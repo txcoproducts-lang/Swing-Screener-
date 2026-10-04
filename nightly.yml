@@ -1,4 +1,4 @@
-name: Nightly screener
+.github/workflows/name: Nightly screener
 
 on:
   schedule:
