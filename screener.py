@@ -916,6 +916,11 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
+PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
+PAPER_HINT = ("Two paper accounts with $1,000 each, trading for six months from Oct 6, 2026. <b>Your system</b> trades your "
+              "screener setups and option rules; <b>Claude's picks</b> trades my AI picks list. They trade on their own at about "
+              "10:00 AM New York time and check every 30 minutes. Click one for every trade and the reason behind it.")
+
 PICK_TEXT = {    # how each list is ordered, in plain words, for the versions in use (others fall back to their description)
     "nu": {"all": "Strongest relative strength (RS, 1-99) first."},
     "bo": {"tight": "{n} stocks in an uptrend are within 5% of a 50-day high set at least 5 days ago (a base). Tightest first: "
@@ -1154,6 +1159,8 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     th = "".join(f"<th>{h}</th>" for h in head)
     banner = '<div class="demo">DEMO DATA, not real stocks</div>' if demo else ""
     n_m = int((picks.setup == "Momentum").sum()); n_p = int((picks.setup == "Pullback").sum())
+    paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
+    paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swing Screener {asof}</title><style>
 :root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7}}
@@ -1191,6 +1198,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof}{f" {live_at} New York time (market open, so prices are not closes)" if live_at else ""} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
+{paper_html}
 {picks_html(lists, earn, calls)}
 {sector_html}
 {chart_html}
@@ -1315,7 +1323,8 @@ document.getElementById('obt').onclick=e=>{{cmOB=!cmOB;e.currentTarget.classList
 document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.dataset.rng;setOn('.bar.rng',cmRng,'rng');draw()}});
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
-</script></body></html>"""
+</script>
+<script>{paper_js}</script></body></html>"""
 
 # --------------------------------------------------------------------- main
 def main():
