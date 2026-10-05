@@ -393,7 +393,27 @@ def bs_call(S, K, T, r, sig):
         vega=S * pdf * math.sqrt(T) / 100)
 
 
+def bs_price(S, K, T, r, sig):
+    sq = sig * math.sqrt(T)
+    d1 = (math.log(S / K) + (r + 0.5 * sig * sig) * T) / sq
+    return S * norm_cdf(d1) - K * math.exp(-r * T) * norm_cdf(d1 - sq)
+
+
+def implied_vol(price, S, K, T, r):
+    """Bisection IV from an option price; None if the price is outside the model's range."""
+    lo, hi = 0.01, 5.0
+    if not (bs_price(S, K, T, r, lo) <= price <= bs_price(S, K, T, r, hi)):
+        return None
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if bs_price(S, K, T, r, mid) < price else (lo, mid)
+    return (lo + hi) / 2
+
+
 def pick_call(t, S):
+    """Call nearest TARGET_DELTA at ~TARGET_DTE. Returns (contract or None, reason).
+    After the close Yahoo often reports bid/ask 0 and a junk IV, so when there are no live quotes it
+    falls back to the last trade price and solves IV from it (marked quote="last")."""
     import yfinance as yf
     tk = yf.Ticker(t)
     today = dt.date.today()
@@ -401,23 +421,32 @@ def pick_call(t, S):
             for e in tk.options]
     exps = [x for x in exps if CFG["DTE_MIN"] <= x[2] <= CFG["DTE_MAX"]]
     if not exps:
-        return None
+        return None, "no expiry in DTE window"
     _, exp, dte = min(exps)
+    T = dte / 365
     ch = tk.option_chain(exp).calls
-    ch = ch[(ch.bid > 0) & (ch.ask > 0) & (ch.impliedVolatility > 0.05) & (ch.openInterest >= CFG["MIN_OI"])].copy()
+    ch = ch[ch.openInterest.fillna(0) >= CFG["MIN_OI"]].copy()
     if ch.empty:
-        return None
-    ch["mid"] = (ch.bid + ch.ask) / 2
-    ch["spr"] = (ch.ask - ch.bid) / ch.mid * 100
-    ch = ch[ch.spr <= CFG["MAX_SPREAD_PCT"]]
+        return None, f"{exp}: no strikes with OI >= {CFG['MIN_OI']}"
+    live = ch[(ch.bid > 0) & (ch.ask > 0)].copy()
+    if len(live):
+        live["px"] = (live.bid + live.ask) / 2
+        live["spr"] = (live.ask - live.bid) / live.px * 100
+        ch, quote = live[live.spr <= CFG["MAX_SPREAD_PCT"]], "live"
+    else:
+        ch = ch[ch.lastPrice > 0].copy()
+        ch["px"], ch["spr"], quote = ch.lastPrice, np.nan, "last"
     rows = []
     for _, o in ch.iterrows():
-        g = bs_call(S, o.strike, dte / 365, CFG["RISK_FREE"], o.impliedVolatility)
-        rows.append({**g, "strike": o.strike, "iv": o.impliedVolatility * 100, "bid": o.bid, "ask": o.ask,
-                     "spr": o.spr, "oi": int(o.openInterest), "exp": exp, "dte": dte})
+        iv = o.impliedVolatility if quote == "live" and o.impliedVolatility > 0.05 else implied_vol(o.px, S, o.strike, T, CFG["RISK_FREE"])
+        if not iv:
+            continue
+        g = bs_call(S, o.strike, T, CFG["RISK_FREE"], iv)
+        rows.append({**g, "strike": o.strike, "iv": iv * 100, "bid": o.bid, "ask": o.ask, "last": o.lastPrice,
+                     "spr": o.spr, "oi": int(o.openInterest), "exp": exp, "dte": dte, "quote": quote})
     if not rows:
-        return None
-    return min(rows, key=lambda r: abs(r["delta"] - CFG["TARGET_DELTA"]))
+        return None, f"{exp}: {quote} quotes but none usable"
+    return min(rows, key=lambda r: abs(r["delta"] - CFG["TARGET_DELTA"])), quote
 
 # --------------------------------------------------------------------- html
 def spark(vals, w=150, h=34, color="currentColor"):
@@ -498,7 +527,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
         o = r.get("opt")
         if isinstance(o, dict):
             oc = [f'{o["exp"]} {o["dte"]}d ${o["strike"]:g}C', f'{o["delta"]:.2f}', f'{o["gamma"]:.3f}', f'{o["theta"]:.2f}',
-                  f'{o["vega"]:.2f}', f'{o["iv"]:.0f}%', f'{o["bid"]:.2f}/{o["ask"]:.2f}', f'{o["oi"]:,}']
+                  f'{o["vega"]:.2f}', f'{o["iv"]:.0f}%', (f'{o["bid"]:.2f}/{o["ask"]:.2f}' if o.get("quote") != "last" else f'last {o["last"]:.2f}'), f'{o["oi"]:,}']
         else:
             oc = [""] * 8
         dsc = r.days_since_cross
@@ -556,7 +585,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Momentum requires price &gt; EMA50, EMA10 &gt; EMA20, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu). Not financial advice.</div>
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu). Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
@@ -683,12 +712,18 @@ def main():
 
     picks["opt"] = None
     if not a.demo and not a.no_options:
-        print(f"Looking up options for top {CFG['OPT_TOP_N']}...")
+        print(f"Looking up options for top {CFG['OPT_TOP_N']}...", flush=True)
+        why_n = {}
         for i in picks.index[picks.has_setup][:CFG["OPT_TOP_N"]]:
             try:
-                picks.at[i, "opt"] = pick_call(picks.at[i, "ticker"], picks.at[i, "close"])
+                o, why = pick_call(picks.at[i, "ticker"], picks.at[i, "close"])
+                picks.at[i, "opt"] = o
+                why_n[why if o else "none"] = why_n.get(why if o else "none", 0) + 1
+                if o is None:
+                    print("  no contract", picks.at[i, "ticker"], why)
             except Exception as e:
                 print("  options failed", picks.at[i, "ticker"], e)
+        print(f"  options: {why_n}", flush=True)
 
     print("Loading sector ETF charts...")
     try:
