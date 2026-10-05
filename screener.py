@@ -846,9 +846,9 @@ PICK_NOTES = {   # one line per list on how it did in research/picks_backtest.py
     "nu": "Backtest, S&amp;P 500 2014-2026: over the next 20 days these did about the same as the average stock (-0.10%, "
           "95% range -0.28% to +0.08%), and no way of ordering them did better. Treat it as a watch list, not a buy signal. " + _RES,
     "bo": "Backtest, S&amp;P 500 2014-2026: 47% of these closed above the level within 10 days, against 27% of all stocks. "
-          "Their 20-day return was no better than the average stock (-0.29%), so a breakout is more likely here, but a gain is not. " + _RES,
-    "ai": "Backtest, S&amp;P 500 as it was each day, 2014-2026, after 0.1% costs per trade: 5.4% a year better than the average "
-          "stock in the same test, but that edge is not proven (95% range -4.1% to +14.9%). It lagged from 2014 to 2021, led from "
+          "Their 20-day return was no better than the average stock (-0.30%), so a breakout is more likely here, but a gain is not. " + _RES,
+    "ai": "Backtest, S&amp;P 500 as it was each day, 2014-2026, after 0.1% costs per trade: 6.2% a year better than the average "
+          "stock in the same test, but that edge is not proven (95% range -3.4% to +15.8%). It lagged from 2014 to 2021, led from "
           "2022 to 2026, and its worst drop was -31%. " + _RES,
 }
 
