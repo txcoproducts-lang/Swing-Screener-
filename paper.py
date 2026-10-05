@@ -24,6 +24,7 @@ P = dict(
     OPEN=dt.time(9, 45),          # the first run at or after this sells and buys
     CLOSE=dt.time(16, 0),         # the first run at or after this records the day's closing value
     STALE_MIN=20,                 # Yahoo's latest 1-minute bar must be this fresh to trade on it
+    STALE_DAYS=5,                 # if a nightly run failed, trade on screener files up to this many days old
     SLIP=0.0005,                  # shares fill 0.05% worse than the last trade
     FEE=0.65,                     # per option contract, each way
     # A: your screener and option rules
@@ -170,15 +171,25 @@ class Day:
         q = self.px.get(t)
         return q is not None and q[1].date() == self.today and self.now - q[1] <= pd.Timedelta(minutes=P["STALE_MIN"])
 
+    def recent(self, d):
+        """Is a nightly file from date d usable today? (Last night's, or a few days old if a nightly run failed.)"""
+        return d is not None and d < self.today and (self.today - d).days <= P["STALE_DAYS"]
+
+    def source(self, d):
+        return "last night's screener" if d == self.prev_day else f"the screener from {day_str(d)} (the last finished nightly run)"
+
     def screener(self):
-        f = self.hist / f"screener_{self.prev_day}.csv"
-        return pd.read_csv(f) if f.exists() else None
+        """The latest screener results from before today: (date, table), or (date or None, None) if too old."""
+        files = sorted(f for f in self.hist.glob("screener_*.csv") if f.stem[9:] < self.today.isoformat())
+        d = dt.date.fromisoformat(files[-1].stem[9:]) if files else None
+        return (d, pd.read_csv(files[-1])) if self.recent(d) else (d, None)
 
     def ai(self):
-        """My AI picks list as of last night, plus each pick's rank and reasons from the Top picks file."""
+        """My AI picks list as of its last nightly update, plus each pick's rank and reasons from that night's
+        Top picks file."""
         f = self.hist / "ai_picks.json"
         st = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-        info, tp = {}, self.hist / f"toppicks_{self.prev_day}.csv"
+        info, tp = {}, self.hist / f"toppicks_{(st or {}).get('as_of')}.csv"
         if tp.exists():
             d = pd.read_csv(tp)
             for _, r in d[d.list == "ai"].iterrows():
@@ -286,7 +297,7 @@ def settle_call(a, pos, now, under):
 
 
 # ------------------------------------------------------------------ A: your screener and option rules
-def setup_why(r, n):
+def setup_why(r, n, src="last night's screener"):
     """Plain-words reason a screener row is a setup."""
     if r.setup == "Momentum":
         b = r.get("brk20")
@@ -294,10 +305,10 @@ def setup_why(r, n):
         where = " and ".join((["closed above its 20-day high"] if brk else [])
                              + (["is at its 52-week high"] if r.from_hi >= -0.5 else
                                 [f"is within {abs(r.from_hi):.1f}% of its 52-week high"] if r.from_hi >= -3 else []))
-        return (f"#{n} setup in last night's screener, a Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
+        return (f"#{n} setup in {src}, a Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
                 f"volume {r.relvol:.1f}x its 20-day average. It's in your uptrend: EMA10 above EMA20, price above the "
                 "50-day EMA and the 150-day average.")
-    return (f"#{n} setup in last night's screener, a Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
+    return (f"#{n} setup in {src}, a Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
             f"{r.vs20:+.1f}% from its 20-day EMA and {r.vs50:+.1f}% from its 50-day EMA, volume {r.relvol:.1f}x its "
             "20-day average. The trend under it holds: price above the 50-day EMA, 20-day EMA above the 50-day.")
 
@@ -386,13 +397,15 @@ def a_buys(a, day):
     if len(a["positions"]) >= P["A_SLOTS"]:
         note(a, now, f"No new buy: both slots are taken ({'; '.join(p['label'] for p in a['positions'])}).", "day")
         return
-    scr = day.screener()
+    sd, scr = day.screener()
     if scr is None:
-        note(a, now, f"No new buy: the screener results for {day_str(day.prev_day)} are missing.", "day")
+        note(a, now, "No new buy: the screener hasn't finished a nightly run in the last few days"
+                     + (f" (the latest is from {day_str(sd)})." if sd else "."), "day")
         return
+    src = day.source(sd)
     setups = scr[scr.has_setup.astype(bool)].reset_index(drop=True)
     if setups.empty:
-        note(a, now, f"No new buy: the screener found no setups on {day_str(day.prev_day)}.", "day")
+        note(a, now, f"No new buy: {src} found no setups.", "day")
         return
     sold_today = {p["ticker"] for p in a["closed"] if p["sell"]["t"][:10] == day.today.isoformat()}
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]
@@ -449,7 +462,7 @@ def a_buys(a, day):
             plan["text"] = (f"sell at +{P['A_TARGET']:.0%} (a bid of {money(plan['target'])}), at -{P['A_STOP']:.0%} "
                             f"({money(plan['stop'])}), on {day_str(exit_by)} at the latest ({plural((exp - exit_by).days, 'day')} before "
                             f"expiry), or after {t} closes below its 50-day EMA or 150-day average.")
-            why = (f"{setup_why(r, n)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
+            why = (f"{setup_why(r, n, src)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
                    f"{f['oi']:,}, IV {f['iv']:.0f}%, bid {money(f['bid'])} / ask {money(f['ask'])}. It's the nearest to "
                    f"{mid:.2f} delta of the {plural(n_ok, 'call')} that fit your rules and the {money(budget)} budget "
                    "(half the account).")
@@ -479,7 +492,7 @@ def a_buys(a, day):
         stop = r4(S * (1 - P["A_SHARE_STOP"]))
         plan = dict(stop=stop, text=f"sell if it drops {P['A_SHARE_STOP']:.0%} (to {money(stop)}) or after {t} closes below "
                                     "its 50-day EMA or 150-day average.")
-        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n)} Why shares, not a call: {reason}", plan) is None:
+        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src)} Why shares, not a call: {reason}", plan) is None:
             return
 
 
@@ -489,10 +502,14 @@ def b_trade(a, day, quiet=False):
     morning run couldn't do, without logging a no-trade note."""
     now = day.now
     st, info = day.ai()
-    if not st or st.get("as_of") != day.prev_day.isoformat():
+    as_of = dt.date.fromisoformat(st["as_of"]) if st and st.get("as_of") else None
+    if not day.recent(as_of):
         if not quiet:
-            note(a, now, f"No trades: my AI picks list wasn't updated last night (it's from {(st or {}).get('as_of')}).", "day")
+            note(a, now, "No trades: my AI picks list hasn't been updated in the last few days"
+                         + (f" (the latest is from {day_str(as_of)})." if as_of else "."), "day")
         return
+    if as_of != day.prev_day and not quiet:
+        note(a, now, f"Last night's update of my AI picks list didn't finish, so I'm trading the list from {day_str(as_of)}.", "note")
     picks = [p["ticker"] for p in st["picks"]]
     added = {p["ticker"]: p.get("added") for p in st["picks"]}
     held = {p["ticker"]: p for p in a["positions"]}
@@ -520,7 +537,7 @@ def b_trade(a, day, quiet=False):
             continue
         inf = info.get(t, {})
         rank = f"ranked #{inf['rank']}" if inf.get("rank") else f"in the top {SC.CFG['AI_KEEP']}"
-        since = ("added last night" if added.get(t) == st["as_of"] else
+        since = ("added last night" if added.get(t) == day.prev_day.isoformat() else
                  f"on the list since {day_str(dt.date.fromisoformat(added[t]))}" if added.get(t) else "on the list")
         why = (f"On my AI picks list ({since}), {rank} by relative strength among liquid S&P 500 and Nasdaq-100 stocks"
                + (f": {inf['why']}." if inf.get("why") else ".")
@@ -536,7 +553,8 @@ def b_trade(a, day, quiet=False):
         note(a, now, f"Waiting for a live price to {', '.join(waiting)}; trying again every 30 minutes.", "note")
     if not acted and not waiting:
         hold = sorted(p["ticker"] for p in a["positions"])
-        note(a, now, f"No trades: my list didn't change last night, so I'm holding {plural(len(hold), 'stock')}"
+        note(a, now, f"No trades: my list didn't change{' last night' if as_of == day.prev_day else ''}, so I'm holding "
+                     f"{plural(len(hold), 'stock')}"
                      + (f" ({', '.join(hold)})." if hold else "."), "day")
 
 
