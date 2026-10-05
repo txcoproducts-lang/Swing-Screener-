@@ -669,8 +669,9 @@ def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow
     return dict(as_of=asof, picks=picks, closed=closed)
 
 
-def pick_lists(frames, sectors, subs, spy, prev, demo=False):
-    """The three lists for tonight. Returns (lists for the page, new AI picks state)."""
+def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
+    """The three lists for tonight. Returns (lists for the page, new AI picks state).
+    step=False (a run before the close) shows the saved AI picks without changing them."""
     idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
     P = {k: wide(frames, k, idx) for k in ("Open", "High", "Low", "Close", "Volume")}
     F = pick_features(P, sectors, subs)
@@ -711,7 +712,8 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False):
     market_ok = True
     if CFG["AI_MARKET_FILTER"] and spy is not None and len(spy) > 200:
         market_ok = bool(spy.iloc[-1] > spy.rolling(200).mean().iloc[-1])
-    st = ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok)
+    st = (ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok) if step else
+          prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[]))
     rank_now = score.rank(ascending=False, method="first")
     ind = pr("ind") if "ind" in F else None
     ai_rows = []
@@ -729,7 +731,7 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False):
             if ind is not None and ind[t] == ind[t] and ind[t] >= 0.8:
                 why.append(f"strong industry ({subs.get(t) or sectors.get(t) or 'its group'})")
         now = float(c[t]) if t in c.index and c[t] == c[t] else None
-        old_pick = p["added"] < st["as_of"]                  # picked today: nothing to measure yet
+        old_pick = p["added"] < asof                         # picked today: nothing to measure yet
         ai_rows.append(row(t, added=p["added"], price=p["price"], now=now,
                            ret=(now / p["price"] - 1) * 100 if now and old_pick else None,
                            spy_ret=(spy_now / p["spy"] - 1) * 100 if p.get("spy") and spy_now == spy_now and old_pick else None,
@@ -743,7 +745,7 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False):
         if r.get("ret") is not None:
             track.append((r["ret"], r.get("spy_ret")))
     ai_list = dict(desc=A[CFG["AI_SCORE"]][0], rows=ai_rows, market_ok=market_ok, as_of=st["as_of"],
-                   dropped=[p for p in st["closed"] if p["dropped"] == st["as_of"]], since=min(
+                   dropped=[p for p in st["closed"] if p["dropped"] == asof], since=min(
                        [p["added"] for p in st["picks"]] + [p["added"] for p in st["closed"]], default=asof), track=track)
     return dict(asof=asof, nu=nu, bo=bo, ai=ai_list), st
 
@@ -1016,6 +1018,9 @@ def picks_html(L, earn=None, calls=None):
     dropped = "".join(f'<span class="tk" data-tk="{p["ticker"]}">{p["ticker"]}</span> ({(p["out"] / p["price"] - 1) * 100:+.1f}%, {p["why"]}) '
                       for p in ai["dropped"])
     mkt = "" if ai["market_ok"] else '<div class="hint warn">Market filter is on: SPY is below its 200-day average, so no new picks until it recovers.</div>'
+    if L.get("live_at"):
+        mkt += (f'<div class="hint warn">This page was built at {L["live_at"]} New York time, before the close, so these are the '
+                f'picks from the last run after a close, with prices as of {L["live_at"]}. The list only changes on a run after the close.</div>')
     ai_html = (f'<div class="hint">My own list, rebuilt every night by rules I chose and tested: {PICK_TEXT["ai"].get(CFG["AI_SCORE"], ai["desc"])}. '
                f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
                f'open spots go to the best-ranked stocks in the top {CFG["AI_KEEP"]} that fit the sector limit, and a spot stays empty '
@@ -1036,7 +1041,7 @@ def picks_html(L, earn=None, calls=None):
             f'Black-Scholes from that price; confirm in your broker.</div>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -1152,7 +1157,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
-<div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
+<div class="meta">Data as of {asof}{f" {live_at} New York time (market open, so prices are not closes)" if live_at else ""} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
 {picks_html(lists, earn, calls)}
 {sector_html}
@@ -1343,14 +1348,20 @@ def main():
     print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} sectors")
 
     out = Path(a.out); out.mkdir(exist_ok=True)
+    now = pd.Timestamp.now(tz="America/New_York")
+    live_at = None if a.demo or asof != now.date().isoformat() or now.time() >= dt.time(16, 15) else now.strftime("%H:%M")
+    if live_at:
+        print(f"Run at {live_at} New York time, before the close: today's prices are not closes, so the AI picks list is not changed.")
     print("Building the top picks lists...")
     lists, earn, calls = None, {}, {}
     try:
         state_file = Path(__file__).resolve().parent / "history" / "ai_picks.json"   # yesterday's AI picks
         prev = None if a.demo or not state_file.exists() else json.loads(state_file.read_text(encoding="utf-8"))
         spy = etf_frames["SPY"]["Close"] if "SPY" in etf_frames else None
-        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo)
-        (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
+        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo, step=live_at is None)
+        lists["live_at"] = live_at
+        if live_at is None:                # the saved list only moves on closing prices
+            (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
         print(f"  new uptrends {lists['nu']['total']}, breakout watch {len(lists['bo']['rows'])}, AI picks {len(lists['ai']['rows'])}")
         if not a.demo:
             earn = next_earnings(sorted({r["ticker"] for k in ("nu", "bo", "ai") for r in lists[k]["rows"]}))
@@ -1383,7 +1394,7 @@ def main():
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  stock charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)
