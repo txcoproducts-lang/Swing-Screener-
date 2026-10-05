@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   trade:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # pinned: ubuntu-latest moves to Ubuntu 26 on Oct 19, mid-trial
     timeout-minutes: 20
     steps:
       - name: Market hours only
