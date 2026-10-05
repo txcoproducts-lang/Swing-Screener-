@@ -24,6 +24,10 @@ jobs:
         env:
           PAGE_URL: https://txcoproducts-lang.github.io/Swing-Screener-/
         run: cd .github/page-check && node check.mjs
+      - name: Deep audit of data, numbers and controls
+        env:
+          PAGE_URL: https://txcoproducts-lang.github.io/Swing-Screener-/
+        run: cd .github/page-check && node audit.mjs
       - name: Save screenshots to the page-check branch
         run: |
           cd .github/page-check/shots
