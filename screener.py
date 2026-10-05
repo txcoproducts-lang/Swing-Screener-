@@ -832,19 +832,36 @@ def chain_rows(ch, S, exp, dte, min_oi):
 def pick_list_call(S, chains, today):
     """Top picks lists: among calls PK_DTE days out (chains: {expiry: Yahoo calls table}) with open interest
     over PK_OI_OVER and delta in PK_DELTA, the one nearest the middle of the range (more open interest wins a tie).
-    Returns (contract or None, reason)."""
+    When none fits, the closest miss: with expiries in the window, the call in the delta range with the most open
+    interest; with none, the next expiry after the window. Returns (contract or None, reason); the contract has
+    fits = how many calls fit and miss = the rules it misses ("dte", "oi")."""
     lo, hi = CFG["PK_DTE"]
     dlo, dhi = CFG["PK_DELTA"]
-    ok = []
-    for exp, ch in chains.items():
-        dte = (dt.date.fromisoformat(exp) - today).days
-        if lo <= dte <= hi:
-            ok += [r for r in chain_rows(ch, S, exp, dte, CFG["PK_OI_OVER"] + 1)[0] if dlo <= r["delta"] <= dhi]
-    if not ok:
-        return None, (f"no call {dlo:.2f}-{dhi:.2f} delta with OI over {CFG['PK_OI_OVER']}"
-                      if any(lo <= (dt.date.fromisoformat(e) - today).days <= hi for e in chains) else f"no expiry {lo}-{hi} days out")
-    best = min(ok, key=lambda r: (abs(r["delta"] - (dlo + dhi) / 2), -(r["oi"] or 0)))
-    return dict(best, fits=len(ok)), best["quote"]
+    mid, need = (dlo + dhi) / 2, CFG["PK_OI_OVER"]
+    dte = {e: (dt.date.fromisoformat(e) - today).days for e in chains}
+    calls = lambda e, min_oi: [r for r in chain_rows(chains[e], S, e, dte[e], min_oi)[0] if dlo <= r["delta"] <= dhi]
+    low_oi = lambda e: [r for r in calls(e, 1) if r["oi"] is not None and r["oi"] <= need]
+    nearest = lambda rows: min(rows, key=lambda r: (abs(r["delta"] - mid), -(r["oi"] or 0)))
+    most_oi = lambda rows: max(rows, key=lambda r: (r["oi"], -abs(r["delta"] - mid)))
+    win = [e for e in chains if lo <= dte[e] <= hi]
+    fit = [r for e in win for r in calls(e, need + 1)]
+    if fit:
+        best = nearest(fit)
+        return dict(best, fits=len(fit), miss=[]), best["quote"]
+    if win:
+        why = f"no call {dlo:.2f}-{dhi:.2f} delta with OI over {need}"
+        rows = [r for e in win for r in low_oi(e)]
+        return (dict(most_oi(rows), fits=0, miss=["oi"]) if rows else None), why
+    why = f"no expiry {lo}-{hi} days out"
+    later = sorted(e for e in chains if dte[e] > hi)
+    if later:
+        ok = calls(later[0], need + 1)
+        if ok:
+            return dict(nearest(ok), fits=0, miss=["dte"]), why
+        rows = low_oi(later[0])
+        if rows:
+            return dict(most_oi(rows), fits=0, miss=["dte", "oi"]), why
+    return None, why
 
 
 def list_calls(prices, demo=False):
@@ -858,8 +875,9 @@ def list_calls(prices, demo=False):
             else:
                 import yfinance as yf
                 tk = yf.Ticker(t)
-                chains = {e: tk.option_chain(e).calls for e in tk.options
-                          if lo <= (dt.date.fromisoformat(e) - today).days <= hi}
+                days = {e: (dt.date.fromisoformat(e) - today).days for e in tk.options}
+                want = [e for e in days if lo <= days[e] <= hi] or sorted(e for e in days if days[e] > hi)[:1]  # else the next one
+                chains = {e: tk.option_chain(e).calls for e in want}
             o, why = pick_list_call(S, chains, today)
             out[t] = o or why
         except Exception as e:
@@ -964,16 +982,28 @@ def picks_html(L, earn=None, calls=None):
             return [(f'<span class="mut" title="{o}">none fits</span>' if o else "", "")] + [("", "")] * 3
         d = dt.date.fromisoformat(o["exp"])
         e = earn.get(t)
-        flag = (f' <span class="warn" title="Earnings on {e} is before this contract expires">E</span>'
+        flag = (f' <span class="warn ef" title="Earnings on {e} is before this contract expires">E</span>'
                 if e and dt.date.fromisoformat(e) <= d else "")
         px = (o["bid"] + o["ask"]) / 2 if o["quote"] == "live" else o["last"]
         tip = f'bid {o["bid"]:.2f} / ask {o["ask"]:.2f}' if o["quote"] == "live" else "last trade"
-        fit = (f'{o["fits"]} contract{"s" if o["fits"] != 1 else ""} fit your rules' if o["oi"] is not None else
-               f'{o["fits"]} contract{"s" if o["fits"] != 1 else ""} fit the delta and expiry; Yahoo did not report open interest, so it was not checked')
-        return [(f'<span title="{fit}; IV {o["iv"]:.0f}%">'
-                 f'{d.strftime("%b")} {d.day} ${o["strike"]:g}</span>{flag}<div class="dte">{o["dte"]} days</div>', o["exp"]),
-                (f'{o["delta"]:.2f}', round(o["delta"], 3)), (f'<span title="{tip}">{px:.2f}</span>', round(px, 2)),
-                (f'{o["oi"]:,}' if o["oi"] is not None else "n/a", o["oi"] if o["oi"] is not None else "")]
+        miss = o.get("miss") or []
+        n = f'{o["fits"]} contract{"s" if o["fits"] != 1 else ""}'
+        if miss:
+            fit = ("No call fits all your rules, so this is the closest one"
+                   + (f": no expiry is {CFG['PK_DTE'][0]}-{CFG['PK_DTE'][1]} days out, so it is the next one after" if "dte" in miss else "")
+                   + (f"{' and' if 'dte' in miss else ':'} its open interest is only {o['oi']:,} (your rule is over {CFG['PK_OI_OVER']})"
+                      if "oi" in miss else ""))
+        elif o["oi"] is None:
+            fit = f"{n} fit the delta and expiry; Yahoo did not report open interest, so it was not checked"
+        else:
+            fit = f"{n} fit your rules"
+        g = ' class="miss"' if miss else ""
+        red = lambda k, txt: f'<span class="warn">{txt}</span>' if k in miss else txt
+        days, oi = red("dte", f'{o["dte"]} days'), (red("oi", f'{o["oi"]:,}') if o["oi"] is not None else "n/a")
+        return [(f'<span{g} title="{fit}; IV {o["iv"]:.0f}%">'
+                 f'{d.strftime("%b")} {d.day} ${o["strike"]:g}</span>{flag}<div class="dte">{days}</div>', o["exp"]),
+                (f'<span{g}>{o["delta"]:.2f}</span>', round(o["delta"], 3)), (f'<span{g} title="{tip}">{px:.2f}</span>', round(px, 2)),
+                (f'<span{g}>{oi}</span>', o["oi"] if o["oi"] is not None else "")]
     VO = ["Volume", "5-day volume", "Call 15-30d", "Δ", "Premium", "OI"]
     vo = lambda r: [vol(r.get("vol1")), vol(r.get("vol5"))] + opt(r["ticker"])
     def table(tid, head, rows, empty):
@@ -1036,8 +1066,9 @@ def picks_html(L, earn=None, calls=None):
             + f'<div class="hint">Volume = shares traded on {L["asof"]}; 5-day volume = shares traded over the last 5 trading days '
             f'(the total). Call 15-30d = the call nearest {sum(CFG["PK_DELTA"]) / 2:.2f} delta among contracts {CFG["PK_DTE"][0]}-'
             f'{CFG["PK_DTE"][1]} days out with delta {CFG["PK_DELTA"][0]:.2f}-{CFG["PK_DELTA"][1]:.2f} and open interest over '
-            f'{CFG["PK_OI_OVER"]} (hover it for how many fit and the IV). <span class="warn">E</span> = earnings come before it '
-            f'expires. Premium = the bid/ask midpoint, or the last trade when there are no live quotes (after hours). Delta is '
+            f'{CFG["PK_OI_OVER"]} (hover it for how many fit and the IV). <span class="miss">Grey</span> = no call fits all three '
+            f'rules, so the closest one is shown, with the rule it misses in <span class="warn">red</span>. '
+            f'<span class="warn">E</span> = earnings come before it expires. Premium = the bid/ask midpoint, or the last trade when there are no live quotes (after hours). Delta is '
             f'Black-Scholes from that price; confirm in your broker.</div>')
 
 
@@ -1146,7 +1177,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
-.pkt .dte{{font-size:10px;color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
+.pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
@@ -1372,16 +1403,19 @@ def main():
                 print(f"  looking up calls for {len(px)} tickers...", flush=True)
                 calls = list_calls(px, a.demo)
                 why_n = {}
-                for o in calls.values():
-                    why_n["fits" if isinstance(o, dict) else o] = why_n.get("fits" if isinstance(o, dict) else o, 0) + 1
+                for t, o in calls.items():
+                    k = ("fits" if not o["miss"] else "closest, misses " + "+".join(o["miss"])) if isinstance(o, dict) else o
+                    why_n[k] = why_n.get(k, 0) + 1
+                    if isinstance(o, dict) and o["miss"]:
+                        print(f"    {t}: closest {o['exp']} ${o['strike']:g} delta {o['delta']:.2f} OI {o['oi']} ({'+'.join(o['miss'])})")
                 print(f"  calls: {why_n}", flush=True)
             except Exception as e:         # extras; never block the lists
                 print("  list calls failed:", e)
         oc = lambda t: calls[t] if isinstance(calls.get(t), dict) else {}
         prem = lambda o: ((o["bid"] + o["ask"]) / 2 if o["quote"] == "live" else o["last"]) if o else None
         pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price", "vol1", "vol5")},
-                           **{f"call_{c}": oc(r["ticker"]).get(c) for c in ("exp", "dte", "strike", "delta", "oi", "quote")},
-                           call_premium=prem(oc(r["ticker"])))
+                           **{f"call_{c}": oc(r["ticker"]).get(c) for c in ("exp", "dte", "strike", "delta", "oi", "quote", "fits")},
+                           call_premium=prem(oc(r["ticker"])), call_misses="+".join(oc(r["ticker"]).get("miss") or []))
                       for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
     except Exception as e:                 # never block the scan on the lists
         import traceback

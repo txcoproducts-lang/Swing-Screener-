@@ -70,7 +70,7 @@ log(`rows with an options contract: ${res.stats.withContract}`);
 
 // ---- 1b. top picks lists against the chart data
 const pk = await p.evaluate(async () => {
-  const out = { issues: [], counts: {}, calls: {}, none: {} };
+  const out = { issues: [], counts: {}, calls: {}, misses: {}, none: {} };
   const asof = (document.querySelector(".meta").textContent.match(/as of (\d{4}-\d{2}-\d{2})/) || [])[1];
   const v = (r, i) => r.cells[i].dataset.v;
   for (const id of ["pk-nu", "pk-bo", "pk-ai"]) {
@@ -86,7 +86,8 @@ const pk = await p.evaluate(async () => {
       catch (e) { out.issues.push(`${id} ${tk}: no chart data`); continue; }
       const s = D.D, n = s.c.length, last = s.c[n - 1];
       const near = i => [s.e10[i] - s.e20[i], s.c[i] - s.e50[i], s.c[i] - s.m150[i]].some(x => Math.abs(x) < 0.05);
-      // volume (shares) against the chart data, and the call against the rules: 15-30 days, delta 0.50-0.80, OI over 500
+      // volume (shares) against the chart data, and the call against the rules: 15-30 days, delta 0.50-0.80, OI over 500;
+      // a grey call (class miss) is the closest one when none fits, with each rule it misses in red
       if (vo >= 0 && v5 >= 0) {
         const off = (a, b) => a === "" || Math.abs(+a - b) > 0.02 * Math.max(1, b);
         const vol1 = s.v[n - 1], vol5 = s.v.slice(n - 5).reduce((a, b) => a + b, 0);
@@ -96,17 +97,22 @@ const pk = await p.evaluate(async () => {
       if (cc >= 0 && dl >= 0 && pm >= 0 && oi >= 0) {
         const exp = v(r, cc);
         if (exp) {
-          out.calls[id] = (out.calls[id] || 0) + 1;
+          const miss = !!r.cells[cc].querySelector(".miss");
+          (miss ? out.misses : out.calls)[id] = ((miss ? out.misses : out.calls)[id] || 0) + 1;
           const days = +(r.cells[cc].querySelector(".dte")?.textContent.match(/\d+/) || [NaN])[0];
           const k = +((r.cells[cc].querySelector("span")?.textContent || "").match(/\$([\d.]+)/) || [])[1], d = +v(r, dl), o = v(r, oi);
-          if (!(days >= 15 && days <= 30)) out.issues.push(`${id} ${tk}: call ${days} days out`);
+          const daysOk = days >= 15 && days <= 30, oiOk = o === "" || +o > 500;
+          if (!miss && !daysOk) out.issues.push(`${id} ${tk}: call ${days} days out`);
+          if (!miss && !oiOk) out.issues.push(`${id} ${tk}: call open interest ${o}`);
+          if (miss && daysOk && oiOk) out.issues.push(`${id} ${tk}: grey call ${days} days, OI ${o} fits the rules`);
+          if (miss && (!!r.cells[cc].querySelector(".dte .warn") !== !daysOk || !!r.cells[oi].querySelector(".warn") !== !oiOk))
+            out.issues.push(`${id} ${tk}: grey call red marks wrong (${days} days, OI ${o})`);
           if (!(exp > asof)) out.issues.push(`${id} ${tk}: call expires ${exp}, list is as of ${asof}`);
           if (!(d >= 0.5 && d <= 0.8)) out.issues.push(`${id} ${tk}: call delta ${d}`);
-          if (o !== "" && !(+o > 500)) out.issues.push(`${id} ${tk}: call open interest ${o}`);
           if (!(+v(r, pm) > 0)) out.issues.push(`${id} ${tk}: premium ${v(r, pm)}`);
           if (!(k > 0.5 * last && k < 1.15 * last)) out.issues.push(`${id} ${tk}: strike ${k} vs close ${last}`);
           if (ea >= 0 && v(r, ea) !== "") {
-            const toExp = (Date.parse(exp) - Date.parse(asof)) / 864e5, toE = +v(r, ea), flag = !!r.cells[cc].querySelector(".warn");
+            const toExp = (Date.parse(exp) - Date.parse(asof)) / 864e5, toE = +v(r, ea), flag = !!r.cells[cc].querySelector(".ef");
             if (flag !== (toE <= toExp)) out.issues.push(`${id} ${tk}: earnings flag ${flag} (earnings in ${toE} days, expiry in ${toExp})`);
           }
         } else out.none[id] = [...(out.none[id] || []), `${tk} (${r.cells[cc].textContent}: ${r.cells[cc].querySelector("[title]")?.title || ""})`];
@@ -141,7 +147,8 @@ log(`top picks: ${pk.counts["pk-nu"] || 0} new uptrends, ${pk.counts["pk-bo"] ||
 pk.issues.slice(0, 40).forEach(i => log("  " + i));
 for (const id of ["pk-nu", "pk-bo", "pk-ai"]) {
   const no = pk.none[id] || [];
-  log(`${id} calls that fit: ${pk.calls[id] || 0} of ${pk.counts[id] || 0}` + (no.length ? `; none for ${no.slice(0, 12).join(", ")}` : ""));
+  log(`${id} calls that fit: ${pk.calls[id] || 0} of ${pk.counts[id] || 0}, closest shown in grey: ${pk.misses[id] || 0}` +
+      (no.length ? `; none for ${no.slice(0, 12).join(", ")}` : ""));
 }
 for (const k of ["nu", "bo", "ai"]) {
   await p.click(`.bar.pk button[data-pk="${k}"]`);
