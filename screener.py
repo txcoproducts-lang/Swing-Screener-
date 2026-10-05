@@ -927,8 +927,9 @@ def picks_html(L, earn=None):
                       for p in ai["dropped"])
     mkt = "" if ai["market_ok"] else '<div class="hint warn">Market filter is on: SPY is below its 200-day average, so no new picks until it recovers.</div>'
     ai_html = (f'<div class="hint">My own list, rebuilt every night by rules I chose and tested: {PICK_TEXT["ai"].get(CFG["AI_SCORE"], ai["desc"])}. '
-               f'I hold {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector; a pick stays while it ranks in the top {CFG["AI_KEEP"]} '
-               f'and its spot goes to the best-ranked stock when it drops out. Rank = today\'s rank of all liquid stocks.</div>'
+               f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
+               f'open spots go to the best-ranked stocks in the top {CFG["AI_KEEP"]} that fit the sector limit, and a spot stays empty '
+               f'(cash) when none fits, as in the test. Rank = today\'s rank of all liquid stocks.</div>'
                + mkt + table("pk-ai", ["Ticker", "Rank", "Picked", "Price then", "Now", "Since picked", "SPY since", "Why", E],
                              ai_rows, "No picks yet.")
                + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
