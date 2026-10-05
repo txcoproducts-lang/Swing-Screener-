@@ -556,7 +556,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Momentum requires price &gt; EMA50, EMA10 &gt; EMA20, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view adds RSI, MACD and any other study. Not financial advice.</div>
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu). Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
@@ -605,8 +605,7 @@ function tvDraw(){{document.getElementById('cmw').innerHTML='<div id="cmc"></div
 const dark=matchMedia('(prefers-color-scheme: dark)').matches;
 tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbol:tvSym(cmSym),interval:cmIv,timezone:'America/Chicago',
 theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
-studies:[{{id:'MAExp@tv-basicstudies',inputs:{{length:10}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:20}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:50}}}},
-{{id:'MASimple@tv-basicstudies',inputs:{{length:200}}}},'STD;RSI','STD;MACD']}}))
+studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
 function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
