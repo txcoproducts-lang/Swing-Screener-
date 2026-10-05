@@ -32,6 +32,9 @@ CFG = dict(
     MIN_OI=100,
     MAX_SPREAD_PCT=12.0,     # bid/ask spread as % of mid
     RISK_FREE=0.045,
+    # order blocks on the charts; research/ob_backtest.py tested all of these on 1,000 stocks over 10 years
+    OB_TYPE="strong",        # classic, strong (best in the test), bos, fvg, volume or lux
+    OB_ENTRY="top",          # box runs from the candle's far side to: "top" (whole candle, best), "body" or "mid" (50%)
 )
 
 # ----------------------------------------------------------------- universe
@@ -107,9 +110,10 @@ def demo_frames(n=80, days=600):
         drift = rng.normal(0.0004, 0.0004)
         r = rng.normal(drift, 0.017, days)
         c = 50 * np.exp(np.cumsum(r)) * rng.uniform(0.6, 4)
-        hi = c * (1 + rng.uniform(0, 0.015, days)); lo = c * (1 - rng.uniform(0, 0.015, days))
+        o = np.concatenate([[c[0]], c[:-1]]) * (1 + rng.normal(0, 0.004, days))
+        hi = np.maximum(o, c) * (1 + rng.uniform(0, 0.012, days)); lo = np.minimum(o, c) * (1 - rng.uniform(0, 0.012, days))
         v = rng.uniform(1.5e6, 9e6, days) * (1 + 0.5 * (rng.random(days) > 0.93))
-        frames[f"DEMO{i:02d}"] = pd.DataFrame({"Open": c, "High": hi, "Low": lo, "Close": c, "Volume": v}, index=idx)
+        frames[f"DEMO{i:02d}"] = pd.DataFrame({"Open": o, "High": hi, "Low": lo, "Close": c, "Volume": v}, index=idx)
     return frames
 
 # ------------------------------------------------------------ sector charts
@@ -216,7 +220,90 @@ def trend_series(b, n_show, intraday=False):
     r2 = lambda s: [None if x != x else round(float(x), 2) for x in s.iloc[k]]
     t = ([int(i.timestamp()) for i in b.index[k]] if intraday else [i.strftime("%Y-%m-%d") for i in b.index[k]])
     return dict(t=t, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(c), v=[int(x) for x in b.Volume.iloc[k]],
-                e10=r2(e10), e20=r2(e20), e50=r2(e50), m150=r2(m150), tr=[int(x) for x in tr.iloc[k]])
+                e10=r2(e10), e20=r2(e20), e50=r2(e50), m150=r2(m150), tr=[int(x) for x in tr.iloc[k]],
+                ob=order_blocks(b, n_show, t))
+
+
+# ------------------------------------------------------------ order blocks
+def _ahead(a, k):
+    """a[i + k] lined up with bar i (NaN past the end)."""
+    out = np.full(len(a), np.nan)
+    if k < len(a):
+        out[:len(a) - k] = a[k:]
+    return out
+
+
+def _lux_pivots(h, l, v, p=5):
+    """LuxAlgo-style candidates: highest volume of 2p+1 bars, at a swing low (bullish) or high (bearish)."""
+    n = len(v)
+    pad = np.concatenate([np.full(p, -np.inf), v, np.full(p, -np.inf)])
+    piv = (v >= np.lib.stride_tricks.sliding_window_view(pad, 2 * p + 1).max(axis=1)) & (v > 0)
+    piv[max(0, n - p):] = False
+    hn = np.fmax.reduce(np.vstack([_ahead(h, k) for k in range(1, p + 1)]), axis=0)
+    ln = np.fmin.reduce(np.vstack([_ahead(l, k) for k in range(1, p + 1)]), axis=0)
+    state, st = np.zeros(n, int), 0
+    for i in range(n):
+        st = 0 if h[i] > hn[i] else 1 if l[i] < ln[i] else st
+        state[i] = st
+    return piv & (state == 1), piv & (state == 0)
+
+
+def _bull_blocks(o, h, l, c, v, a, avgv, kind, lux):
+    """Bullish order blocks as (candle, bar where it is confirmed): the last down candle before a
+    move that closes 1 ATR (2 for "strong") above its high within 3 bars, plus the extra test of
+    each type. Bearish blocks come from the same code run on mirrored prices."""
+    if kind == "lux":
+        i = np.flatnonzero(lux)
+        return i, i + 5
+    n = len(c)
+    best = np.fmax.accumulate(np.vstack([_ahead(c, k) for k in (1, 2, 3)]), axis=0)   # best close 1, 2, 3 bars on
+    cond = best >= h + (2.0 if kind == "strong" else 1.0) * a
+    if kind in ("bos", "fvg"):                      # also closes above the last confirmed swing high
+        p = 3
+        pad = np.concatenate([np.full(p, -np.inf), h, np.full(p, -np.inf)])
+        piv = np.flatnonzero(h >= np.lib.stride_tricks.sliding_window_view(pad, 2 * p + 1).max(axis=1))
+        piv = piv[piv + p < n]
+        sh = np.full(n, np.nan)
+        sh[piv + p] = h[piv]
+        cond &= best > pd.Series(sh).ffill().to_numpy()
+    if kind == "fvg":                               # and leaves a gap between candles 1 and 3 of the move
+        g1 = _ahead(l, 2) > h
+        cond &= np.vstack([np.zeros(n, bool), g1, g1 | (_ahead(l, 3) > _ahead(h, 1))])
+    if kind == "volume":                            # on 1.5x the 20-day average volume
+        cond &= np.fmax.accumulate(np.vstack([_ahead(v, k) for k in (1, 2, 3)]), axis=0) >= 1.5 * avgv
+    cond &= (c < o) & (_ahead(c, 1) > _ahead(o, 1))
+    first = np.where(cond.any(axis=0), cond.argmax(axis=0), -1)
+    i = np.flatnonzero(first >= 0)
+    return i, i + first[i] + 1
+
+
+def order_blocks(b, n_show, times):
+    """Zones that start inside the shown window: [start, end, top, bottom, side, fresh].
+    side 1 = bullish (support), -1 = bearish (resistance). A zone ends where price first comes
+    back into it; fresh = 1 if price hasn't come back yet (drawn to the right edge)."""
+    kind, entry = CFG["OB_TYPE"], CFG["OB_ENTRY"]
+    O, H, L, C, V = (b[k].to_numpy(float) for k in ("Open", "High", "Low", "Close", "Volume"))
+    n = len(C)
+    pc = np.concatenate([[np.nan], C[:-1]])
+    A = pd.Series(np.fmax(H - L, np.fmax(np.abs(H - pc), np.abs(L - pc)))).ewm(alpha=1 / 14, adjust=False).mean().to_numpy()
+    avgv = pd.Series(V).rolling(20).mean().to_numpy()
+    lux = _lux_pivots(H, L, V) if kind == "lux" else (None, None)
+    first = max(0, n - n_show)
+    zones = []
+    for sgn, lx in ((1, lux[0]), (-1, lux[1])):
+        o, h, l, c = (O, H, L, C) if sgn > 0 else (-O, -L, -H, -C)
+        for i, a in zip(*_bull_blocks(o, h, l, c, V, A, avgv, kind, lx)):
+            if i < first or a >= n:
+                continue
+            p = h[i] if entry == "top" else max(o[i], c[i]) if entry == "body" else (h[i] + l[i]) / 2
+            if not c[a] > p:
+                continue
+            hit = np.flatnonzero(l[a + 1:] <= p)
+            end = a + 1 + hit[0] if hit.size else n - 1
+            top, bot = (p, l[i]) if sgn > 0 else (-l[i], -p)
+            zones.append([times[i - first], times[end - first], round(float(top), 2), round(float(bot), 2),
+                          sgn, int(not hit.size)])
+    return zones
 
 
 def write_stock_charts(tickers, out, demo=False):
@@ -230,8 +317,9 @@ def write_stock_charts(tickers, out, demo=False):
             last = d.iloc[-200:]
             idx = [ts + pd.Timedelta(hours=9.5 + i) for ts in last.index for i in range(7)]
             px = np.repeat(last.Close.values, 7) * (1 + np.random.default_rng(1).normal(0, .003, len(idx)))
-            hourly[t] = pd.DataFrame({"Open": px, "High": px * 1.002, "Low": px * .998, "Close": px,
-                                      "Volume": np.repeat(last.Volume.values / 7, 7)}, index=idx)
+            op = np.concatenate([[px[0]], px[:-1]])
+            hourly[t] = pd.DataFrame({"Open": op, "High": np.maximum(op, px) * 1.002, "Low": np.minimum(op, px) * .998,
+                                      "Close": px, "Volume": np.repeat(last.Volume.values / 7, 7)}, index=idx)
     else:
         def fetch(**kw):                    # one retry in small batches for anything Yahoo dropped
             f = yf_batch(tickers, **kw)
@@ -602,10 +690,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu). Not financial advice.</div>
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
+Order blocks (Trend view): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
+<div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
 <div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -658,8 +748,17 @@ document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='
 cm.hidden=false;document.body.style.overflow='hidden';draw()}}
 function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
-let cmSrc='trend';const dataCache={{}};
-function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=cmSrc!=='trend'}}
+let cmSrc='trend',cmOB=true;const dataCache={{}};
+function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=document.querySelector('.obb').hidden=cmSrc!=='trend'}}
+// order block boxes: [start, end, top, bottom, side, fresh], drawn under the candles; fresh ones run to the right edge
+function obPrim(zs){{let ch,se,rs=[];
+const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,vr=sc.verticalPixelRatio,lw=Math.max(1,Math.round(hr));
+rs.forEach(r=>{{const X=Math.round(r.x1*hr),Y=Math.round(r.y1*vr),W=Math.max(lw,Math.round((r.x2-r.x1)*hr)),H=Math.max(lw,Math.round((r.y2-r.y1)*vr));
+x.fillStyle=r.col+(r.fresh?'40':'1c');x.fillRect(X,Y,W,H);x.lineWidth=lw;x.strokeStyle=r.col+(r.fresh?'e6':'73');x.strokeRect(X+lw/2,Y+lw/2,Math.max(0,W-lw),Math.max(0,H-lw))}})}})}};
+const view={{zOrder:()=>'bottom',renderer:()=>rend}};
+return {{attached:p=>{{ch=p.chart;se=p.series}},paneViews:()=>[view],updateAllViews:()=>{{const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
+zs.forEach(z=>{{const x1=ts.timeToCoordinate(z[0]),x2=z[5]?ts.width():ts.timeToCoordinate(z[1]),y1=se.priceToCoordinate(z[2]),y2=se.priceToCoordinate(z[3]);
+if(x1==null||x2==null||y1==null||y2==null)return;rs.push({{x1:x1-sp,x2:z[5]?x2:x2+sp,y1:Math.min(y1,y2),y2:Math.max(y1,y2),col:z[4]>0?'#2962ff':'#f57c00',fresh:z[5]}})}})}}}}}}
 function trendDraw(){{const w=document.getElementById('cmw');w.innerHTML='<div id="cmc"></div>';const lg=document.getElementById('cmlg');lg.textContent='Loading…';
 const tf=cmIv==='240'?'4H':cmIv,sym=cmSym;
 (dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))).then(D=>{{
@@ -682,15 +781,21 @@ k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[
 const l=c.addLineSeries({{color:col,lineWidth:key==='m150'?2:1,lineStyle:ls,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}});
 l.setData(s.t.map((t,i)=>s[key][i]==null?{{time:t}}:{{time:t,value:s[key][i]}}))}});
 const mk=[];for(let i=1;i<s.t.length;i++)if(s.tr[i]!==s.tr[i-1]&&s.tr[i]!==0)mk.push(s.tr[i]>0?{{time:s.t[i],position:'belowBar',color:UP,shape:'arrowUp'}}:{{time:s.t[i],position:'aboveBar',color:DN,shape:'arrowDown'}});
-k.setMarkers(mk);c.timeScale().fitContent();
+k.setMarkers(mk);if(cmOB&&s.ob)k.attachPrimitive(obPrim(s.ob));c.timeScale().fitContent();
 let i=s.tr.length-1;const st=s.tr[i];while(i>0&&s.tr[i-1]===st)i--;
 const since=typeof s.t[i]==='number'?new Date(s.t[i]*1000).toISOString().slice(0,10):s.t[i];
+const last=s.c[s.c.length-1],fresh=(s.ob||[]).filter(z=>z[5]),pct=v=>{{const p=(v/last-1)*100;return(p>=0?'+':'')+p.toFixed(1)+'%'}};
+const sup=fresh.filter(z=>z[4]>0&&z[2]<=last).sort((a,b)=>b[2]-a[2])[0],res=fresh.filter(z=>z[4]<0&&z[3]>=last).sort((a,b)=>a[3]-b[3])[0];
+const obTxt=!cmOB?'':' · <span title="Order block: the last opposite candle before a strong move, where traders got caught on the wrong side. Blue = bullish (support), orange = bearish (resistance). A box ends where price first came back; solid boxes are still untouched.">order blocks</span>: '+
+(sup?'<span style="color:#2962ff">support '+sup[3].toFixed(2)+'–'+sup[2].toFixed(2)+' ('+pct(sup[2])+')</span>':'no untouched support')+', '+
+(res?'<span style="color:#f57c00">resistance '+res[3].toFixed(2)+'–'+res[2].toFixed(2)+' ('+pct(res[3])+')</span>':'no untouched resistance');
 lg.innerHTML=(st>0?'<span class="up">Uptrend</span>':st<0?'<span class="dn">Downtrend</span>':'<b>No trend</b>')+' since '+since+
-' · <span title="Uptrend: EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; 150 MA. Downtrend: the reverse.">green = uptrend, red = downtrend</span> · EMA 10 orange, 20 blue, 50 purple, 150 dashed'}})
+' · <span title="Uptrend: EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; 150 MA. Downtrend: the reverse.">green = uptrend, red = downtrend</span> · EMA 10 orange, 20 blue, 50 purple, 150 dashed'+obTxt}})
 .catch(()=>{{if(sym!==cmSym)return;lg.textContent='Trend data not available for '+sym+' here, showing the indicator chart.';cmSrc='tv';setOn('.bar.src','tv','src');tvDraw()}})}}
 function setOn(sel,val,key){{document.querySelectorAll(sel+' button').forEach(x=>x.classList.toggle('on',x.dataset[key]===val))}}
 document.querySelectorAll('.bar.tfb button').forEach(b=>b.onclick=()=>{{cmIv=b.dataset.iv;setOn('.bar.tfb',cmIv,'iv');draw()}});
 document.querySelectorAll('.bar.src button').forEach(b=>b.onclick=()=>{{cmSrc=b.dataset.src;setOn('.bar.src',cmSrc,'src');draw()}});
+document.getElementById('obt').onclick=e=>{{cmOB=!cmOB;e.currentTarget.classList.toggle('on',cmOB);draw()}};
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script></body></html>"""
