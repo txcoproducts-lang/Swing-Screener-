@@ -233,9 +233,15 @@ def write_stock_charts(tickers, out, demo=False):
             hourly[t] = pd.DataFrame({"Open": px, "High": px * 1.002, "Low": px * .998, "Close": px,
                                       "Volume": np.repeat(last.Volume.values / 7, 7)}, index=idx)
     else:
-        daily = yf_batch(tickers, period="10y", interval="1d")
-        monthly = yf_batch(tickers, period="max", interval="1mo")
-        hourly = yf_batch(tickers, period="730d", interval="60m")
+        def fetch(**kw):                    # one retry in small batches for anything Yahoo dropped
+            f = yf_batch(tickers, **kw)
+            miss = [t for t in tickers if t not in f]
+            if miss:
+                f.update(yf_batch(miss, size=10, **kw))
+            return f
+        daily = fetch(period="10y", interval="1d")
+        monthly = fetch(period="max", interval="1mo")
+        hourly = fetch(period="730d", interval="60m")
     dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
     n = 0
     for t in tickers:
