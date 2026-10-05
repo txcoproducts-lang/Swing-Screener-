@@ -606,7 +606,7 @@ const dark=matchMedia('(prefers-color-scheme: dark)').matches;
 tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbol:tvSym(cmSym),interval:cmIv,timezone:'America/Chicago',
 theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
 studies:[{{id:'MAExp@tv-basicstudies',inputs:{{length:10}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:20}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:50}}}},
-{{id:'MASimple@tv-basicstudies',inputs:{{length:200}}}},'RSI@tv-basicstudies','MACD@tv-basicstudies']}}))
+{{id:'MASimple@tv-basicstudies',inputs:{{length:200}}}},'STD;RSI','STD;MACD']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
 function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
