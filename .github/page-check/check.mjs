@@ -16,6 +16,21 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(1500);
   log(`[${name}] title=${await p.title()} rows=${await p.$$eval("#t tbody tr", r => r.length)} sectorCharts=${await p.$$eval(".ch canvas", c => c.length)}`);
   await p.screenshot({ path: `${out}/${name}-1-top.png` });
+  // paper trading tiles and each account's breakdown
+  await p.waitForSelector(".pp-tile", { timeout: 15000 }).catch(() => {});
+  await p.evaluate(() => { const e = document.getElementById("pp"); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 60); });
+  log(`[${name}] paper tiles: ${(await p.$$eval(".pp-tile", ts => ts.map(t => t.innerText.replace(/\n/g, " | ")))).join(" || ") || "none: " + (await p.$eval("#pp", e => e.textContent).catch(() => "no section"))}`);
+  await p.screenshot({ path: `${out}/${name}-0-paper.png` });
+  for (const id of ["A", "B"]) {
+    if (!(await p.$(`.pp-tile[data-acct="${id}"]`))) continue;
+    await p.click(`.pp-tile[data-acct="${id}"]`); await p.waitForTimeout(400);
+    log(`[${name}] paper ${id}: ${await p.$$eval("#pm .pm-cards .card", cs => cs.map(c => c.innerText.replace(/\n/g, " ")).join(" | "))}`);
+    await p.screenshot({ path: `${out}/${name}-0-paper-${id}.png` });
+    await p.$eval("#pm .pm-body", b => { const h = [...b.querySelectorAll("h3")][2]; if (h) b.scrollTop = h.offsetTop - 10; });
+    await p.waitForTimeout(150);
+    await p.screenshot({ path: `${out}/${name}-0-paper-${id}-log.png` });
+    await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+  }
   for (const k of ["nu", "bo", "ai"]) {
     await p.click(`.bar.pk button[data-pk="${k}"]`); await p.waitForTimeout(300);
     await p.evaluate(() => { const e = document.querySelector(".bar.pk"); window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); });

@@ -198,6 +198,50 @@ for (const tk of tks) {
   await p.keyboard.press("Escape"); opened++;
 }
 log(`opened ${opened} tickers x 4 timeframes (daily also at 5Y), problems: ${chartErr.length}`); chartErr.slice(0, 40).forEach(i => log("  " + i));
+// ---- 4. paper trading: the accounts add up, every trade has its reasons, and the tiles and breakdown match the data
+const paper = await p.evaluate(async () => {
+  const SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/";
+  const money = v => (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const lines = [];
+  for (const id of ["A", "B"]) {
+    let a; try { a = await (await fetch(SRC + id + ".json?v=" + Date.now(), { cache: "no-store" })).json(); } catch (e) { lines.push(`${id}: could not load (${e})`); continue; }
+    const bad = [], near = (x, y, tol = 0.05) => Math.abs(x - y) <= tol;
+    const all = a.positions.concat(a.closed);
+    const cash = a.start_cash - all.reduce((s, q) => s + q.buy.cost, 0) + a.closed.reduce((s, q) => s + q.sell.proceeds, 0);
+    if (!near(cash, a.cash, 0.1)) bad.push(`cash ${a.cash} but the trades add up to ${cash.toFixed(2)}`);
+    const v = a.cash + a.positions.reduce((s, q) => s + q.last.value, 0);
+    if (a.mark && !near(v, a.mark.v)) bad.push(`value ${a.mark.v} but cash + positions = ${v.toFixed(2)}`);
+    if (a.cash < -0.01) bad.push(`negative cash ${a.cash}`);
+    for (const q of all) {
+      if (!q.buy.why || !q.plan || !q.plan.text) bad.push(`${q.label}: no buy reason or plan`);
+      if (q.kind === "call" && !(q.buy.dte >= 15 && q.buy.dte <= 30 && q.buy.delta >= 0.5 && q.buy.delta <= 0.8 && q.buy.oi > 500)) bad.push(`${q.label}: bought outside your rules (${q.buy.dte}d, delta ${q.buy.delta}, OI ${q.buy.oi})`);
+      if (!a.log.some(e => e.kind === "buy" && e.t === q.buy.t && e.text.includes(q.ticker))) bad.push(`${q.label}: no log line for the buy`);
+    }
+    for (const q of a.closed) {
+      if (!q.sell.why) bad.push(`${q.label}: no sell reason`);
+      if (!near(q.pnl, q.sell.proceeds - q.buy.cost, 0.011)) bad.push(`${q.label}: P&L ${q.pnl} != ${(q.sell.proceeds - q.buy.cost).toFixed(2)}`);
+      if (!a.log.some(e => e.kind === "sell" && e.t === q.sell.t && e.text.includes(q.ticker))) bad.push(`${q.label}: no log line for the sale`);
+    }
+    if (a.id === "A" && a.positions.length > 2) bad.push(`${a.positions.length} positions, more than 2`);
+    if (a.equity.length && a.equity[0].v !== a.start_cash) bad.push(`chart starts at ${a.equity[0].v}`);
+    for (let i = 1; i < a.equity.length; i++) if (!(a.equity[i].d > a.equity[i - 1].d)) bad.push(`chart dates out of order at ${a.equity[i].d}`);
+    const tile = document.querySelector(`.pp-tile[data-acct="${id}"] .pp-val`);
+    const want = money(a.mark ? a.mark.v : a.cash);
+    if (!tile) bad.push("no tile on the page"); else if (tile.textContent !== want) bad.push(`tile shows ${tile.textContent}, data says ${want}`);
+    if (tile) {
+      tile.closest(".pp-tile").click();
+      await new Promise(r => setTimeout(r, 300));
+      const m = document.getElementById("pm");
+      const np = m.querySelectorAll(".pm-pos").length, nc = m.querySelectorAll(".pm-trade").length;
+      if (np !== a.positions.length || nc !== a.closed.length) bad.push(`breakdown shows ${np} open / ${nc} closed, data has ${a.positions.length} / ${a.closed.length}`);
+      m.querySelector(".pm-x").click();
+    }
+    lines.push(`${id} ${a.name}: ${money(a.mark ? a.mark.v : a.cash)} (updated ${a.updated || "never"}), cash ${money(a.cash)}, ${a.positions.length} open, ` +
+               `${a.closed.length} closed, ${a.log.length} log lines, ${a.equity.length} closes; problems: ${bad.length ? bad.join("; ") : "none"}`);
+  }
+  return lines;
+});
+paper.forEach(l => log("paper " + l));
 log(`page errors overall: ${errs.length ? errs.slice(0, 10).join(" | ") : "none"}`);
 await b.close();
 fs.mkdirSync("shots", { recursive: true }); fs.writeFileSync("shots/audit.txt", out.join("\n") + "\n");
