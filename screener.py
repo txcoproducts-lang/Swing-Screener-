@@ -241,7 +241,8 @@ def write_stock_charts(tickers, out, demo=False):
             return f
         daily = fetch(period="10y", interval="1d")
         monthly = fetch(period="max", interval="1mo")
-        hourly = fetch(period="720d", interval="60m")   # 730d trips Yahoo's limit for some tickers
+        # explicit dates: with period= yfinance starts at the listing date for some recent IPOs (GEV) and Yahoo rejects it
+        hourly = fetch(start=(dt.date.today() - dt.timedelta(days=700)).isoformat(), interval="60m")
     dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
     n = 0
     for t in tickers:
@@ -428,7 +429,15 @@ def pick_call(t, S):
     exps = [x for x in exps if CFG["DTE_MIN"] <= x[2] <= CFG["DTE_MAX"]]
     if not exps:
         return None, "no expiry in DTE window"
-    _, exp, dte = min(exps)
+    why = ""
+    for _, exp, dte in sorted(exps)[:3]:          # nearest-to-target first; weeklies can be thin, so try the next
+        o, why = _pick_from_chain(tk, S, exp, dte)
+        if o:
+            return o, why
+    return None, why
+
+
+def _pick_from_chain(tk, S, exp, dte):
     T = dte / 365
     ch = tk.option_chain(exp).calls
     oi_known = ch.openInterest.fillna(0).gt(0).any()   # Yahoo often zeroes OI on weekends
