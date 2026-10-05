@@ -16,6 +16,13 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(1500);
   log(`[${name}] title=${await p.title()} rows=${await p.$$eval("#t tbody tr", r => r.length)} sectorCharts=${await p.$$eval(".ch canvas", c => c.length)}`);
   await p.screenshot({ path: `${out}/${name}-1-top.png` });
+  for (const k of ["nu", "bo", "ai"]) {
+    await p.click(`.bar.pk button[data-pk="${k}"]`); await p.waitForTimeout(300);
+    await p.evaluate(() => { const e = document.querySelector(".bar.pk"); window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); });
+    log(`[${name}] top picks ${k}: ${await p.$$eval(`.pkl[data-pk="${k}"] tbody tr`, r => r.length)} rows`);
+    await p.screenshot({ path: `${out}/${name}-1-picks-${k}.png` });
+  }
+  await p.click('.bar.pk button[data-pk="nu"]');
   await (await p.$("#t")).scrollIntoViewIfNeeded();
   await p.screenshot({ path: `${out}/${name}-2-table.png` });
   const tk = await p.$eval("#t tbody tr:not([style*='none']) .tk", e => e.dataset.tk);

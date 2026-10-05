@@ -68,10 +68,60 @@ log(`data issues: ${res.issues.length}`); res.issues.slice(0, 40).forEach(i => l
 log(`table vs data mismatches: ${res.stats.numMismatch.length}`); res.stats.numMismatch.slice(0, 40).forEach(i => log("  " + i));
 log(`rows with an options contract: ${res.stats.withContract}`);
 
+// ---- 1b. top picks lists against the chart data
+const pk = await p.evaluate(async () => {
+  const out = { issues: [], counts: {} };
+  const asof = (document.querySelector(".meta").textContent.match(/as of (\d{4}-\d{2}-\d{2})/) || [])[1];
+  const v = (r, i) => r.cells[i].dataset.v;
+  for (const id of ["pk-nu", "pk-bo", "pk-ai"]) {
+    const rows = [...document.querySelectorAll(`#${id} tbody tr`)];
+    out.counts[id] = rows.length;
+    const secs = {};
+    for (const r of rows) {
+      const tk = v(r, 0); let D;
+      try { const x = await fetch("data/" + encodeURIComponent(tk) + ".json"); if (!x.ok) throw x.status; D = await x.json(); }
+      catch (e) { out.issues.push(`${id} ${tk}: no chart data`); continue; }
+      const s = D.D, n = s.c.length, last = s.c[n - 1];
+      const near = i => [s.e10[i] - s.e20[i], s.c[i] - s.e50[i], s.c[i] - s.m150[i]].some(x => Math.abs(x) < 0.05);
+      if (id === "pk-nu") {
+        if (Math.abs(+v(r, 1) - last) > 0.02) out.issues.push(`${id} ${tk}: close ${v(r, 1)} vs data ${last}`);
+        if (!(s.tr[n - 1] === 1 && s.tr[n - 2] !== 1) && !near(n - 1) && !near(n - 2)) out.issues.push(`${id} ${tk}: not a new uptrend in the data (${s.tr[n - 2]} -> ${s.tr[n - 1]})`);
+      } else if (id === "pk-bo") {
+        const lvl = +v(r, 2), below = +v(r, 3), base = +v(r, 4), hi = Math.max(...s.h.slice(n - 50));
+        if (Math.abs(+v(r, 1) - last) > 0.02) out.issues.push(`${id} ${tk}: close ${v(r, 1)} vs data ${last}`);
+        if (Math.abs(lvl - hi) > 0.02) out.issues.push(`${id} ${tk}: breakout level ${lvl} vs 50-day high ${hi}`);
+        if (Math.abs(below - (last / lvl - 1) * 100) > 0.15 || below < -5.05 || below > 0) out.issues.push(`${id} ${tk}: "below it" ${below}`);
+        if (!(base >= 5)) out.issues.push(`${id} ${tk}: base ${base} days`);
+        if (s.tr[n - 1] !== 1 && !near(n - 1)) out.issues.push(`${id} ${tk}: not in an uptrend`);
+      } else {
+        const sec = r.querySelector(".sec").textContent; secs[sec] = (secs[sec] || 0) + 1;
+        if (v(r, 4) !== "" && Math.abs(+v(r, 4) - last) > 0.02) out.issues.push(`${id} ${tk}: now ${v(r, 4)} vs data ${last}`);
+        if (v(r, 2) === asof && Math.abs(+v(r, 3) - last) > 0.02) out.issues.push(`${id} ${tk}: picked today at ${v(r, 3)} but closed ${last}`);
+        if (v(r, 2) > asof) out.issues.push(`${id} ${tk}: picked in the future (${v(r, 2)})`);
+      }
+    }
+    if (id === "pk-ai") {
+      if (rows.length > 10) out.issues.push(`AI picks: ${rows.length} rows (max 10)`);
+      for (const [k, c] of Object.entries(secs)) if (k && c > 3) out.issues.push(`AI picks: ${c} in ${k} (max 3)`);
+      const ranks = rows.map(r => +v(r, 1)).filter(x => x);
+      if (ranks.some(x => x > 20)) out.issues.push(`AI picks: a rank above 20 (${ranks.join(",")})`);
+    }
+  }
+  return out;
+});
+log(`top picks: ${pk.counts["pk-nu"] || 0} new uptrends, ${pk.counts["pk-bo"] || 0} breakout watch, ${pk.counts["pk-ai"] || 0} AI picks; issues: ${pk.issues.length}`);
+pk.issues.slice(0, 40).forEach(i => log("  " + i));
+for (const k of ["nu", "bo", "ai"]) {
+  await p.click(`.bar.pk button[data-pk="${k}"]`);
+  const shown = await p.$$eval(".pkl", d => d.filter(x => !x.hidden).map(x => x.dataset.pk).join(","));
+  if (shown !== k) log(`top picks tab ${k}: shows "${shown}"`);
+}
+await p.click('.bar.pk button[data-pk="nu"]');
+
 // ---- 2. controls
 const vis = () => p.$$eval("#t tbody tr", r => r.filter(x => x.style.display !== "none").length);
 for (const f of ["setups", "Momentum", "Pullback", "all"]) {
-  await p.click(`.bar:not(.tf):not(.iv) button[data-f="${f}"]`);
+  await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="${f}"]`);
   const n = await vis(); const bad = await p.$$eval("#t tbody tr", (r, f) => r.filter(x => x.style.display !== "none" && !(f === "all" || (f === "setups" ? x.dataset.setup !== "Uptrend" : x.dataset.setup === f))).length, f);
   log(`filter ${f}: ${n} rows, ${bad} wrong`);
 }
