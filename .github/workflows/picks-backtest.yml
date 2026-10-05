@@ -1,7 +1,7 @@
 name: Pick lists backtest
 
 on:
-  workflow_dispatch: {}      # run from the Actions tab; takes about 15 minutes
+  workflow_dispatch: {}      # run from the Actions tab; takes about 7 minutes
 
 permissions:
   contents: write
