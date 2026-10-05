@@ -156,6 +156,101 @@ def chart_data(etf_frames):
     return out
 
 
+
+# ------------------------------------------------------- per-stock trend charts
+STOCK_BARS = {"4H": 300, "D": 260, "W": 156, "M": 180}   # ~5 months, 1 year, 3 years, 15 years
+
+
+def yf_batch(tickers, size=100, **kw):
+    import yfinance as yf
+    frames = {}
+    for i in range(0, len(tickers), size):
+        chunk = tickers[i:i + size]
+        try:
+            df = yf.download(chunk, auto_adjust=True, group_by="ticker", threads=True, progress=False, **kw)
+        except Exception as e:
+            print("  batch failed:", e)
+            continue
+        if df.empty:
+            continue
+        top = set(df.columns.get_level_values(0))
+        for t in chunk:
+            if t in top:
+                d = df[t].dropna(subset=["Close"])
+                if len(d):
+                    frames[t] = d[["Open", "High", "Low", "Close", "Volume"]]
+    return frames
+
+
+def to_4h(h):
+    """Hourly regular-session bars -> two bars per day (09:30-13:30 and 13:30-16:00 New York)."""
+    if h.index.tz is not None:
+        h = h.tz_convert("America/New_York").tz_localize(None)
+    half = (h.index.hour * 60 + h.index.minute >= 13 * 60 + 30).astype(int)
+    key = h.index.normalize() + pd.to_timedelta(half * 4, unit="h")
+    g = h.groupby(key)
+    b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                      "Close": g.Close.last(), "Volume": g.Volume.sum()})
+    b.index = [grp.index[0] for _, grp in g]
+    return b
+
+
+def to_period(d, rule):
+    g = d.groupby(d.index.to_period(rule))
+    b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                      "Close": g.Close.last(), "Volume": g.Volume.sum()})
+    b.index = [grp.index[0] for _, grp in g]
+    return b
+
+
+def trend_series(b, n_show, intraday=False):
+    """OHLC + EMA10/20/50 + 150 MA + trend state (1 up, -1 down, 0 neither) for the last n_show bars.
+    Uptrend = EMA10 > EMA20, close > EMA50 and close > 150 MA; downtrend is the mirror image."""
+    c = b.Close
+    e10, e20, e50 = ema(c, 10), ema(c, 20), ema(c, 50)
+    m150 = ema(c, 150) if CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean()
+    up = (e10 > e20) & (c > e50) & (c > m150)
+    dn = (e10 < e20) & (c < e50) & (c < m150)
+    tr = up.astype(int) - dn.astype(int)
+    k = slice(-n_show, None)
+    r2 = lambda s: [None if x != x else round(float(x), 2) for x in s.iloc[k]]
+    t = ([int(i.timestamp()) for i in b.index[k]] if intraday else [i.strftime("%Y-%m-%d") for i in b.index[k]])
+    return dict(t=t, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(c), v=[int(x) for x in b.Volume.iloc[k]],
+                e10=r2(e10), e20=r2(e20), e50=r2(e50), m150=r2(m150), tr=[int(x) for x in tr.iloc[k]])
+
+
+def write_stock_charts(tickers, out, demo=False):
+    """One JSON per ticker (4H / D / W / M), loaded by the chart pop-up on click."""
+    if demo:
+        fr = demo_frames(n=len(tickers), days=2600)
+        daily = dict(zip(tickers, fr.values()))
+        monthly = {t: to_period(d, "M") for t, d in daily.items()}
+        hourly = {}
+        for t, d in daily.items():
+            last = d.iloc[-200:]
+            idx = [ts + pd.Timedelta(hours=9.5 + i) for ts in last.index for i in range(7)]
+            px = np.repeat(last.Close.values, 7) * (1 + np.random.default_rng(1).normal(0, .003, len(idx)))
+            hourly[t] = pd.DataFrame({"Open": px, "High": px * 1.002, "Low": px * .998, "Close": px,
+                                      "Volume": np.repeat(last.Volume.values / 7, 7)}, index=idx)
+    else:
+        daily = yf_batch(tickers, period="10y", interval="1d")
+        monthly = yf_batch(tickers, period="max", interval="1mo")
+        hourly = yf_batch(tickers, period="730d", interval="60m")
+    dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for t in tickers:
+        d = daily.get(t)
+        if d is None or len(d) < 60:
+            continue
+        rec = {"D": trend_series(d, STOCK_BARS["D"]), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
+        if t in monthly and len(monthly[t]) > 20:
+            rec["M"] = trend_series(monthly[t], STOCK_BARS["M"])
+        if t in hourly and len(hourly[t]) > 60:
+            rec["4H"] = trend_series(to_4h(hourly[t]), STOCK_BARS["4H"], intraday=True)
+        (dd / f"{t}.json").write_text(json.dumps(rec, separators=(",", ":")), encoding="utf-8")
+        n += 1
+    return n
+
 # --------------------------------------------------------------- indicators
 def ema(s, n): return s.ewm(span=n, adjust=False).mean()
 
@@ -447,7 +542,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
 #cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
-#cmw{{flex:1;min-height:0}}#cmw>div{{height:100%}}
+#cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
@@ -459,11 +554,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Momentum requires price &gt; EMA50, EMA10 &gt; EMA20, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart with EMA 10/20/50, SMA 200, volume, RSI and MACD (add more from the chart's Indicators menu). Not financial advice.</div>
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view adds RSI, MACD and any other study. Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
-<div class="bar iv"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
+<div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
+<div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const CH={chart_json};
@@ -512,10 +608,42 @@ studies:[{{id:'MAExp@tv-basicstudies',inputs:{{length:10}}}},{{id:'MAExp@tv-basi
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
 function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
-cm.hidden=false;document.body.style.overflow='hidden';tvDraw()}}
+cm.hidden=false;document.body.style.overflow='hidden';draw()}}
 function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
-document.querySelectorAll('.bar.iv button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.iv button').forEach(x=>x.classList.remove('on'));b.classList.add('on');cmIv=b.dataset.iv;tvDraw()}});
+let cmSrc='trend';const dataCache={{}};
+function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=cmSrc!=='trend'}}
+function trendDraw(){{const w=document.getElementById('cmw');w.innerHTML='<div id="cmc"></div>';const lg=document.getElementById('cmlg');lg.textContent='Loading…';
+const tf=cmIv==='240'?'4H':cmIv,sym=cmSym;
+(dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))).then(D=>{{
+if(sym!==cmSym||cmSrc!=='trend')return;const s=D[tf];if(!s){{lg.textContent='No '+tf+' data for '+sym+'.';return}}
+if(!window.LightweightCharts){{lg.textContent='Chart library blocked.';return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim(),UP=V('--up'),DN=V('--dn');
+const c=LightweightCharts.createChart(document.getElementById('cmc'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut')}},
+grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false}},timeScale:{{borderVisible:false,timeVisible:tf==='4H'}}}});
+const runs=[];s.tr.forEach((v,i)=>{{if(!v)return;const r=runs[runs.length-1];if(r&&r.v===v&&r.b===i-1)r.b=i;else runs.push({{v,a:i,b:i}})}});
+const box=document.getElementById('cmc');box.style.position='relative';const lay=document.createElement('div');lay.className='trl';box.appendChild(lay);
+function shade(){{const ts=c.timeScale(),sp=ts.options().barSpacing,w=box.clientWidth-c.priceScale('right').width();
+lay.innerHTML=runs.map(r=>{{let x1=ts.timeToCoordinate(s.t[r.a]),x2=ts.timeToCoordinate(s.t[r.b]);if(x1==null||x2==null)return'';
+x1=Math.max(0,x1-sp/2);x2=Math.min(w,x2+sp/2);return x2>x1?`<i style="left:${{x1}}px;width:${{x2-x1}}px;background:${{r.v>0?UP:DN}}"></i>`:''}}).join('')}}
+c.timeScale().subscribeVisibleLogicalRangeChange(()=>requestAnimationFrame(shade));new ResizeObserver(()=>requestAnimationFrame(shade)).observe(box);
+const vol=c.addHistogramSeries({{priceScaleId:'v',priceFormat:{{type:'volume'}},lastValueVisible:false,priceLineVisible:false}});c.priceScale('v').applyOptions({{scaleMargins:{{top:0.85,bottom:0}}}});
+vol.setData(s.t.map((t,i)=>({{time:t,value:s.v[i],color:(s.c[i]>=s.o[i]?UP:DN)+'55'}})));
+const k=c.addCandlestickSeries({{upColor:UP,downColor:DN,wickUpColor:UP,wickDownColor:DN,borderVisible:false}});
+k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[i]}})));
+[['e10','#e8a33d',0],['e20',V('--acc'),0],['e50','#a259d9',0],['m150',V('--mut'),2]].forEach(([key,col,ls])=>{{
+const l=c.addLineSeries({{color:col,lineWidth:key==='m150'?2:1,lineStyle:ls,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}});
+l.setData(s.t.map((t,i)=>s[key][i]==null?{{time:t}}:{{time:t,value:s[key][i]}}))}});
+const mk=[];for(let i=1;i<s.t.length;i++)if(s.tr[i]!==s.tr[i-1]&&s.tr[i]!==0)mk.push(s.tr[i]>0?{{time:s.t[i],position:'belowBar',color:UP,shape:'arrowUp'}}:{{time:s.t[i],position:'aboveBar',color:DN,shape:'arrowDown'}});
+k.setMarkers(mk);c.timeScale().fitContent();
+let i=s.tr.length-1;const st=s.tr[i];while(i>0&&s.tr[i-1]===st)i--;
+const since=typeof s.t[i]==='number'?new Date(s.t[i]*1000).toISOString().slice(0,10):s.t[i];
+lg.innerHTML=(st>0?'<span class="up">Uptrend</span>':st<0?'<span class="dn">Downtrend</span>':'<b>No trend</b>')+' since '+since+
+' · <span title="Uptrend: EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; 150 MA. Downtrend: the reverse.">green = uptrend, red = downtrend</span> · EMA 10 orange, 20 blue, 50 purple, 150 dashed'}})
+.catch(()=>{{if(sym!==cmSym)return;lg.textContent='Trend data not available for '+sym+' here, showing the indicator chart.';cmSrc='tv';setOn('.bar.src','tv','src');tvDraw()}})}}
+function setOn(sel,val,key){{document.querySelectorAll(sel+' button').forEach(x=>x.classList.toggle('on',x.dataset[key]===val))}}
+document.querySelectorAll('.bar.tfb button').forEach(b=>b.onclick=()=>{{cmIv=b.dataset.iv;setOn('.bar.tfb',cmIv,'iv');draw()}});
+document.querySelectorAll('.bar.src button').forEach(b=>b.onclick=()=>{{cmSrc=b.dataset.src;setOn('.bar.src',cmSrc,'src');draw()}});
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script></body></html>"""
@@ -575,6 +703,12 @@ def main():
     print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} sectors")
 
     out = Path(a.out); out.mkdir(exist_ok=True)
+    chart_tks = list(picks.ticker) + list(SECTOR_ETF.values())
+    print(f"Building trend charts for {len(chart_tks)} tickers...")
+    try:
+        print(f"  wrote {write_stock_charts(chart_tks, out, a.demo)} chart files")
+    except Exception as e:                 # extras; never block the scan
+        print("  stock charts failed:", e)
     html = render(picks, breadth, secb, df, asof, a.demo, charts)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
