@@ -23,6 +23,10 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(2500);
   log(`[${name}] opened ${tk}: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
   await p.screenshot({ path: `${out}/${name}-3-trend-daily.png` });
+  await p.click('.bar.rng button[data-rng="5Y"]'); await p.waitForTimeout(1500);
+  log(`[${name}] daily 5Y: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
+  await p.screenshot({ path: `${out}/${name}-3-trend-daily-5y.png` });
+  await p.click('.bar.rng button[data-rng="1Y"]'); await p.waitForTimeout(800);
   for (const iv of ["240", "W", "M"]) {
     await p.click(`.bar.tfb button[data-iv="${iv}"]`); await p.waitForTimeout(1500);
     log(`[${name}] ${iv}: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);

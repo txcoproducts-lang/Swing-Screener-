@@ -46,6 +46,7 @@ const res = await p.evaluate(async () => {
         if (early >= 0) { issues.push(`${tk} ${tf} order block touched at ${s.t[early]} before its end ${JSON.stringify(z)}`); break; }
         stats.ob = (stats.ob || 0) + 1; if (z[5]) stats.obFresh = (stats.obFresh || 0) + 1;
       }
+      if (tf === "D") (stats.dailyBars ||= []).push(n);
     }
     const r = rows[tk], s = D.D;
     if (r && s) {
@@ -60,6 +61,7 @@ const res = await p.evaluate(async () => {
 });
 log(`tickers with charts: ${res.stats.tickers}`);
 log(`order block boxes: ${res.stats.ob || 0} (${res.stats.obFresh || 0} untouched)`);
+{ const d = (res.stats.dailyBars || []).sort((a, b) => a - b); log(`daily bars per ticker: min ${d[0]}, median ${d[d.length >> 1]}, max ${d[d.length - 1]} (5 years is about 1,260)`); }
 log(`missing data files: ${res.stats.missingFile.join(", ") || "none"}`);
 for (const [tf, l] of Object.entries(res.stats.missingTf)) log(`missing ${tf}: ${l.length} (${l.slice(0, 15).join(", ")})`);
 log(`data issues: ${res.issues.length}`); res.issues.slice(0, 40).forEach(i => log("  " + i));
@@ -95,15 +97,18 @@ const tks = await p.$$eval(".tk", e => [...new Set(e.map(x => x.dataset.tk))]);
 let opened = 0; const chartErr = [];
 for (const tk of tks) {
   await p.evaluate(tk => document.querySelector(`.tk[data-tk="${tk}"]`).click(), tk);
-  for (const iv of ["D", "240", "W", "M"]) {
+  for (const iv of ["D", "D5Y", "240", "W", "M"]) {
     const before = errs.length;
-    await p.click(`.bar.tfb button[data-iv="${iv}"]`); await p.waitForTimeout(250);
+    if (iv === "D5Y") await p.click('.bar.rng button[data-rng="5Y"]');
+    else await p.click(`.bar.tfb button[data-iv="${iv}"]`);
+    await p.waitForTimeout(250);
+    if (iv === "D5Y") await p.click('.bar.rng button[data-rng="1Y"]');
     const lg = await p.$eval("#cmlg", e => e.textContent);
     if (!/trend|No trend/i.test(lg) || errs.length > before) chartErr.push(`${tk} ${iv}: "${lg.slice(0, 50)}" ${errs.slice(before).join(" | ")}`);
   }
   await p.keyboard.press("Escape"); opened++;
 }
-log(`opened ${opened} tickers x 4 timeframes, problems: ${chartErr.length}`); chartErr.slice(0, 40).forEach(i => log("  " + i));
+log(`opened ${opened} tickers x 4 timeframes (daily also at 5Y), problems: ${chartErr.length}`); chartErr.slice(0, 40).forEach(i => log("  " + i));
 log(`page errors overall: ${errs.length ? errs.slice(0, 10).join(" | ") : "none"}`);
 await b.close();
 fs.mkdirSync("shots", { recursive: true }); fs.writeFileSync("shots/audit.txt", out.join("\n") + "\n");
