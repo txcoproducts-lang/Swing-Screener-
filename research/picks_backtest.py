@@ -38,6 +38,7 @@ SPLIT = "2022-01-01"                      # rules are chosen before this date, c
 HORIZONS = (5, 10, 20)
 TOP = 10
 COST = 0.001                              # 0.10% per buy and per sell
+TIE = 0.0001                              # 20-day returns this close (0.01%) count as the same when choosing a list
 SP500, OTHER = "List_of_S%26P_500_companies", (("S&P 400", "List_of_S%26P_400_companies"),
                                                ("S&P 600", "List_of_S%26P_600_companies"))
 
@@ -568,14 +569,20 @@ def main():
             rows.append(("everyone", pname, B.stats(ok, d)))
         names_bl = {k: v[0] for k, v in BL.items()}
         names_bl["everyone"] = "Baseline: every liquid stock"
+        tied = []
         if main_u:
             base_bo = get(rows, "everyone", PIS)["bo10"]
-            ok_bl = [k for k in BL if k != "all" and get(rows, k, PIS)["bo10"] >= 1.5 * base_bo]
-            chosen["breakout"] = max(ok_bl or [k for k in BL if k != "all"], key=lambda k: num(get(rows, k, PIS)["ex20"]))
+            ok_bl = [k for k in BL if k != "all" and get(rows, k, PIS)["bo10"] >= 1.5 * base_bo] or [k for k in BL if k != "all"]
+            ex = lambda k: num(get(rows, k, PIS)["ex20"])
+            tied = [k for k in ok_bl if ex(k) >= max(map(ex, ok_bl)) - TIE]      # a tie goes to the list that breaks out more
+            chosen["breakout"] = max(tied, key=lambda k: num(get(rows, k, PIS)["bo10"]))
         R["breakout"] = dict(rows=rows, best=chosen["breakout"])
+        tie_md = (" Tied on return with " + ", ".join(f"**{names_bl[k]}**" for k in tied if k != chosen["breakout"])
+                  + "; it broke out more often." if len(tied) > 1 else "")
         body += ["### Breakout watch (top 10 a day)", "", list_table(rows, names_bl), "",
                  f"Chosen: **{names_bl[chosen['breakout']]}** (best 2014-2021 return among lists that broke out at least "
-                 "1.5x as often as the average stock).", ""]
+                 f"1.5x as often as the average stock; returns within {TIE * 100:.2f}% count as a tie, and a tie goes to "
+                 f"the list that broke out more often).{tie_md}", ""]
         print(f"  breakouts done ({time.time() - t0:.0f}s)", flush=True)
 
         # ---- the chosen lists, side by side
