@@ -162,7 +162,7 @@ def chart_data(etf_frames):
 
 
 # ------------------------------------------------------- per-stock trend charts
-STOCK_BARS = {"4H": 300, "D": 260, "W": 156, "M": 180}   # ~5 months, 1 year, 3 years, 15 years
+STOCK_BARS = {"4H": 300, "D": 1260, "W": 156, "M": 180}  # ~5 months, 5 years (opens on the last year), 3 years, 15 years
 
 
 def yf_batch(tickers, size=100, **kw):
@@ -690,11 +690,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
+<div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
 <div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
@@ -748,8 +749,9 @@ document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='
 cm.hidden=false;document.body.style.overflow='hidden';draw()}}
 function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
-let cmSrc='trend',cmOB=true;const dataCache={{}};
-function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=cmSrc!=='trend';document.querySelector('.obb').hidden=cmSrc!=='trend'||cmIv!=='D'}}
+let cmSrc='trend',cmOB=true,cmRng='1Y';const dataCache={{}};
+function draw(){{cmSrc==='trend'?trendDraw():tvDraw();const day=cmSrc==='trend'&&cmIv==='D';
+document.getElementById('cmlg').hidden=cmSrc!=='trend';document.querySelector('.obb').hidden=document.querySelector('.rng').hidden=!day}}
 // order block boxes: [start, end, top, bottom, side, fresh], drawn under the candles; fresh ones run to the right edge
 function obPrim(zs){{let ch,se,rs=[];
 const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,vr=sc.verticalPixelRatio,lw=Math.max(1,Math.round(hr));
@@ -766,7 +768,7 @@ if(sym!==cmSym||cmSrc!=='trend')return;const s=D[tf];if(!s){{lg.textContent='No 
 if(!window.LightweightCharts){{lg.textContent='Chart library blocked.';return}}
 const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim(),UP=V('--up'),DN=V('--dn');
 const c=LightweightCharts.createChart(document.getElementById('cmc'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut')}},
-grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false}},timeScale:{{borderVisible:false,timeVisible:tf==='4H'}}}});
+grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false}},timeScale:{{borderVisible:false,timeVisible:tf==='4H',minBarSpacing:0.05}}}});
 const runs=[];s.tr.forEach((v,i)=>{{if(!v)return;const r=runs[runs.length-1];if(r&&r.v===v&&r.b===i-1)r.b=i;else runs.push({{v,a:i,b:i}})}});
 const box=document.getElementById('cmc');box.style.position='relative';const lay=document.createElement('div');lay.className='trl';box.appendChild(lay);
 function shade(){{const ts=c.timeScale(),sp=ts.options().barSpacing,w=box.clientWidth-c.priceScale('right').width();
@@ -781,7 +783,8 @@ k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[
 const l=c.addLineSeries({{color:col,lineWidth:key==='m150'?2:1,lineStyle:ls,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}});
 l.setData(s.t.map((t,i)=>s[key][i]==null?{{time:t}}:{{time:t,value:s[key][i]}}))}});
 const mk=[];for(let i=1;i<s.t.length;i++)if(s.tr[i]!==s.tr[i-1]&&s.tr[i]!==0)mk.push(s.tr[i]>0?{{time:s.t[i],position:'belowBar',color:UP,shape:'arrowUp'}}:{{time:s.t[i],position:'aboveBar',color:DN,shape:'arrowDown'}});
-k.setMarkers(mk);if(cmOB&&tf==='D'&&s.ob)k.attachPrimitive(obPrim(s.ob));c.timeScale().fitContent();
+const five=tf==='D'&&cmRng==='5Y';k.setMarkers(five?[]:mk);if(cmOB&&tf==='D'&&s.ob)k.attachPrimitive(obPrim(s.ob));
+const n=s.t.length;if(tf==='D'&&cmRng==='1Y'&&n>252)c.timeScale().setVisibleLogicalRange({{from:n-252,to:n+1}});else c.timeScale().fitContent();
 let i=s.tr.length-1;const st=s.tr[i];while(i>0&&s.tr[i-1]===st)i--;
 const since=typeof s.t[i]==='number'?new Date(s.t[i]*1000).toISOString().slice(0,10):s.t[i];
 const last=s.c[s.c.length-1],fresh=(s.ob||[]).filter(z=>z[5]),pct=v=>{{const p=(v/last-1)*100;return(p>=0?'+':'')+p.toFixed(1)+'%'}};
@@ -796,6 +799,7 @@ function setOn(sel,val,key){{document.querySelectorAll(sel+' button').forEach(x=
 document.querySelectorAll('.bar.tfb button').forEach(b=>b.onclick=()=>{{cmIv=b.dataset.iv;setOn('.bar.tfb',cmIv,'iv');draw()}});
 document.querySelectorAll('.bar.src button').forEach(b=>b.onclick=()=>{{cmSrc=b.dataset.src;setOn('.bar.src',cmSrc,'src');draw()}});
 document.getElementById('obt').onclick=e=>{{cmOB=!cmOB;e.currentTarget.classList.toggle('on',cmOB);draw()}};
+document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.dataset.rng;setOn('.bar.rng',cmRng,'rng');draw()}});
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script></body></html>"""
