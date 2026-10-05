@@ -14,6 +14,7 @@ Manual use:
 Tune your rules in the CFG block below (delta target, DTE, min volume, SMA vs EMA).
 """
 import argparse, datetime as dt, io, json, math, sys
+from collections import Counter
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -473,6 +474,112 @@ def regime(b):
     votes = [x.pct20 > 50, x.pct50 > 50, x.pct200 > 50, x.nh > x.nl, x.udvol > 1, x.adv > x.dec]
     s = sum(bool(v) for v in votes)
     return ("Strong / risk-on", "good") if s >= 5 else ("Mixed", "mid") if s >= 3 else ("Weak / risk-off", "bad")
+
+# --------------------------------------------------------------- pick lists
+# Signals for the three lists at the top of the page (New uptrends, Breakout watch, AI picks).
+# research/picks_backtest.py runs this same code on 12 years of S&P 500 data to choose the rules.
+def wide(frames, key, idx=None):
+    w = pd.DataFrame({t: d[key] for t, d in frames.items()})
+    return (w.reindex(idx) if idx is not None else w.sort_index()).astype(float)
+
+
+def days_since(mask):
+    """Trading days since the mask was last True (NaN if never)."""
+    i = np.arange(len(mask), dtype=float)[:, None]
+    last = pd.DataFrame(np.where(mask.to_numpy(bool), i, np.nan)).ffill().to_numpy()
+    return pd.DataFrame(i - last, index=mask.index, columns=mask.columns)
+
+
+def group_mean(X, ok, labels, min_n=3):
+    """Average of X over the liquid stocks in each group (sector, industry), given back per stock."""
+    lab = pd.Series(labels, dtype=object).reindex(X.columns).to_numpy()
+    g = X.where(ok).T.groupby(lab)
+    m = g.mean().T.where(g.count().T >= min_n)
+    out = m.reindex(columns=lab)
+    out.columns = X.columns
+    return out
+
+
+def zs(X, ok):
+    """Cross-sectional z-score among the liquid stocks each day, capped at +-3; missing = 0 (neutral)."""
+    x = X.where(ok)
+    return x.sub(x.mean(axis=1), axis=0).div(x.std(axis=1), axis=0).clip(-3, 3).fillna(0).where(ok)
+
+
+def pick_features(P, sector=None, sub=None):
+    """Everything the lists use, as dates x tickers tables. P: wide Open/High/Low/Close/Volume tables;
+    sector / sub: ticker -> GICS sector / sub-industry (for industry strength)."""
+    O, H, L, C, V = (P[k] for k in ("Open", "High", "Low", "Close", "Volume"))
+    pc = C.shift()
+    ret = C / pc - 1
+    e10, e20, e50 = (C.ewm(span=n, adjust=False).mean() for n in (10, 20, 50))
+    m50, m150, m200 = (C.rolling(n).mean() for n in (50, 150, 200))
+    tr = np.fmax(H - L, np.fmax((H - pc).abs(), (L - pc).abs()))
+    atr_ = tr.ewm(alpha=1 / 14, adjust=False).mean()
+    av20 = V.rolling(20).mean()
+    up = (e10 > e20) & (C > e50) & (C > m150)                      # your uptrend rule
+    F = dict(close=C, up=up, e50=e50, atr=atr_,
+             liquid=(C >= CFG["MIN_PRICE"]) & (av20 >= CFG["MIN_AVG_VOL"]) & m200.notna())
+    F["new_up"] = up & ~up.shift(fill_value=False)                  # turned into an uptrend today
+    F["days_out"] = days_since(up).shift()                          # days it was out of an uptrend before that
+    r = lambda n: C / C.shift(n) - 1
+    lr = np.log(C).diff()
+    F["mom"] = C.shift(21) / C.shift(252) - 1                       # 12-month return, skipping the last month
+    F["mom_va"] = F["mom"] / (lr.rolling(252, min_periods=200).std() * np.sqrt(252))
+    F["mom6"] = C.shift(21) / C.shift(126) - 1
+    F["rs"] = 0.4 * r(63) + 0.2 * r(126) + 0.2 * r(189) + 0.2 * r(252)   # IBD-style relative strength
+    F["r5"], F["r21"], F["r126"] = r(5), r(21), r(126)
+    F["vol"] = lr.rolling(63).std() * np.sqrt(252)
+    F["hi52"] = C / C.rolling(252, min_periods=200).max()
+    F["lo52"] = C / C.rolling(252, min_periods=200).min()
+    share = lambda b: b.astype(float).where(ret.notna()).shift(21).rolling(231, min_periods=200).mean()
+    F["smooth"] = np.sign(F["mom"]) * (share(ret > 0) - share(ret < 0))    # steady climbs beat jumpy ones
+    if sector is not None:
+        sec = group_mean(F["r126"], F["liquid"], sector)
+        F["ind"] = (group_mean(F["r126"], F["liquid"], sub) if sub is not None else sec).fillna(sec)
+        F["sec_up"] = group_mean(up.astype(float), F["liquid"], sector)
+    pg = (O / pc - 1 >= 0.04) & (V >= 2.5 * av20.shift()) & (C >= O)   # gap up 4%+ on 2.5x volume that held
+    F["pgap"] = (C > L.where(pg).ffill(limit=39)).astype(float)         # ...in the last 40 days, still above that day's low
+    upv, dnv = V.where(ret > 0, 0).rolling(50).sum(), V.where(ret < 0, 0).rolling(50).sum()
+    F["accum"] = np.log((upv + 1) / (dnv + 1))                          # up-day vs down-day volume, 50 days
+    piv = H.rolling(50).max()                                           # breakout level: the 50-day high
+    F["piv"] = piv
+    F["base_days"] = days_since(H >= piv)                              # days since that high was set
+    F["dist"] = (piv - C) / C                                           # how far below it
+    F["depth"] = (piv - L.rolling(50).min()) / piv
+    F["tight"] = (H.rolling(10).max() - L.rolling(10).min()) / C        # 10-day range
+    F["vcp"] = tr.rolling(10).mean() / tr.rolling(50).mean()           # daily ranges shrinking
+    F["dry"] = V.rolling(10).mean() / V.rolling(50).mean()             # volume drying up
+    F["hl"] = L.rolling(10).min() / L.shift(10).rolling(20).min() - 1   # higher lows
+    F["clv"] = ((C - L) / (H - L).where(H > L)).fillna(0.5).rolling(5).mean()   # closing near the highs
+    bbw = C.rolling(20).std() / C.rolling(20).mean()
+    F["squeeze"] = bbw / bbw.rolling(126).min()                         # 1 = tightest Bollinger width in 6 months
+    F["template"] = ((C > m50) & (m50 > m150) & (m150 > m200) & (m200 > m200.shift(21))
+                     & (F["lo52"] >= 1.3) & (F["hi52"] >= 0.75))        # Minervini's trend template
+    F["ext"] = (C - e20) / atr_
+    F["relvol"] = V / av20
+    return F
+
+
+def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=()):
+    """One night of the AI picks list. held: the current picks; score: today's AI score for every liquid
+    stock (Series). A pick stays while it ranks in the top `keep` and isn't in `sell`; open slots go to
+    the best-ranked stocks, at most `cap` per sector. Returns (kept, added, dropped)."""
+    order = score.dropna().sort_values(ascending=False, kind="stable").index[:keep]
+    top = set(order)
+    kept = [t for t in held if t in top and t not in sell]
+    dropped = [t for t in held if t not in kept]
+    grp = lambda t: sector.get(t) if isinstance(sector.get(t), str) and sector.get(t) else t
+    added = []
+    if allow_new:
+        cnt = Counter(grp(t) for t in kept)
+        for t in order:
+            if len(kept) + len(added) >= n:
+                break
+            if t not in kept and t not in dropped and t not in sell and cnt[grp(t)] < cap:
+                added.append(t)
+                cnt[grp(t)] += 1
+    return kept, added, dropped
 
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
