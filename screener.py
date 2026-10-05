@@ -386,7 +386,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
                       'Daily shows ~6 months, weekly ~2 years, monthly ~10 years.</div>'
                       '<div class="bar tf"><button class="on" data-tf="D">Daily</button><button data-tf="W">Weekly</button>'
                       '<button data-tf="M">Monthly</button></div><div class="charts">'
-                      + "".join(f'<div class="ch" data-sector="{n}"><div class="chh"><b>{n}</b> <span class="mut">{c["etf"]}</span>'
+                      + "".join(f'<div class="ch" data-sector="{n}"><div class="chh"><b>{n}</b> <span class="tk mut" data-tk="{c["etf"]}">{c["etf"]}</span>'
                                 f'<span class="chg"></span></div><div class="cv"></div></div>' for n, c in charts.items())
                       + '</div><div id="chfail" class="hint" hidden>Charts could not load (chart library blocked).</div>')
     else:
@@ -407,7 +407,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
             oc = [""] * 8
         dsc = r.days_since_cross
         cross = f'new ({int(dsc)}d ago)' if r.cross else ("above" if dsc == dsc and dsc is not None else "")
-        cells = [f'<b>{r.ticker}</b><div class="sec">{r.sector}</div>', r.setup, f"{r.score:.0f}", f"{r.close:.2f}",
+        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', r.setup, f"{r.score:.0f}", f"{r.close:.2f}",
                  f'<span class="{"up" if r.chg1d > 0 else "dn"}">{r.chg1d:+.1f}</span>', num(r.rsi, "{:.0f}"), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
                  num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
                  flag(r.p150), flag(r.p200), cross] + oc
@@ -441,7 +441,14 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
-.ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}</style></head><body>
+.ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
+.tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
+#cm{{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center}}#cm[hidden]{{display:none}}
+#cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
+#cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
+#cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
+#cmw{{flex:1;min-height:0}}#cmw>div{{height:100%}}
+@media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
@@ -452,7 +459,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Momentum requires price &gt; EMA50, EMA10 &gt; EMA20, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
-call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Not financial advice.</div>
+call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Click any ticker for a 4H / daily / weekly / monthly chart with EMA 10/20/50, SMA 200, volume, RSI and MACD (add more from the chart's Indicators menu). Not financial advice.</div>
+<div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
+<div class="bar iv"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
+<span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
+<div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const CH={chart_json};
@@ -482,12 +493,31 @@ const chip=document.getElementById('secf');
 function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st!=='Uptrend':st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
-document.querySelectorAll('.bar:not(.tf) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
+document.querySelectorAll('.bar:not(.tf):not(.iv) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
 document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
 chip.onclick=()=>{{fSec=null;apply()}};
 function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;
 [...tb.rows].sort((a,b)=>{{const x=a.cells[i].dataset.v??a.cells[i].textContent,y=b.cells[i].dataset.v??b.cells[i].textContent,nx=parseFloat(x),ny=parseFloat(y);return (isNaN(nx)||isNaN(ny)?String(x).localeCompare(String(y)):nx-ny)*d}}).forEach(r=>tb.appendChild(r))}})}}
 sortable('t');sortable('s');apply();
+// ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
+const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
+const tvSym=t=>t.replace(/-/g,'.');
+function tvLib(){{return tvLoading||(tvLoading=new Promise((ok,no)=>{{const s=document.createElement('script');s.src='https://s3.tradingview.com/tv.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)}}))}}
+function tvDraw(){{document.getElementById('cmw').innerHTML='<div id="cmc"></div>';
+const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbol:tvSym(cmSym),interval:cmIv,timezone:'America/Chicago',
+theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
+studies:[{{id:'MAExp@tv-basicstudies',inputs:{{length:10}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:20}}}},{{id:'MAExp@tv-basicstudies',inputs:{{length:50}}}},
+{{id:'MASimple@tv-basicstudies',inputs:{{length:200}}}},'Volume@tv-basicstudies','RSI@tv-basicstudies','MACD@tv-basicstudies']}}))
+.catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
+function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
+document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
+cm.hidden=false;document.body.style.overflow='hidden';tvDraw()}}
+function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
+document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
+document.querySelectorAll('.bar.iv button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.iv button').forEach(x=>x.classList.remove('on'));b.classList.add('on');cmIv=b.dataset.iv;tvDraw()}});
+cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
+document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script></body></html>"""
 
 # --------------------------------------------------------------------- main
