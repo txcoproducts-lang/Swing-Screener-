@@ -13,7 +13,7 @@ Manual use:
 
 Tune your rules in the CFG block below (delta target, DTE, min volume, SMA vs EMA).
 """
-import argparse, datetime as dt, io, math, sys
+import argparse, datetime as dt, io, json, math, sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -111,6 +111,50 @@ def demo_frames(n=80, days=600):
         v = rng.uniform(1.5e6, 9e6, days) * (1 + 0.5 * (rng.random(days) > 0.93))
         frames[f"DEMO{i:02d}"] = pd.DataFrame({"Open": c, "High": hi, "Low": lo, "Close": c, "Volume": v}, index=idx)
     return frames
+
+# ------------------------------------------------------------ sector charts
+SECTOR_ETF = {
+    "S&P 500": "SPY", "Information Technology": "XLK", "Health Care": "XLV", "Financials": "XLF",
+    "Consumer Discretionary": "XLY", "Communication Services": "XLC", "Industrials": "XLI",
+    "Consumer Staples": "XLP", "Energy": "XLE", "Utilities": "XLU", "Real Estate": "XLRE", "Materials": "XLB",
+}
+CHART_BARS = {"D": 130, "W": 104, "M": 120}   # ~6 months daily, 2 years weekly, 10 years monthly
+
+
+def download_etfs():
+    import yfinance as yf
+    etfs = list(SECTOR_ETF.values())
+    df = yf.download(etfs, period="10y", interval="1d", auto_adjust=True,
+                     group_by="ticker", threads=True, progress=False)
+    top = set(df.columns.get_level_values(0)) if not df.empty else set()
+    return {t: df[t].dropna(subset=["Close"])[["Open", "High", "Low", "Close", "Volume"]] for t in etfs if t in top}
+
+
+def chart_data(etf_frames):
+    """Daily / weekly / monthly OHLC + EMA10/20/50 per sector ETF, as compact lists for the page."""
+    out = {}
+    for name, etf in SECTOR_ETF.items():
+        d = etf_frames.get(etf)
+        if d is None or len(d) < 60:
+            continue
+        tfs = {}
+        for tf in ("D", "W", "M"):
+            if tf == "D":
+                b = d
+            else:
+                g = d.groupby(d.index.to_period(tf))
+                b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                                  "Close": g.Close.last(), "Volume": g.Volume.sum()})
+                b.index = [g_.index[0] for _, g_ in g]          # first trading day of the week / month
+            e = {n: ema(b.Close, n) for n in (10, 20, 50)}
+            b = b.iloc[-CHART_BARS[tf]:]
+            day = [i.strftime("%Y-%m-%d") for i in b.index]
+            r2 = lambda s: [round(float(x), 2) for x in s]
+            tfs[tf] = dict(t=day, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(b.Close),
+                           v=[int(x) for x in b.Volume], **{f"e{n}": r2(e[n].iloc[-len(b):]) for n in e})
+        out[name] = dict(etf=etf, **tfs)
+    return out
+
 
 # --------------------------------------------------------------- indicators
 def ema(s, n): return s.ewm(span=n, adjust=False).mean()
@@ -293,7 +337,7 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
-def render(picks, breadth, secb, df, asof, demo):
+def render(picks, breadth, secb, df, asof, demo, charts=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -333,6 +377,21 @@ def render(picks, breadth, secb, df, asof, demo):
                    '<th>Sector</th><th>In uptrend</th><th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
                    '<th>% &gt; 50d</th><th>% &gt; 200d</th><th>Adv / Dec</th><th>52w Hi / Lo</th></tr></thead>'
                    f'<tbody>{"".join(srows)}</tbody></table></div>')
+
+    order = ["S&P 500"] + [n for n in secb.sector if n != "S&P 500"]
+    order += [n for n in SECTOR_ETF if n not in order]
+    charts = {n: charts[n] for n in order if charts and n in charts}
+    if charts:
+        chart_html = ('<h2>Sector charts</h2><div class="hint">Sector SPDR ETFs with EMA 10 (orange), 20 (blue) and 50 (purple). '
+                      'Daily shows ~6 months, weekly ~2 years, monthly ~10 years.</div>'
+                      '<div class="bar tf"><button class="on" data-tf="D">Daily</button><button data-tf="W">Weekly</button>'
+                      '<button data-tf="M">Monthly</button></div><div class="charts">'
+                      + "".join(f'<div class="ch" data-sector="{n}"><div class="chh"><b>{n}</b> <span class="mut">{c["etf"]}</span>'
+                                f'<span class="chg"></span></div><div class="cv"></div></div>' for n, c in charts.items())
+                      + '</div><div id="chfail" class="hint" hidden>Charts could not load (chart library blocked).</div>')
+    else:
+        chart_html = ""
+    chart_json = json.dumps(charts, separators=(",", ":"))
 
     def num(v, f="{:.1f}"): return "" if v is None or v != v else f.format(v)
     def flag(b): return '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
@@ -380,24 +439,50 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .bar2{{height:4px;background:var(--line);border-radius:2px;margin-top:3px;min-width:90px}}.bar2 i{{display:block;height:100%;border-radius:2px}}
 #s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:var(--card)}}#s td:nth-child(2){{text-align:left}}
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
-.note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}</style></head><body>
+.note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
+.charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
+.ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}</style></head><body>
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
 {sector_html}
+{chart_html}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
 <div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="all">All uptrend</button></div>
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Momentum requires price &gt; EMA50, EMA10 &gt; EMA20, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). Not financial advice.</div>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
+const CH={chart_json};
+(function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
+if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();
+const UP=V('--up'),DN=V('--dn');let tf='D';
+const made=boxes.map(b=>{{const d=CH[b.dataset.sector];
+const c=LightweightCharts.createChart(b.querySelector('.cv'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11}},
+grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false}},timeScale:{{borderVisible:false}},handleScroll:false,handleScale:false}});
+const k=c.addCandlestickSeries({{upColor:UP,downColor:DN,wickUpColor:UP,wickDownColor:DN,borderVisible:false}});
+const vol=c.addHistogramSeries({{priceScaleId:'v',priceFormat:{{type:'volume'}},lastValueVisible:false,priceLineVisible:false}});
+c.priceScale('v').applyOptions({{scaleMargins:{{top:0.82,bottom:0}}}});
+const ln=[['e10','#e8a33d'],['e20',V('--acc')],['e50','#a259d9']].map(([key,col])=>[key,c.addLineSeries({{color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}})]);
+return {{b,d,c,k,vol,ln}}}});
+function draw(){{made.forEach(m=>{{const s=m.d[tf];if(!s)return;
+m.k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[i]}})));
+m.vol.setData(s.t.map((t,i)=>({{time:t,value:s.v[i],color:(s.c[i]>=s.o[i]?UP:DN)+'55'}})));
+m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}))));
+m.c.timeScale().fitContent();
+const n=s.c.length,p=(s.c[n-1]/s.c[n-2]-1)*100,e=m.b.querySelector('.chg');
+e.textContent=s.c[n-1].toFixed(2)+'  '+(p>=0?'+':'')+p.toFixed(1)+'% '+({{D:'1d',W:'1w',M:'1m'}})[tf];e.className='chg '+(p>=0?'up':'dn')}})}}
+document.querySelectorAll('.bar.tf button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.tf button').forEach(x=>x.classList.remove('on'));b.classList.add('on');tf=b.dataset.tf;draw()}});
+draw()}})();
 const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
 const chip=document.getElementById('secf');
 function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st!=='Uptrend':st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
-document.querySelectorAll('.bar button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
+document.querySelectorAll('.bar:not(.tf) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
 document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
 chip.onclick=()=>{{fSec=null;apply()}};
 function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;
@@ -446,8 +531,21 @@ def main():
             except Exception as e:
                 print("  options failed", picks.at[i, "ticker"], e)
 
+    print("Loading sector ETF charts...")
+    try:
+        if a.demo:
+            ef = demo_frames(n=len(SECTOR_ETF), days=2600)
+            etf_frames = dict(zip(SECTOR_ETF.values(), ef.values()))
+        else:
+            etf_frames = download_etfs()
+        charts = chart_data(etf_frames)
+    except Exception as e:                 # charts are extras; never block the scan on them
+        print("  sector charts failed:", e)
+        charts = {}
+    print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} sectors")
+
     out = Path(a.out); out.mkdir(exist_ok=True)
-    html = render(picks, breadth, secb, df, asof, a.demo)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)
