@@ -1,0 +1,6 @@
+a_std_rsi_only: no errors
+b_legacy_rsi_only: no errors
+c_legacy_rsi_macd: no errors
+d_full_legacy: cannot_get_metainfo
+e_rsi_first: cannot_get_metainfo | cannot_get_metainfo | cannot_get_metainfo
+f_std_all: no errors
