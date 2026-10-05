@@ -36,6 +36,15 @@ CFG = dict(
     # order blocks on the charts; research/ob_backtest.py tested all of these on 1,000 stocks over 10 years
     OB_TYPE="strong",        # classic, strong (best in the test), bos, fvg, volume or lux
     OB_ENTRY="top",          # box runs from the candle's far side to: "top" (whole candle, best), "body" or "mid" (50%)
+    # top picks lists: research/picks_backtest.py chose these on 2014-2021 S&P 500 data and checked them on 2022-2026
+    NEW_UP="all",            # every stock that turned into an uptrend (no ordering did better), strongest RS first
+    NEW_UP_N=50,
+    BREAKOUT="squeeze",      # uptrend + Bollinger squeeze within 5% of a 50-day high, strongest RS first
+    BREAKOUT_N=10,
+    AI_SCORE="rs",           # AI picks: IBD-style relative strength (see ai_scores for the other versions tested)
+    AI_N=10, AI_KEEP=20, AI_CAP=3,   # hold 10, at most 3 per sector; a pick stays while it ranks in the top 20
+    AI_TREND_EXIT=False,     # True = also drop a pick on a close below its EMA50 (tested worse)
+    AI_MARKET_FILTER=False,  # True = no new picks while SPY is below its 200-day average (tested no better)
 )
 
 # ----------------------------------------------------------------- universe
@@ -51,7 +60,9 @@ def get_universe():
         return pd.read_html(io.StringIO(html))
 
     sp = tables("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
-    sectors = dict(zip(sp["Symbol"].str.replace(".", "-", regex=False), sp["GICS Sector"]))
+    tk = sp["Symbol"].str.replace(".", "-", regex=False)
+    sectors = dict(zip(tk, sp["GICS Sector"]))
+    subs = dict(zip(tk, sp["GICS Sub-Industry"])) if "GICS Sub-Industry" in sp.columns else {}   # for industry strength
     syms = set(sectors)
     for t in tables("https://en.wikipedia.org/wiki/Nasdaq-100"):
         col = next((c for c in ("Ticker", "Symbol") if c in t.columns), None)
@@ -62,8 +73,12 @@ def get_universe():
             if scol:
                 for tk, sec in zip(t[col], t[scol].astype(str)):
                     sectors.setdefault(tk, ICB_TO_GICS.get(sec, sec))
+            ucol = next((c for c in t.columns if "Sub" in str(c)), None)
+            if ucol:
+                for tk, sub in zip(t[col], t[ucol].astype(str)):
+                    subs.setdefault(tk, sub)
             break
-    return sorted(syms), sectors
+    return sorted(syms), sectors, subs
 
 
 def download(tickers, size=100):
@@ -528,7 +543,7 @@ def pick_features(P, sector=None, sub=None):
     F["mom_va"] = F["mom"] / (lr.rolling(252, min_periods=200).std() * np.sqrt(252))
     F["mom6"] = C.shift(21) / C.shift(126) - 1
     F["rs"] = 0.4 * r(63) + 0.2 * r(126) + 0.2 * r(189) + 0.2 * r(252)   # IBD-style relative strength
-    F["r5"], F["r21"], F["r126"] = r(5), r(21), r(126)
+    F["r5"], F["r21"], F["r63"], F["r126"], F["r252"] = r(5), r(21), r(63), r(126), r(252)
     F["vol"] = lr.rolling(63).std() * np.sqrt(252)
     F["hi52"] = C / C.rolling(252, min_periods=200).max()
     F["lo52"] = C / C.rolling(252, min_periods=200).min()
@@ -561,6 +576,50 @@ def pick_features(P, sector=None, sub=None):
     return F
 
 
+def ai_scores(F, ok):
+    """AI score versions (higher = better), each as (description, dates x tickers score). CFG AI_SCORE picks one."""
+    z = lambda k: zs(F[k], ok)
+    core = z("mom_va") + z("hi52") + z("ind")
+    return {
+        "mom": ("12-month momentum (skip the last month)", z("mom")),
+        "mom_va": ("Momentum per unit of volatility", z("mom_va")),
+        "hi52": ("Closeness to the 52-week high", z("hi52")),
+        "rs": ("IBD-style relative strength", z("rs")),
+        "core": ("Momentum/vol + 52w high + industry strength", core),
+        "core_smooth": ("Core + steady climb", core + z("smooth")),
+        "core_smooth_gap": ("Core + steady climb + recent power gap", core + z("smooth") + z("pgap")),
+    }
+
+
+def new_up_lists(F, ok, ai):
+    """New uptrend list versions: (description, candidates, ranking or None for all). CFG NEW_UP picks one."""
+    cand = F["new_up"] & ok
+    return {
+        "all": ("Every new uptrend", cand, None),
+        "rs": ("Strongest relative strength first", cand, F["rs"]),
+        "hi52": ("Closest to the 52-week high first", cand, F["hi52"]),
+        "relvol": ("Highest volume on the day it turned", cand, F["relvol"]),
+        "ai": ("Best AI score first", cand, ai),
+        "fresh": ("Out of an uptrend for 20+ days, then relative strength", cand & (F["days_out"] >= 20), F["rs"]),
+        "sector": ("Strongest sector first", cand, F["sec_up"] + 0.001 * zs(F["rs"], ok)),
+    }
+
+
+def breakout_lists(F, ok):
+    """Breakout watch versions: (description, candidates, ranking). CFG BREAKOUT picks one."""
+    z = lambda k: zs(F[k], ok)
+    near = ok & (F["dist"] <= 0.05) & (F["base_days"] >= 5)          # within 5% of a 50-day high set 5+ days ago
+    tight = -z("tight") - z("vcp") - z("dry") - z("dist")
+    return {
+        "all": ("Every stock within 5% of its 50-day high", near, None),
+        "near": ("Closest to the breakout level", near, -F["dist"]),
+        "tight": ("Uptrend + tightest range, shrinking ranges, drying volume, closest", near & F["up"], tight),
+        "tight_rs": ("Same + relative strength", near & F["up"], tight + z("rs")),
+        "template": ("Minervini trend template, strongest RS first", near & F["template"], F["rs"]),
+        "squeeze": ("Uptrend + Bollinger squeeze, strongest RS first", near & F["up"] & (F["squeeze"] <= 1.15), F["rs"]),
+    }
+
+
 def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=()):
     """One night of the AI picks list. held: the current picks; score: today's AI score for every liquid
     stock (Series). A pick stays while it ranks in the top `keep` and isn't in `sell`; open slots go to
@@ -580,6 +639,102 @@ def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=()):
                 added.append(t)
                 cnt[grp(t)] += 1
     return kept, added, dropped
+
+
+def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow_new=True):
+    """Step the saved AI picks list once per trading day. State: {as_of, picks, closed}; each pick keeps
+    the day it was added and that day's close (and SPY's) so the page can show how it has done."""
+    st = prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[])
+    if st.get("as_of") == asof:                       # already stepped for this day (a re-run)
+        return st
+    old = {p["ticker"]: p for p in st["picks"]}
+    gone = [t for t in old if t not in present]       # no prices tonight: hold, don't guess
+    kept, added, dropped = ai_step([t for t in old if t in present], score, sector, n=CFG["AI_N"] - len(gone),
+                                   keep=CFG["AI_KEEP"], cap=CFG["AI_CAP"], allow_new=allow_new, sell=sell)
+    px = lambda t: round(float(close[t]), 2)
+    spy = round(float(spy_now), 2) if spy_now == spy_now and spy_now is not None else None
+    closed = list(st.get("closed", []))
+    for t in dropped:
+        why = (f"closed below its 50-day EMA" if t in sell else f"fell out of the top {CFG['AI_KEEP']}"
+               if t in score.index else "no longer passes the liquidity filter")
+        closed.append(dict(old[t], dropped=asof, out=px(t), spy_out=spy, why=why))
+    picks = [old[t] for t in kept + gone] + [dict(ticker=t, added=asof, price=px(t), spy=spy) for t in added]
+    return dict(as_of=asof, picks=picks, closed=closed)
+
+
+def pick_lists(frames, sectors, subs, spy, prev, demo=False):
+    """The three lists for tonight. Returns (lists for the page, new AI picks state)."""
+    idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
+    P = {k: wide(frames, k, idx) for k in ("Open", "High", "Low", "Close", "Volume")}
+    F = pick_features(P, sectors, subs)
+    ok = F["liquid"]
+    asof = idx[-1].date().isoformat()
+    last = {k: v.iloc[-1] for k, v in F.items()}
+    pr = lambda k: F[k].where(ok).rank(axis=1, pct=True).iloc[-1]       # percentile among liquid stocks today
+    rs, c, c1 = pr("rs"), last["close"], F["close"].iloc[-2]
+
+    def row(t, **kw):
+        return dict(ticker=t, sector=sectors.get(t) or "", close=float(c[t]), chg1d=float(c[t] / c1[t] - 1) * 100,
+                    rs=int(round(float(rs[t]) * 99)) if rs[t] == rs[t] else None,
+                    from_hi=float(last["hi52"][t] - 1) * 100 if last["hi52"][t] == last["hi52"][t] else None, **kw)
+
+    ranked = lambda score, cand: score.iloc[-1].where(cand.iloc[-1]).dropna().sort_values(ascending=False, kind="stable")
+    A = ai_scores(F, ok)
+    ai = A[CFG["AI_SCORE"]][1]
+
+    desc, cand, rank = new_up_lists(F, ok, ai)[CFG["NEW_UP"]]
+    tks = list(ranked(rank if rank is not None else F["rs"], cand).index)       # the whole list is shown strongest RS first
+    nu = dict(desc=desc, total=int((F["new_up"].iloc[-1] & ok.iloc[-1]).sum()), rows=[
+        row(t, days_out=None if last["days_out"][t] != last["days_out"][t] else int(last["days_out"][t]),
+            relvol=float(last["relvol"][t])) for t in tks[:CFG["NEW_UP_N"]]])
+
+    desc, cand, rank = breakout_lists(F, ok)[CFG["BREAKOUT"]]
+    s = ranked(rank, cand)
+    bo = dict(desc=desc, total=int(cand.iloc[-1].sum()), rows=[
+        row(t, piv=float(last["piv"][t]), dist=float(last["dist"][t]) * 100, base_days=int(last["base_days"][t]),
+            tight=float(last["tight"][t]) * 100, dry=float(last["dry"][t])) for t in s.index[:CFG["BREAKOUT_N"]]])
+
+    score = ai.iloc[-1].dropna()
+    present = set(c.dropna().index)
+    sell = set(c.index[(c < last["e50"]).to_numpy(bool)]) if CFG["AI_TREND_EXIT"] else set()
+    spy_now = float(spy.iloc[-1]) if spy is not None and len(spy) else float("nan")
+    market_ok = True
+    if CFG["AI_MARKET_FILTER"] and spy is not None and len(spy) > 200:
+        market_ok = bool(spy.iloc[-1] > spy.rolling(200).mean().iloc[-1])
+    st = ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok)
+    rank_now = score.rank(ascending=False, method="first")
+    ind = pr("ind") if "ind" in F else None
+    ai_rows = []
+    for p in st["picks"]:
+        t = p["ticker"]
+        why = []
+        if t in rank_now.index:
+            ok3, ok12 = last["r63"][t] == last["r63"][t], last["r252"][t] == last["r252"][t]
+            if ok3 or ok12:
+                why.append(" and ".join(([f"{last['r63'][t] * 100:+.0f}% in 3 months"] if ok3 else [])
+                                        + ([f"{last['r252'][t] * 100:+.0f}% in 12"] if ok12 else [])))
+            h = last["hi52"][t]
+            if h == h:
+                why.append("at its 52-week high" if h >= 0.995 else f"{(1 - h) * 100:.0f}% below its 52-week high")
+            if ind is not None and ind[t] == ind[t] and ind[t] >= 0.8:
+                why.append(f"strong industry ({subs.get(t) or sectors.get(t) or 'its group'})")
+        now = float(c[t]) if t in c.index and c[t] == c[t] else None
+        ai_rows.append(row(t, added=p["added"], price=p["price"], now=now,
+                           ret=(now / p["price"] - 1) * 100 if now else None,
+                           spy_ret=(spy_now / p["spy"] - 1) * 100 if p.get("spy") and spy_now == spy_now else None,
+                           rank=int(rank_now[t]) if t in rank_now.index else None, why=why) if t in c.index else
+                       dict(ticker=t, sector=sectors.get(t) or "", added=p["added"], price=p["price"], why=["no prices tonight"]))
+    ai_rows.sort(key=lambda r: r.get("rank") or 999)
+    track = []
+    for p in st["closed"]:
+        track.append(((p["out"] / p["price"] - 1) * 100, (p["spy_out"] / p["spy"] - 1) * 100 if p.get("spy") and p.get("spy_out") else None))
+    for r in ai_rows:
+        if r.get("ret") is not None:
+            track.append((r["ret"], r.get("spy_ret")))
+    ai_list = dict(desc=A[CFG["AI_SCORE"]][0], rows=ai_rows, market_ok=market_ok, as_of=st["as_of"],
+                   dropped=[p for p in st["closed"] if p["dropped"] == st["as_of"]], since=min(
+                       [p["added"] for p in st["picks"]] + [p["added"] for p in st["closed"]], default=asof), track=track)
+    return dict(asof=asof, nu=nu, bo=bo, ai=ai_list), st
 
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
@@ -674,7 +829,100 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None):
+PICK_NOTES = {   # one line per list on how it did in research/picks_backtest.py (filled in from the results)
+    "nu": "",
+    "bo": "",
+    "ai": "",
+}
+
+
+def next_earnings(tickers):
+    """Next earnings date per ticker from Yahoo (often an estimate until the company confirms it)."""
+    import yfinance as yf
+    out, today = {}, dt.date.today()
+    for t in tickers:
+        try:
+            cal = yf.Ticker(t).calendar
+            ds = cal.get("Earnings Date") if isinstance(cal, dict) else None
+            ds = [d for d in (ds or []) if isinstance(d, dt.date) and d >= today]
+            if ds:
+                out[t] = min(ds).isoformat()[:10]
+        except Exception:
+            pass
+    return out
+
+
+def picks_html(L, earn=None):
+    """Top picks section: New uptrends / Breakout watch / AI picks tabs."""
+    if not L:
+        return ""
+    earn = earn or {}
+    asof = dt.date.fromisoformat(L["asof"])
+    def pc(v, d=1):
+        return ("", "") if v is None or v != v else (f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.{d}f}%</span>', round(v, 3))
+    def tk(r):
+        return (f'<b class="tk" data-tk="{r["ticker"]}">{r["ticker"]}</b><div class="sec">{r["sector"]}</div>', r["ticker"])
+    def num(v, f="{:.2f}"):
+        return ("", "") if v is None or v != v else (f.format(v), round(v, 4))
+    def er(t):
+        d = earn.get(t)
+        if not d:
+            return ("", "")
+        dd = dt.date.fromisoformat(d)
+        n = (dd - asof).days
+        txt = f'{dd.strftime("%b")} {dd.day} · {n}d'
+        return (f'<span class="warn" title="Earnings within a week">{txt}</span>' if n <= 7 else txt, n)
+    def table(tid, head, rows, empty):
+        if not rows:
+            return f'<div class="hint pke">{empty}</div>'
+        th = "".join(f'<th>{h}</th>' for h in head)
+        body = "".join("<tr>" + "".join(f'<td data-v="{v}"{" class=why" if i == len(r) - 2 and tid == "pk-ai" else ""}>{c}</td>'
+                                         for i, (c, v) in enumerate(r)) + "</tr>" for r in rows)
+        return f'<div class="wrap"><table id="{tid}" class="pkt"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
+    note = lambda k: f'<div class="note">{PICK_NOTES[k]}</div>' if PICK_NOTES.get(k) else ""
+
+    nu, bo, ai = L["nu"], L["bo"], L["ai"]
+    E = "Earnings"
+    nu_rows = [[tk(r), num(r["close"]), pc(r["chg1d"]), num(r["days_out"], "{:.0f}"), num(r["rs"], "{:.0f}"),
+                pc(r["from_hi"]), num(r["relvol"], "{:.1f}x"), er(r["ticker"])] for r in nu["rows"]]
+    nu_html = (f'<div class="hint">{nu["total"]} stock{"s" if nu["total"] != 1 else ""} turned into an uptrend on {L["asof"]} '
+               f'(EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA, after missing it the day before). '
+               f'Order: {nu["desc"].lower()}. "Out" = days it had been out of an uptrend.</div>'
+               + table("pk-nu", ["Ticker", "Close", "1D %", "Out (days)", "RS", "From 52w hi", "Volume", E], nu_rows,
+                       f"No stock turned into an uptrend on {L['asof']}.") + note("nu"))
+    bo_rows = [[tk(r), num(r["close"]), num(r["piv"]), pc(-r["dist"]), num(r["base_days"], "{:.0f}"), num(r["tight"], "{:.1f}%"),
+                num(r["dry"], "{:.2f}x"), num(r["rs"], "{:.0f}"), er(r["ticker"])] for r in bo["rows"]]
+    bo_html = (f'<div class="hint">{bo["total"]} stocks are within 5% of a 50-day high set at least 5 days ago (a base). '
+               f'Order: {bo["desc"].lower()}. Breakout = a close above the level. Range = high to low of the last 10 days; '
+               f'Volume = last 10 days vs the 50-day average.</div>'
+               + table("pk-bo", ["Ticker", "Close", "Breakout level", "Below it", "Base (days)", "10-day range", "Volume", "RS", E],
+                       bo_rows, "No stock fits the breakout rules today.") + note("bo"))
+    ai_rows = [[tk(r), num(r.get("rank"), "{:.0f}"), (r["added"], r["added"]), num(r["price"]), num(r.get("now")), pc(r.get("ret")),
+                pc(r.get("spy_ret")), (", ".join(r["why"]), ""), er(r["ticker"])] for r in ai["rows"]]
+    tr = ai["track"]
+    track = ""
+    if tr:
+        beat = [a_ - b_ for a_, b_ in tr if b_ is not None]
+        track = (f'<div class="hint">Track record since {ai["since"]}: {len(tr)} pick{"s" if len(tr) != 1 else ""}, average '
+                 f'{sum(a_ for a_, _ in tr) / len(tr):+.1f}% vs SPY {sum(b_ for _, b_ in tr if b_ is not None) / max(1, len(beat)):+.1f}% '
+                 f'over the same days; {sum(x > 0 for x in beat)} of {len(beat)} beat SPY. Prices are closes on the day picked.</div>')
+    dropped = "".join(f'<span class="tk" data-tk="{p["ticker"]}">{p["ticker"]}</span> ({(p["out"] / p["price"] - 1) * 100:+.1f}%, {p["why"]}) '
+                      for p in ai["dropped"])
+    mkt = "" if ai["market_ok"] else '<div class="hint warn">Market filter is on: SPY is below its 200-day average, so no new picks until it recovers.</div>'
+    ai_html = (f'<div class="hint">My own list, rebuilt every night by rules I chose and tested: {ai["desc"].lower()}. '
+               f'I hold {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector; a pick stays while it ranks in the top {CFG["AI_KEEP"]} '
+               f'and its spot goes to the best-ranked stock when it drops out. Rank = today\'s rank of all liquid stocks.</div>'
+               + mkt + table("pk-ai", ["Ticker", "Rank", "Picked", "Price then", "Now", "Since picked", "SPY since", "Why", E],
+                             ai_rows, "No picks yet.")
+               + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
+    tab = lambda k, label, n, on: f'<button{" class=on" if on else ""} data-pk="{k}">{label} <span class="n">{n}</span></button>'
+    return ('<h2>Top picks</h2><div class="bar pk">' + tab("nu", "New uptrends", nu["total"], True)
+            + tab("bo", "Breakout watch", len(bo["rows"]), False) + tab("ai", "AI picks", len(ai["rows"]), False) + '</div>'
+            + f'<div class="pkl" data-pk="nu">{nu_html}</div><div class="pkl" data-pk="bo" hidden>{bo_html}</div>'
+            + f'<div class="pkl" data-pk="ai" hidden>{ai_html}</div>')
+
+
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -778,6 +1026,8 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:var(--card)}}#s td:nth-child(2){{text-align:left}}
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
+.pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
+.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
@@ -790,6 +1040,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
+{picks_html(lists, earn)}
 {sector_html}
 {chart_html}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
@@ -835,12 +1086,16 @@ const chip=document.getElementById('secf');
 function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st!=='Uptrend':st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
-document.querySelectorAll('.bar:not(.tf):not(.iv) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
+document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
 document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
 chip.onclick=()=>{{fSec=null;apply()}};
 function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;
 [...tb.rows].sort((a,b)=>{{const x=a.cells[i].dataset.v??a.cells[i].textContent,y=b.cells[i].dataset.v??b.cells[i].textContent,nx=parseFloat(x),ny=parseFloat(y);return (isNaN(nx)||isNaN(ny)?String(x).localeCompare(String(y)):nx-ny)*d}}).forEach(r=>tb.appendChild(r))}})}}
 sortable('t');sortable('s');apply();
+document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.bar.pk',b.dataset.pk,'pk');
+document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
+try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
+['pk-nu','pk-bo','pk-ai'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
 // ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
 const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
 const tvSym=t=>t.replace(/-/g,'.');
@@ -925,8 +1180,9 @@ def main():
         secs = ["Information Technology", "Health Care", "Financials", "Energy", "Industrials",
                 "Consumer Discretionary", "Communication Services", "Utilities"]
         sectors = {t: secs[i % len(secs)] for i, t in enumerate(frames)}
+        subs = {t: f"{sectors[t]} {i % 3}" for i, t in enumerate(frames)}
     else:
-        tickers, sectors = get_universe()
+        tickers, sectors, subs = get_universe()
         frames = download_with_retry(tickers)
         if len(frames) < 0.8 * len(tickers):
             sys.exit(f"Only got data for {len(frames)} of {len(tickers)} tickers; not publishing a partial scan.")
@@ -959,6 +1215,7 @@ def main():
         print(f"  options: {why_n}", flush=True)
 
     print("Loading sector ETF charts...")
+    etf_frames = {}
     try:
         if a.demo:
             ef = demo_frames(n=len(SECTOR_ETF), days=2600)
@@ -972,13 +1229,32 @@ def main():
     print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} sectors")
 
     out = Path(a.out); out.mkdir(exist_ok=True)
-    chart_tks = list(picks.ticker) + list(SECTOR_ETF.values())
+    print("Building the top picks lists...")
+    lists, earn = None, {}
+    try:
+        state_file = Path(__file__).resolve().parent / "history" / "ai_picks.json"   # yesterday's AI picks
+        prev = None if a.demo or not state_file.exists() else json.loads(state_file.read_text(encoding="utf-8"))
+        spy = etf_frames["SPY"]["Close"] if "SPY" in etf_frames else None
+        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo)
+        (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
+        pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price")})
+                      for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
+        print(f"  new uptrends {lists['nu']['total']}, breakout watch {len(lists['bo']['rows'])}, AI picks {len(lists['ai']['rows'])}")
+        if not a.demo:
+            earn = next_earnings(sorted({r["ticker"] for k in ("nu", "bo", "ai") for r in lists[k]["rows"]}))
+            print(f"  earnings dates for {len(earn)} tickers")
+    except Exception as e:                 # never block the scan on the lists
+        import traceback
+        traceback.print_exc()
+        print("  top picks failed:", e)
+    listed = [r["ticker"] for k in ("nu", "bo", "ai") for r in (lists or {}).get(k, {}).get("rows", [])]
+    chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values())))
     print(f"Building trend charts for {len(chart_tks)} tickers...")
     try:
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  stock charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)

@@ -317,21 +317,7 @@ def trade_stats(trades, O, dates):
                 days=float(np.median(r[:, 1])))
 
 
-# ---------------------------------------------------------------- the lists to compare
-def ai_scores(F, ok):
-    z = lambda k: S.zs(F[k], ok)
-    core = z("mom_va") + z("hi52") + z("ind")
-    return {
-        "mom": ("12-month momentum (skip the last month)", z("mom")),
-        "mom_va": ("Momentum per unit of volatility", z("mom_va")),
-        "hi52": ("Closeness to the 52-week high", z("hi52")),
-        "rs": ("IBD-style relative strength", z("rs")),
-        "core": ("Momentum/vol + 52w high + industry strength", core),
-        "core_smooth": ("Core + steady climb", core + z("smooth")),
-        "core_smooth_gap": ("Core + steady climb + recent power gap", core + z("smooth") + z("pgap")),
-    }
-
-
+# ---------------------------------------------------------------- signal report card
 FACTORS = {   # name: (description, sign) for the factor report card
     "mom": ("12-month momentum, skip last month", 1), "mom_va": ("momentum / volatility", 1),
     "mom6": ("6-month momentum, skip last month", 1), "rs": ("IBD-style relative strength", 1),
@@ -342,33 +328,6 @@ FACTORS = {   # name: (description, sign) for the factor report card
     "up": ("in an uptrend (your rule)", 1), "template": ("Minervini trend template", 1),
     "ext": ("not stretched above EMA20", -1), "dry": ("volume drying up", -1), "vcp": ("ranges shrinking", -1),
 }
-
-
-def new_up_lists(F, ok, ai):
-    cand = F["new_up"] & ok
-    return {
-        "all": ("Every new uptrend", cand, None),
-        "rs": ("Strongest relative strength first", cand, F["rs"]),
-        "hi52": ("Closest to the 52-week high first", cand, F["hi52"]),
-        "relvol": ("Highest volume on the day it turned", cand, F["relvol"]),
-        "ai": ("Best AI score first", cand, ai),
-        "fresh": ("Out of an uptrend for 20+ days, then relative strength", cand & (F["days_out"] >= 20), F["rs"]),
-        "sector": ("Strongest sector first", cand, F["sec_up"] + 0.001 * S.zs(F["rs"], ok)),
-    }
-
-
-def breakout_lists(F, ok):
-    z = lambda k: S.zs(F[k], ok)
-    near = ok & (F["dist"] <= 0.05) & (F["base_days"] >= 5)          # within 5% of a 50-day high set 5+ days ago
-    tight = -z("tight") - z("vcp") - z("dry") - z("dist")
-    return {
-        "all": ("Every stock within 5% of its 50-day high", near, None),
-        "near": ("Closest to the breakout level", near, -F["dist"]),
-        "tight": ("Uptrend + tightest range, shrinking ranges, drying volume, closest", near & F["up"], tight),
-        "tight_rs": ("Same + relative strength", near & F["up"], tight + z("rs")),
-        "template": ("Minervini trend template, strongest RS first", near & F["template"], F["rs"]),
-        "squeeze": ("Uptrend + Bollinger squeeze, strongest RS first", near & F["up"] & (F["squeeze"] <= 1.15), F["rs"]),
-    }
 
 
 # ---------------------------------------------------------------- report
@@ -447,23 +406,26 @@ def main():
         print(f"  {names_u[u]}: {m.sum(axis=1).loc[TEST_FROM:].mean():.0f} liquid stocks a day on average", flush=True)
 
     valid = (idx >= TEST_FROM) & (idx <= idx[-22])
-    per = {"2014-2021 (chosen here)": valid & (idx < SPLIT), "2022-2026 (unseen)": valid & (idx >= SPLIT)}
-    PIS, POS = per
+    PIS, POS, PALL = "2014-2021 (chosen here)", "2022-2026 (unseen)", "2014-2026 (all)"
+    per = {PIS: valid & (idx < SPLIT), POS: valid & (idx >= SPLIT), PALL: valid}
     spy_c = P["Close"]["SPY"]
     mkt_up = spy_c > spy_c.rolling(200).mean()
+    oo = P["Open"].shift(-2) / P["Open"].shift(-1) - 1           # open to open: decided at the close, traded next open
 
     res = dict(meta=dict(demo=a.demo, tickers=len(cols), start=str(idx[0].date()), end=str(idx[-1].date()),
                          split=SPLIT, universes={u: float(m.sum(axis=1).loc[TEST_FROM:].mean()) for u, m in U.items()}))
     md = [f"# Pick lists backtest{' (DEMO: random walks)' if a.demo else ''}", "",
           f"Data {idx[0].date()} to {idx[-1].date()}, {len(cols)} tickers. Signals from {TEST_FROM[:7]}; "
-          f"rules chosen on {TEST_FROM[:4]}-2021 and checked on 2022-{idx[-1].year}. Entry at the next open; "
-          "returns are compared with the average liquid stock in the same universe over the same days.", ""]
+          f"every choice was made on {TEST_FROM[:4]}-2021 S&P 500 data and then checked on 2022-{idx[-1].year}. "
+          "Entry at the next open; returns are compared with the average liquid stock in the same universe over the same days.", ""]
+    chosen, top_md, body = {}, [], []
 
     for u in U:
         ok = U[u]
         B = Book(P, F, ok)
+        main_u = u == "sp500"                                    # choices are made here; the other universe only checks them
         print(f"== {names_u[u]} ==", flush=True)
-        md += [f"## {names_u[u]}", f"About {res['meta']['universes'][u]:.0f} liquid stocks a day.", ""]
+        body += [f"## {names_u[u]}", f"About {res['meta']['universes'][u]:.0f} liquid stocks a day.", ""]
         R = res[u] = {}
 
         # ---- factor report card
@@ -483,40 +445,34 @@ def main():
                 s = dict(top=float(top_.mean()), top_ci=boot(top_), bot=float(bot_.mean()), ic=float(icd.loc[d].mean()))
                 R["factors"][f][pname] = s
                 rows.append(f"| {desc} | {pname} | {pct(s['top'])} ({ci(s['top_ci'])}) | {pct(s['bot'])} | {s['ic']:+.3f} |")
-        md += ["### Signal report card", "Each signal on its own: the best 10% of stocks by that signal each day, "
-               "and the worst 10%, against the average stock over the next 20 trading days.", ""] + rows + [""]
+        body += ["### Signal report card", "Each signal on its own: the best 10% of stocks by that signal each day, "
+                 "and the worst 10%, against the average stock over the next 20 trading days.", ""] + rows + [""]
         print(f"  factors done ({time.time() - t0:.0f}s)", flush=True)
 
-        # ---- AI score: daily top 10 and the managed list
-        A = ai_scores(F, ok)
+        # ---- AI score: daily top 10, best 10%, and the managed list
+        A = S.ai_scores(F, ok)
         res_ai = R["ai"] = {}
         names = {k: v[0] for k, v in A.items()}
-        rows = []
+        rows, dec = [], []
         for k, (desc, sc) in A.items():
-            sel = top_k(sc, ok)
+            sel, sel10 = top_k(sc, ok), sc.where(ok).rank(axis=1, pct=True) > 0.9
             for pname, d in per.items():
                 rows.append((k, pname, B.stats(sel, d)))
-        md += ["### AI score: the 10 best stocks each day", "", list_table(rows, names), ""]
-        res_ai["daily"] = [(k, p_, s) for k, p_, s in rows]
-        dec = []
-        for k, (desc, sc) in A.items():
-            sel = sc.where(ok).rank(axis=1, pct=True) > 0.9
-            for pname, d in per.items():
-                dec.append((k, pname, B.stats(sel, d)))
-        md += ["### AI score: the best 10% each day (about 45 stocks, so much less noise; the score is chosen here)", "",
-               list_table(dec, names), ""]
-        res_ai["decile"] = dec
-        best = max(A, key=lambda k: num(next(s for k2, p_, s in dec if k2 == k and p_ == PIS)["ex20"]))
+                dec.append((k, pname, B.stats(sel10, d)))
+        body += ["### AI score: the 10 best stocks each day", "", list_table(rows, names), "",
+                 "### AI score: the best 10% each day (30-40 stocks, so much less noise; the score is chosen here)", "",
+                 list_table(dec, names), ""]
+        res_ai["daily"], res_ai["decile"] = rows, dec
+        if main_u:
+            chosen["ai_score"] = max(A, key=lambda k: num(next(s for k2, p_, s in dec if k2 == k and p_ == PIS)["ex20"]))
+        best = chosen["ai_score"]
 
-        oo = P["Open"].shift(-2) / P["Open"].shift(-1) - 1
         ew = oo.where(ok).mean(axis=1)
         spy = oo["SPY"]
-        bench_rows = {}
-        for pname, d in per.items():
-            bench_rows[pname] = dict(ew=perf(ew[d]), spy=perf(spy[d]))
+        bench_rows = {pname: dict(ew=perf(ew[d]), spy=perf(spy[d])) for pname, d in per.items()}
         res_ai["bench"] = bench_rows
 
-        def run(label, sc, **kw):
+        def run(sc, **kw):
             r, trades = manage(sc, ok, sector, oo, **kw)
             row = {}
             for pname, d in per.items():
@@ -528,7 +484,7 @@ def main():
 
         sims = {}
         for k, (desc, sc) in A.items():
-            sims[k] = run(k, sc)
+            sims[k] = run(sc)
             print(f"  managed {k} ({time.time() - t0:.0f}s)", flush=True)
         rules = {
             "base": ("Hold 10, keep while in the top 30, max 3 per sector", {}),
@@ -541,9 +497,11 @@ def main():
         rsims = {"base": sims[best]}
         for rk, (desc, kw) in rules.items():
             if rk != "base":
-                rsims[rk] = run(rk, A[best][1], **kw)
+                rsims[rk] = run(A[best][1], **kw)
                 print(f"  rule {rk} ({time.time() - t0:.0f}s)", flush=True)
-        best_rule = max(rsims, key=lambda k: num(rsims[k][1][PIS].get("sharpe")))
+        if main_u:
+            chosen["ai_rule"] = max(rsims, key=lambda k: num(rsims[k][1][PIS].get("sharpe")))
+        best_rule = chosen["ai_rule"]
         res_ai.update(score=best, rule=best_rule, scores={k: v[1] for k, v in sims.items()},
                       rules={k: v[1] for k, v in rsims.items()})
 
@@ -563,23 +521,23 @@ def main():
                                 f"{pct(s.get('maxdd'), 0)} | | | | |")
             return "\n".join(rows)
 
-        md += ["### AI picks as a managed list (10 stocks, entries and exits at the next open, 0.10% cost each way)", "",
-               "Score versions, all with the same rules (hold 10, keep while in the top 30, max 3 per sector):", "",
-               ptable([(k, v[1]) for k, v in sims.items()], lambda k: names[k]), "",
-               f"Score chosen on the best 10% in 2014-2021: **{names[best]}**. Rule versions for it (chosen on the 2014-2021 Sharpe ratio):", "",
-               ptable([(k, v[1]) for k, v in rsims.items()], lambda k: rules[k][0]), "",
-               f"Chosen rule: **{rules[best_rule][0]}**.", ""]
-        r_final = rsims[best_rule][0]
+        body += ["### AI picks as a managed list (10 stocks, entries and exits at the next open, 0.10% cost each way)", "",
+                 "Score versions, all with the same rules (hold 10, keep while in the top 30, max 3 per sector):", "",
+                 ptable([(k, v[1]) for k, v in sims.items()], lambda k: names[k]), "",
+                 f"Score chosen on the best 10% in 2014-2021 (S&P 500): **{names[best]}**. "
+                 "Rule versions for it (chosen on the 2014-2021 Sharpe ratio):", "",
+                 ptable([(k, v[1]) for k, v in rsims.items()], lambda k: rules[k][0]), "",
+                 f"Chosen rule: **{rules[best_rule][0]}**.", ""]
+        r_final, ai_final = rsims[best_rule]
         yr = pd.DataFrame({"AI picks": r_final, "Average stock": ew, "SPY": spy})[valid].dropna()
         yrs = (1 + yr).groupby(yr.index.year).prod() - 1
-        md += ["Year by year (chosen version):", "", "| Year | AI picks | Average stock | SPY |", "|---|---|---|---|"]
-        md += [f"| {y_} | {pct(r_['AI picks'], 1)} | {pct(r_['Average stock'], 1)} | {pct(r_['SPY'], 1)} |" for y_, r_ in yrs.iterrows()]
-        md += [""]
+        body += ["Year by year (chosen version):", "", "| Year | AI picks | Average stock | SPY |", "|---|---|---|---|"]
+        body += [f"| {y_} | {pct(r_['AI picks'], 1)} | {pct(r_['Average stock'], 1)} | {pct(r_['SPY'], 1)} |" for y_, r_ in yrs.iterrows()]
+        body += [""]
         res_ai["years"] = {int(y_): {k: float(v) for k, v in r_.items()} for y_, r_ in yrs.iterrows()}
-        res_ai["final_score"] = A[best][1]  # used below for the new-uptrend list; dropped before saving
 
         # ---- new uptrends
-        NU = new_up_lists(F, ok, A[best][1])
+        NU = S.new_up_lists(F, ok, A[best][1])
         rows = []
         for k, (desc, cand, sc) in NU.items():
             sel = cand if sc is None else top_k(sc, cand, 5)
@@ -590,14 +548,17 @@ def main():
         for pname, d in per.items():
             rows.append(("old", pname, B.stats(old, d)))
         names_nu["old"] = "Baseline: stocks already in an uptrend"
-        best_nu = max((k for k in NU if k != "all"), key=lambda k: num(next(s for k2, p_, s in rows if k2 == k and p_ == PIS)["ex20"]))
-        R["new_up"] = dict(rows=rows, best=best_nu)
-        md += ["### New uptrends (top 5 a day)", "", list_table(rows, names_nu), "",
-               f"Best on 2014-2021: **{names_nu[best_nu]}**.", ""]
+        get = lambda rows_, k, p_: next(s for k2, q_, s in rows_ if k2 == k and q_ == p_)
+        if main_u:   # an order is only worth using if its top 5 beat the whole list by more than noise (0.10%) in 2014-2021
+            rk = max((k for k in NU if k != "all"), key=lambda k: num(get(rows, k, PIS)["ex20"]))
+            chosen["new_up"] = rk if num(get(rows, rk, PIS)["ex20"]) > num(get(rows, "all", PIS)["ex20"]) + 0.001 else "all"
+        R["new_up"] = dict(rows=rows, best=chosen["new_up"])
+        body += ["### New uptrends (each ordering's top 5 a day, against the whole list)", "", list_table(rows, names_nu), "",
+                 f"Chosen: **{names_nu[chosen['new_up']]}** (an ordering had to beat the whole list by 0.10% in 2014-2021).", ""]
         print(f"  new uptrends done ({time.time() - t0:.0f}s)", flush=True)
 
         # ---- breakout watch
-        BL = breakout_lists(F, ok)
+        BL = S.breakout_lists(F, ok)
         rows = []
         for k, (desc, cand, sc) in BL.items():
             sel = cand if sc is None else top_k(sc, cand)
@@ -607,16 +568,45 @@ def main():
             rows.append(("everyone", pname, B.stats(ok, d)))
         names_bl = {k: v[0] for k, v in BL.items()}
         names_bl["everyone"] = "Baseline: every liquid stock"
-        base_bo = {p_: s["bo10"] for k, p_, s in rows if k == "everyone"}
-        ok_bl = [k for k in BL if k != "all" and next(s for k2, p_, s in rows if k2 == k and p_ == PIS)["bo10"] >= 1.5 * base_bo[PIS]]
-        best_bl = max(ok_bl or [k for k in BL if k != "all"],
-                      key=lambda k: num(next(s for k2, p_, s in rows if k2 == k and p_ == PIS)["ex20"]))
-        R["breakout"] = dict(rows=rows, best=best_bl)
-        md += ["### Breakout watch (top 10 a day)", "", list_table(rows, names_bl), "",
-               f"Best on 2014-2021 (among lists that broke out at least 1.5x as often as the average stock): **{names_bl[best_bl]}**.", ""]
+        if main_u:
+            base_bo = get(rows, "everyone", PIS)["bo10"]
+            ok_bl = [k for k in BL if k != "all" and get(rows, k, PIS)["bo10"] >= 1.5 * base_bo]
+            chosen["breakout"] = max(ok_bl or [k for k in BL if k != "all"], key=lambda k: num(get(rows, k, PIS)["ex20"]))
+        R["breakout"] = dict(rows=rows, best=chosen["breakout"])
+        body += ["### Breakout watch (top 10 a day)", "", list_table(rows, names_bl), "",
+                 f"Chosen: **{names_bl[chosen['breakout']]}** (best 2014-2021 return among lists that broke out at least "
+                 "1.5x as often as the average stock).", ""]
         print(f"  breakouts done ({time.time() - t0:.0f}s)", flush=True)
-        del res_ai["final_score"]
 
+        # ---- the chosen lists, side by side
+        top_md += [f"### {names_u[u]}", "", "| List | Version | Period | vs avg stock | Notes |", "|---|---|---|---|---|"]
+        for pname in per:
+            s = get(R["new_up"]["rows"], chosen["new_up"], pname)
+            top_md.append(f"| New uptrends | {names_nu[chosen['new_up']]} | {pname} | {pct(s['ex20'])} over 20 days ({ci(s['ci20'])}) | "
+                          f"{s['per_day']:.1f} a day, {pct(s['hit20'], 0, False)} beat the average stock |")
+        for pname in per:
+            s, b0 = get(R["breakout"]["rows"], chosen["breakout"], pname), get(R["breakout"]["rows"], "everyone", pname)
+            top_md.append(f"| Breakout watch | {names_bl[chosen['breakout']]} | {pname} | {pct(s['ex20'])} over 20 days ({ci(s['ci20'])}) | "
+                          f"broke out within 10 days {pct(s['bo10'], 0, False)} of the time vs {pct(b0['bo10'], 0, False)} for all stocks |")
+        for pname in per:
+            s, bw = ai_final[pname], bench_rows[pname]
+            top_md.append(f"| AI picks | {names[best]}, {rules[best_rule][0].lower()} | {pname} | {pct(s.get('vs_ew'), 1)} a year ({ci(s.get('vs_ew_ci'))}) | "
+                          f"{pct(s.get('cagr'), 1)}/yr vs {pct(bw['ew'].get('cagr'), 1)} average stock and {pct(bw['spy'].get('cagr'), 1)} SPY; "
+                          f"worst drop {pct(s.get('maxdd'), 0)}; {s.get('trades', 0)} picks, median hold {s.get('days', float('nan')):.0f} days |")
+        top_md += [""]
+        R["final"] = dict(new_up={p_: get(R["new_up"]["rows"], chosen["new_up"], p_) for p_ in per},
+                          breakout={p_: get(R["breakout"]["rows"], chosen["breakout"], p_) for p_ in per},
+                          breakout_base={p_: get(R["breakout"]["rows"], "everyone", p_) for p_ in per},
+                          ai=ai_final, bench=bench_rows)
+
+    res["chosen"] = chosen
+    live = dict(new_up=S.CFG["NEW_UP"], breakout=S.CFG["BREAKOUT"], ai_score=S.CFG["AI_SCORE"],
+                ai_rule={20: "keep20", 30: "base", 50: "keep50"}.get(S.CFG["AI_KEEP"]) if not (S.CFG["AI_TREND_EXIT"] or S.CFG["AI_MARKET_FILTER"])
+                else "trend_market" if S.CFG["AI_TREND_EXIT"] and S.CFG["AI_MARKET_FILTER"] else "trend" if S.CFG["AI_TREND_EXIT"] else "market")
+    same = all(live[k] == chosen[k] for k in chosen)
+    print("Chosen:", chosen, "| the page uses:", live, "(same)" if same else "(DIFFERENT: update CFG in screener.py)", flush=True)
+    md += ["## The chosen lists", "",
+           f"Chosen: {chosen}. The page (CFG in screener.py) uses: {live}{'' if same else ' **(different!)**'}.", ""] + top_md + body
     md += ["## Caveats", "",
            "- S&P 500 membership is rebuilt from Wikipedia's change log. Stocks that left the index and no longer trade "
            "(most were bought out) have no Yahoo data, so they are missing from the days they were members.",
