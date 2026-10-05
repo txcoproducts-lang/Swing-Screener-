@@ -1,0 +1,99 @@
+name: Paper trading
+
+on:
+  schedule:
+    # Every 30 minutes on weekdays, 13:05-21:35 UTC (9:05 AM-5:35 PM New York in summer, 8:05 AM-4:35 PM in winter).
+    # paper.py decides what to do from the New York time: sell and buy at the first run after 9:45, check stops
+    # and targets until the close, and record the day's close at the first run after 4 PM.
+    - cron: "5,35 13-21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: print what it would do and save nothing"
+        type: boolean
+        default: true
+      at:
+        description: "Pretend it's this New York time, e.g. 2026-10-06 10:05 (blank = now)"
+        required: false
+        default: ""
+      start:
+        description: "Dry runs: pretend the trial starts on this date"
+        required: false
+        default: ""
+      test_quotes:
+        description: "Dry runs after hours: use last trades as option quotes"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paper
+  cancel-in-progress: false
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Market hours only
+        id: gate
+        run: |
+          now=$(TZ=America/New_York date +%H%M)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || { [ "$now" -ge 0940 ] && [ "$now" -le 1745 ]; }; then
+            echo "go=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "It's $now in New York, outside 9:40 AM-5:45 PM, so there's nothing to do."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.go
+
+      - name: Check out the accounts (paper-trading branch)
+        if: steps.gate.outputs.go
+        uses: actions/checkout@v4
+        with:
+          ref: paper-trading
+          path: paper-state
+          fetch-depth: 2          # the amend below needs the parent commit
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.go
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - if: steps.gate.outputs.go
+        run: pip install -r requirements.txt
+
+      - name: Trade
+        id: trade
+        if: steps.gate.outputs.go
+        env:
+          AT: ${{ inputs.at }}
+          START: ${{ inputs.start }}
+          DRY: ${{ inputs.dry_run && '--dry-run' || '' }}
+          TQ: ${{ inputs.test_quotes && '--test-quotes' || '' }}
+        run: python paper.py --state paper-state/paper --message "$RUNNER_TEMP/msg.txt" $DRY $TQ ${AT:+--at "$AT"} ${START:+--start "$START"}
+
+      - name: Save the accounts
+        if: always() && steps.gate.outputs.go && !inputs.dry_run && steps.trade.outcome != 'skipped'
+        run: |
+          cd paper-state
+          git config user.name "paper-trading-bot"
+          git config user.email "paper-trading-bot@users.noreply.github.com"
+          git add paper
+          if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
+          old=$(git rev-parse HEAD)
+          if [ -s "$RUNNER_TEMP/msg.txt" ]; then
+            git commit -q -F "$RUNNER_TEMP/msg.txt"
+            git push origin HEAD:paper-trading
+          elif [ "$(git log -1 --format=%s)" = "Prices updated" ]; then
+            # only prices moved since the last price update: fold it into that commit, so the history stays one commit per event
+            git commit -q --amend -m "Prices updated"
+            git push --force-with-lease=paper-trading:$old origin HEAD:paper-trading
+          else
+            git commit -q -m "Prices updated"
+            git push origin HEAD:paper-trading
+          fi
