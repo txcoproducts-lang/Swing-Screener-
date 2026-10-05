@@ -35,6 +35,17 @@ const res = await p.evaluate(async () => {
         const want = up ? 1 : dn ? -1 : 0;
         if (want !== s.tr[i] && ![s.e10[i] - s.e20[i], s.c[i] - s.e50[i], s.c[i] - s.m150[i]].some(x => Math.abs(x) < 0.02)) { issues.push(`${tk} ${tf} trend ${s.tr[i]} != ${want} at ${s.t[i]}`); break; }
       }
+      // order blocks [start, end, top, bottom, side, fresh]: inside the window, and each box ends where price first came back
+      const at = new Map(s.t.map((t, i) => [t, i]));
+      for (const z of s.ob || []) {
+        const a = at.get(z[0]), e = at.get(z[1]), back = i => z[4] > 0 ? s.l[i] <= z[2] + 0.011 : s.h[i] >= z[3] - 0.011,
+          clearlyIn = i => z[4] > 0 ? s.l[i] < z[2] - 0.011 : s.h[i] > z[3] + 0.011;   // published prices are rounded to cents
+        if (a == null || e == null || e < a || !(z[2] >= z[3]) || Math.abs(z[4]) !== 1) { issues.push(`${tk} ${tf} bad order block ${JSON.stringify(z)}`); break; }
+        if (z[5] ? e !== n - 1 : !back(e)) { issues.push(`${tk} ${tf} order block ends wrong ${JSON.stringify(z)}`); break; }
+        let early = -1; for (let i = a + 6; i < e; i++) if (clearlyIn(i)) { early = i; break; }
+        if (early >= 0) { issues.push(`${tk} ${tf} order block touched at ${s.t[early]} before its end ${JSON.stringify(z)}`); break; }
+        stats.ob = (stats.ob || 0) + 1; if (z[5]) stats.obFresh = (stats.obFresh || 0) + 1;
+      }
     }
     const r = rows[tk], s = D.D;
     if (r && s) {
@@ -48,6 +59,7 @@ const res = await p.evaluate(async () => {
   return { issues, stats };
 });
 log(`tickers with charts: ${res.stats.tickers}`);
+log(`order block boxes: ${res.stats.ob || 0} (${res.stats.obFresh || 0} untouched)`);
 log(`missing data files: ${res.stats.missingFile.join(", ") || "none"}`);
 for (const [tf, l] of Object.entries(res.stats.missingTf)) log(`missing ${tf}: ${l.length} (${l.slice(0, 15).join(", ")})`);
 log(`data issues: ${res.issues.length}`); res.issues.slice(0, 40).forEach(i => log("  " + i));
