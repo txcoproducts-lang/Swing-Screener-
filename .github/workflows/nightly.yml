@@ -39,6 +39,7 @@ jobs:
           mkdir -p site
           cp output/latest.html site/index.html
           cp output/*.csv site/
+          cp -r output/data site/ 2>/dev/null || true
 
       - name: Save daily CSVs to history
         run: |
