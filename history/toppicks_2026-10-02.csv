@@ -1,0 +1,26 @@
+list,rank,ticker,sector,close,rs,added,price
+nu,1,FLEX,Information Technology,116.61000061035156,92,,
+nu,2,EXPD,Industrials,192.47000122070312,88,,
+nu,3,CAT,Industrials,845.4199829101562,84,,
+nu,4,MCHP,Information Technology,81.31999969482422,74,,
+nu,5,PM,Consumer Staples,187.4600067138672,71,,
+nu,6,MAR,Consumer Discretionary,358.9599914550781,68,,
+nu,7,LUV,Industrials,42.470001220703125,55,,
+bo,1,ANET,Information Technology,207.35000610351562,91,,
+bo,2,TECH,Health Care,72.4000015258789,78,,
+bo,3,MU,Information Technology,1074.8900146484375,99,,
+bo,4,AMAT,Information Technology,540.0399780273438,93,,
+bo,5,ABBV,Health Care,262.82000732421875,71,,
+bo,6,AAPL,Information Technology,333.69000244140625,80,,
+bo,7,XOM,Energy,164.00999450683594,86,,
+bo,8,FAST,Industrials,50.75,70,,
+bo,9,APH,Information Technology,86.95999908447266,83,,
+bo,10,EMR,Industrials,161.61000061035156,82,,
+ai,1,AMD,Information Technology,633.9099731445312,98,2026-10-02,633.91
+ai,2,DELL,Information Technology,562.52001953125,98,2026-10-02,562.52
+ai,3,HPE,Information Technology,69.33000183105469,98,2026-10-02,69.33
+ai,4,MRNA,Health Care,190.00999450683594,99,2026-10-02,190.01
+ai,5,BE,Industrials,289.1499938964844,97,2026-10-02,289.15
+ai,6,MPC,Energy,422.3299865722656,96,2026-10-02,422.33
+ai,7,ILMN,Health Care,273.0400085449219,96,2026-10-02,273.04
+ai,8,VLO,Energy,406.29998779296875,96,2026-10-02,406.3
