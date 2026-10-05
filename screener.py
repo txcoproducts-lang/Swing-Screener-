@@ -33,6 +33,11 @@ CFG = dict(
     MIN_OI=100,
     MAX_SPREAD_PCT=12.0,     # bid/ask spread as % of mid
     RISK_FREE=0.045,
+    # options on the Top picks lists (your rules): calls 15-30 days out, delta 0.50-0.80, open interest over 500;
+    # each stock shows the one nearest the middle of the delta range
+    PK_DTE=(15, 30),
+    PK_DELTA=(0.50, 0.80),
+    PK_OI_OVER=500,
     # order blocks on the charts; research/ob_backtest.py tested all of these on 1,000 stocks over 10 years
     OB_TYPE="strong",        # classic, strong (best in the test), bos, fvg, volume or lux
     OB_ENTRY="top",          # box runs from the candle's far side to: "top" (whole candle, best), "body" or "mid" (50%)
@@ -675,10 +680,13 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False):
     pr = lambda k: F[k].where(ok).rank(axis=1, pct=True).iloc[-1]       # percentile among liquid stocks today
     rs, c, c1 = pr("rs"), last["close"], F["close"].iloc[-2]
 
+    v1, v5 = P["Volume"].iloc[-1], P["Volume"].iloc[-5:].sum(min_count=5)    # shares: last day, last 5 days
+
     def row(t, **kw):
         return dict(ticker=t, sector=sectors.get(t) or "", close=float(c[t]), chg1d=float(c[t] / c1[t] - 1) * 100,
                     rs=int(round(float(rs[t]) * 99)) if rs[t] == rs[t] else None,
-                    from_hi=float(last["hi52"][t] - 1) * 100 if last["hi52"][t] == last["hi52"][t] else None, **kw)
+                    from_hi=float(last["hi52"][t] - 1) * 100 if last["hi52"][t] == last["hi52"][t] else None,
+                    vol1=float(v1[t]), vol5=float(v5[t]), **kw)
 
     ranked = lambda score, cand: score.iloc[-1].where(cand.iloc[-1]).dropna().sort_values(ascending=False, kind="stable")
     A = ai_scores(F, ok)
@@ -784,20 +792,20 @@ def pick_call(t, S):
         return None, "no expiry in DTE window"
     why = ""
     for _, exp, dte in sorted(exps)[:3]:          # nearest-to-target first; weeklies can be thin, so try the next
-        o, why = _pick_from_chain(tk, S, exp, dte)
-        if o:
-            return o, why
+        rows, why = chain_rows(tk.option_chain(exp).calls, S, exp, dte, CFG["MIN_OI"])
+        if rows:
+            return min(rows, key=lambda r: abs(r["delta"] - CFG["TARGET_DELTA"])), why
     return None, why
 
 
-def _pick_from_chain(tk, S, exp, dte):
+def chain_rows(ch, S, exp, dte, min_oi):
+    """Usable calls from one Yahoo option chain, with Greeks. Returns (rows, "live" / "last"), or ([], reason)."""
     T = dte / 365
-    ch = tk.option_chain(exp).calls
     oi_known = ch.openInterest.fillna(0).gt(0).any()   # Yahoo often zeroes OI on weekends
     if oi_known:
-        ch = ch[ch.openInterest.fillna(0) >= CFG["MIN_OI"]].copy()
+        ch = ch[ch.openInterest.fillna(0) >= min_oi].copy()
     if ch.empty:
-        return None, f"{exp}: no strikes with OI >= {CFG['MIN_OI']}"
+        return [], f"{exp}: no strikes with OI >= {min_oi}"
     live = ch[(ch.bid > 0) & (ch.ask > 0)].copy()
     if len(live):
         live["px"] = (live.bid + live.ask) / 2
@@ -815,8 +823,63 @@ def _pick_from_chain(tk, S, exp, dte):
         rows.append({**g, "strike": o.strike, "iv": iv * 100, "bid": o.bid, "ask": o.ask, "last": o.lastPrice,
                      "spr": o.spr, "oi": int(o.openInterest) if oi_known else None, "exp": exp, "dte": dte, "quote": quote})
     if not rows:
-        return None, f"{exp}: {quote} quotes but none usable"
-    return min(rows, key=lambda r: abs(r["delta"] - CFG["TARGET_DELTA"])), quote
+        return [], f"{exp}: {quote} quotes but none usable"
+    return rows, quote
+
+
+def pick_list_call(S, chains, today):
+    """Top picks lists: among calls PK_DTE days out (chains: {expiry: Yahoo calls table}) with open interest
+    over PK_OI_OVER and delta in PK_DELTA, the one nearest the middle of the range (more open interest wins a tie).
+    Returns (contract or None, reason)."""
+    lo, hi = CFG["PK_DTE"]
+    dlo, dhi = CFG["PK_DELTA"]
+    ok = []
+    for exp, ch in chains.items():
+        dte = (dt.date.fromisoformat(exp) - today).days
+        if lo <= dte <= hi:
+            ok += [r for r in chain_rows(ch, S, exp, dte, CFG["PK_OI_OVER"] + 1)[0] if dlo <= r["delta"] <= dhi]
+    if not ok:
+        return None, (f"no call {dlo:.2f}-{dhi:.2f} delta with OI over {CFG['PK_OI_OVER']}"
+                      if any(lo <= (dt.date.fromisoformat(e) - today).days <= hi for e in chains) else f"no expiry {lo}-{hi} days out")
+    best = min(ok, key=lambda r: (abs(r["delta"] - (dlo + dhi) / 2), -(r["oi"] or 0)))
+    return dict(best, fits=len(ok)), best["quote"]
+
+
+def list_calls(prices, demo=False):
+    """Option contracts for the Top picks lists: {ticker: contract dict, or the reason there is none}."""
+    lo, hi = CFG["PK_DTE"]
+    today, out = dt.date.today(), {}
+    for t, S in prices.items():
+        try:
+            if demo:
+                chains = demo_chains(t, S, today)
+            else:
+                import yfinance as yf
+                tk = yf.Ticker(t)
+                chains = {e: tk.option_chain(e).calls for e in tk.options
+                          if lo <= (dt.date.fromisoformat(e) - today).days <= hi}
+            o, why = pick_list_call(S, chains, today)
+            out[t] = o or why
+        except Exception as e:
+            out[t] = "lookup failed"
+            print("  options failed", t, e)
+    return out
+
+
+def demo_chains(t, S, today):
+    """Made-up after-hours call chains (last trades only) for the demo page."""
+    rng = np.random.default_rng(sum(map(ord, t)))
+    fri = [today + dt.timedelta(days=d) for d in range(1, 50) if (today + dt.timedelta(days=d)).weekday() == 4]
+    step = 1 if S < 50 else 2.5 if S < 150 else 5 if S < 400 else 10
+    ks = np.arange(round(S * 0.8 / step) * step, S * 1.2, step)
+    out = {}
+    for f in fri:
+        T = (f - today).days / 365
+        iv = rng.uniform(0.25, 0.6)
+        px = [round(bs_price(S, k, T, CFG["RISK_FREE"], iv), 2) for k in ks]
+        oi = (rng.lognormal(6.3, 1.1, len(ks)) * (1 if rng.random() > 0.15 else 0.1)).astype(int)
+        out[f.isoformat()] = pd.DataFrame(dict(strike=ks, lastPrice=px, bid=0.0, ask=0.0, impliedVolatility=1e-5, openInterest=oi))
+    return out
 
 # --------------------------------------------------------------------- html
 def spark(vals, w=150, h=34, color="currentColor"):
@@ -869,11 +932,11 @@ def next_earnings(tickers):
     return out
 
 
-def picks_html(L, earn=None):
+def picks_html(L, earn=None, calls=None):
     """Top picks section: New uptrends / Breakout watch / AI picks tabs."""
     if not L:
         return ""
-    earn = earn or {}
+    earn, calls = earn or {}, calls or {}
     asof = dt.date.fromisoformat(L["asof"])
     def pc(v, d=1):
         return ("", "") if v is None or v != v else (f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.{d}f}%</span>', round(v, 3))
@@ -889,11 +952,34 @@ def picks_html(L, earn=None):
         n = (dd - asof).days
         txt = f'{dd.strftime("%b")} {dd.day} · {n}d'
         return (f'<span class="warn" title="Earnings within a week">{txt}</span>' if n <= 7 else txt, n)
+    def vol(v):
+        return ("", "") if v is None or v != v else (f"{v / 1e6:.1f}M" if v >= 1e6 else f"{v / 1e3:.0f}K", round(v))
+    def opt(t):
+        o = calls.get(t)
+        if not isinstance(o, dict):
+            if o == "lookup failed":
+                return [('<span class="mut" title="Yahoo did not answer for this stock tonight">n/a</span>', "")] + [("", "")] * 3
+            return [(f'<span class="mut" title="{o}">none fits</span>' if o else "", "")] + [("", "")] * 3
+        d = dt.date.fromisoformat(o["exp"])
+        e = earn.get(t)
+        flag = (f' <span class="warn" title="Earnings on {e} is before this contract expires">E</span>'
+                if e and dt.date.fromisoformat(e) <= d else "")
+        px = (o["bid"] + o["ask"]) / 2 if o["quote"] == "live" else o["last"]
+        tip = f'bid {o["bid"]:.2f} / ask {o["ask"]:.2f}' if o["quote"] == "live" else "last trade"
+        fit = (f'{o["fits"]} contract{"s" if o["fits"] != 1 else ""} fit your rules' if o["oi"] is not None else
+               f'{o["fits"]} contract{"s" if o["fits"] != 1 else ""} fit the delta and expiry; Yahoo did not report open interest, so it was not checked')
+        return [(f'<span title="{fit}; IV {o["iv"]:.0f}%">'
+                 f'{d.strftime("%b")} {d.day} ${o["strike"]:g}</span>{flag}<div class="dte">{o["dte"]} days</div>', o["exp"]),
+                (f'{o["delta"]:.2f}', round(o["delta"], 3)), (f'<span title="{tip}">{px:.2f}</span>', round(px, 2)),
+                (f'{o["oi"]:,}' if o["oi"] is not None else "n/a", o["oi"] if o["oi"] is not None else "")]
+    VO = ["Volume", "5-day volume", "Call 15-30d", "Δ", "Premium", "OI"]
+    vo = lambda r: [vol(r.get("vol1")), vol(r.get("vol5"))] + opt(r["ticker"])
     def table(tid, head, rows, empty):
         if not rows:
             return f'<div class="hint pke">{empty}</div>'
-        th = "".join(f'<th{" class=why" if h == "Why" else ""}>{h}</th>' for h in head)
-        body = "".join("<tr>" + "".join(f'<td data-v="{v}"{" class=why" if i == len(r) - 2 and tid == "pk-ai" else ""}>{c}</td>'
+        wi = head.index("Why") if "Why" in head else -1
+        th = "".join(f'<th{" class=why" if i == wi else ""}>{h}</th>' for i, h in enumerate(head))
+        body = "".join("<tr>" + "".join(f'<td data-v="{v}"{" class=why" if i == wi else ""}>{c}</td>'
                                          for i, (c, v) in enumerate(r)) + "</tr>" for r in rows)
         return f'<div class="wrap"><table id="{tid}" class="pkt"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
     note = lambda k: f'<div class="note">{PICK_NOTES[k]}</div>' if PICK_NOTES.get(k) else ""
@@ -901,23 +987,25 @@ def picks_html(L, earn=None):
     nu, bo, ai = L["nu"], L["bo"], L["ai"]
     E = "Earnings"
     nu_rows = [[tk(r), num(r["close"]), pc(r["chg1d"]), num(r["days_out"], "{:.0f}"), num(r["rs"], "{:.0f}"),
-                pc(r["from_hi"]), num(r["relvol"], "{:.1f}x"), er(r["ticker"])] for r in nu["rows"]]
+                pc(r["from_hi"]), num(r["relvol"], "{:.1f}x")] + vo(r) + [er(r["ticker"])] for r in nu["rows"]]
     nu_html = (f'<div class="hint">{nu["total"]} stock{"s" if nu["total"] != 1 else ""} turned into an uptrend on {L["asof"]} '
                f'(EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA, after missing it the day before). '
-               f'{PICK_TEXT["nu"].get(CFG["NEW_UP"], nu["desc"])} "Out" = days it had been out of an uptrend.</div>'
-               + table("pk-nu", ["Ticker", "Close", "1D %", "Out (days)", "RS", "From 52w hi", "Volume", E], nu_rows,
+               f'{PICK_TEXT["nu"].get(CFG["NEW_UP"], nu["desc"])} "Out" = days it had been out of an uptrend. '
+               f'Vol vs avg = that day\'s volume vs the 20-day average.</div>'
+               + table("pk-nu", ["Ticker", "Close", "1D %", "Out (days)", "RS", "From 52w hi", "Vol vs avg"] + VO + [E], nu_rows,
                        f"No stock turned into an uptrend on {L['asof']}.") + note("nu"))
     bo_rows = [[tk(r), num(r["close"]), num(r["piv"]), pc((r["close"] / r["piv"] - 1) * 100), num(r["base_days"], "{:.0f}"), num(r["tight"], "{:.1f}%"),
-                num(r["dry"], "{:.2f}x"), num(r["rs"], "{:.0f}"), er(r["ticker"])] for r in bo["rows"]]
+                num(r["dry"], "{:.2f}x"), num(r["rs"], "{:.0f}")] + vo(r) + [er(r["ticker"])] for r in bo["rows"]]
     bo_txt = PICK_TEXT["bo"].get(CFG["BREAKOUT"], "{n} stocks fit: " + bo["desc"] + ".")
     bo_html = (f'<div class="hint">{bo_txt.format(n=bo["total"])} Level = the 50-day high; a breakout is a close above it. '
                f'Range = high to low of the last 10 days; '
-               f'Volume = last 10 days vs the 50-day average.</div>'
-               + table("pk-bo", ["Ticker", "Close", "Breakout level", "Below it", "Base (days)", "10-day range", "Volume", "RS", E],
+               f'Vol 10d/50d = average volume of the last 10 days vs the last 50.</div>'
+               + table("pk-bo", ["Ticker", "Close", "Breakout level", "Below it", "Base (days)", "10-day range", "Vol 10d/50d", "RS"] + VO + [E],
                        bo_rows, "No stock fits the breakout rules today.") + note("bo"))
     new = lambda r, cell: ('<span class="mut">new today</span>', 0) if r["added"] == L["asof"] else cell
     ai_rows = [[tk(r), num(r.get("rank"), "{:.0f}"), (r["added"], r["added"]), num(r["price"]), num(r.get("now")),
-                new(r, pc(r.get("ret"))), new(r, pc(r.get("spy_ret"))), (", ".join(r["why"]), ""), er(r["ticker"])] for r in ai["rows"]]
+                new(r, pc(r.get("ret"))), new(r, pc(r.get("spy_ret")))] + vo(r) + [(", ".join(r["why"]), ""), er(r["ticker"])]
+               for r in ai["rows"]]
     tr = ai["track"]
     track = f'<div class="hint">Track record starts {ai["since"]}: each pick is measured from its close on the day it was picked.</div>'
     if tr:
@@ -932,17 +1020,23 @@ def picks_html(L, earn=None):
                f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
                f'open spots go to the best-ranked stocks in the top {CFG["AI_KEEP"]} that fit the sector limit, and a spot stays empty '
                f'(cash) when none fits, as in the test. Rank = today\'s rank of all liquid stocks.</div>'
-               + mkt + table("pk-ai", ["Ticker", "Rank", "Picked", "Price then", "Now", "Since picked", "SPY since", "Why", E],
+               + mkt + table("pk-ai", ["Ticker", "Rank", "Picked", "Price then", "Now", "Since picked", "SPY since"] + VO + ["Why", E],
                              ai_rows, "No picks yet.")
                + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
     tab = lambda k, label, n, on: f'<button{" class=on" if on else ""} data-pk="{k}">{label} <span class="n">{n}</span></button>'
     return ('<h2>Top picks</h2><div class="bar pk">' + tab("nu", "New uptrends", nu["total"], True)
             + tab("bo", "Breakout watch", len(bo["rows"]), False) + tab("ai", "AI picks", len(ai["rows"]), False) + '</div>'
             + f'<div class="pkl" data-pk="nu">{nu_html}</div><div class="pkl" data-pk="bo" hidden>{bo_html}</div>'
-            + f'<div class="pkl" data-pk="ai" hidden>{ai_html}</div>')
+            + f'<div class="pkl" data-pk="ai" hidden>{ai_html}</div>'
+            + f'<div class="hint">Volume = shares traded on {L["asof"]}; 5-day volume = shares traded over the last 5 trading days '
+            f'(the total). Call 15-30d = the call nearest {sum(CFG["PK_DELTA"]) / 2:.2f} delta among contracts {CFG["PK_DTE"][0]}-'
+            f'{CFG["PK_DTE"][1]} days out with delta {CFG["PK_DELTA"][0]:.2f}-{CFG["PK_DELTA"][1]:.2f} and open interest over '
+            f'{CFG["PK_OI_OVER"]} (hover it for how many fit and the IV). <span class="warn">E</span> = earnings come before it '
+            f'expires. Premium = the bid/ask midpoint, or the last trade when there are no live quotes (after hours). Delta is '
+            f'Black-Scholes from that price; confirm in your broker.</div>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -1047,7 +1141,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
-.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
+.pkt .dte{{font-size:10px;color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
@@ -1060,7 +1154,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
 <div class="meta">Data as of {asof} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
-{picks_html(lists, earn)}
+{picks_html(lists, earn, calls)}
 {sector_html}
 {chart_html}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
@@ -1250,19 +1344,34 @@ def main():
 
     out = Path(a.out); out.mkdir(exist_ok=True)
     print("Building the top picks lists...")
-    lists, earn = None, {}
+    lists, earn, calls = None, {}, {}
     try:
         state_file = Path(__file__).resolve().parent / "history" / "ai_picks.json"   # yesterday's AI picks
         prev = None if a.demo or not state_file.exists() else json.loads(state_file.read_text(encoding="utf-8"))
         spy = etf_frames["SPY"]["Close"] if "SPY" in etf_frames else None
         lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo)
         (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
-        pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price")})
-                      for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
         print(f"  new uptrends {lists['nu']['total']}, breakout watch {len(lists['bo']['rows'])}, AI picks {len(lists['ai']['rows'])}")
         if not a.demo:
             earn = next_earnings(sorted({r["ticker"] for k in ("nu", "bo", "ai") for r in lists[k]["rows"]}))
             print(f"  earnings dates for {len(earn)} tickers")
+        if not a.no_options:
+            try:
+                px = {r["ticker"]: r["close"] for k in ("nu", "bo", "ai") for r in lists[k]["rows"] if r.get("close")}
+                print(f"  looking up calls for {len(px)} tickers...", flush=True)
+                calls = list_calls(px, a.demo)
+                why_n = {}
+                for o in calls.values():
+                    why_n["fits" if isinstance(o, dict) else o] = why_n.get("fits" if isinstance(o, dict) else o, 0) + 1
+                print(f"  calls: {why_n}", flush=True)
+            except Exception as e:         # extras; never block the lists
+                print("  list calls failed:", e)
+        oc = lambda t: calls[t] if isinstance(calls.get(t), dict) else {}
+        prem = lambda o: ((o["bid"] + o["ask"]) / 2 if o["quote"] == "live" else o["last"]) if o else None
+        pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price", "vol1", "vol5")},
+                           **{f"call_{c}": oc(r["ticker"]).get(c) for c in ("exp", "dte", "strike", "delta", "oi", "quote")},
+                           call_premium=prem(oc(r["ticker"])))
+                      for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
     except Exception as e:                 # never block the scan on the lists
         import traceback
         traceback.print_exc()
@@ -1274,7 +1383,7 @@ def main():
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  stock charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)

@@ -8,7 +8,7 @@ Nightly swing-trade screener for the S&P 500 + Nasdaq 100 with market and sector
 
 **Run it now:** Actions tab → *Nightly screener* → *Run workflow*.
 
-**Change the rules:** edit the `CFG` block at the top of `screener.py` (min volume, delta target, DTE, SMA vs EMA for the 150/200).
+**Change the rules:** edit the `CFG` block at the top of `screener.py` (min volume, delta target, DTE, the Top picks call rules `PK_DTE` / `PK_DELTA` / `PK_OI_OVER`, SMA vs EMA for the 150/200).
 
 **Run on your own PC instead:** `setup_windows.bat` and `run_screener.bat` (in the repo root, next to `screener.py`) set up a local nightly run.
 
