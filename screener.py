@@ -577,14 +577,16 @@ def pick_features(P, sector=None, sub=None):
 
 
 def ai_scores(F, ok):
-    """AI score versions (higher = better), each as (description, dates x tickers score). CFG AI_SCORE picks one."""
+    """AI score versions (higher = better), each as (description, dates x tickers score). CFG AI_SCORE picks one.
+    Single signals rank by their percentile among liquid stocks: a capped z-score would tie the strongest stocks."""
     z = lambda k: zs(F[k], ok)
+    pct = lambda k: F[k].where(ok).rank(axis=1, pct=True)
     core = z("mom_va") + z("hi52") + z("ind")
     return {
-        "mom": ("12-month momentum (skip the last month)", z("mom")),
-        "mom_va": ("Momentum per unit of volatility", z("mom_va")),
-        "hi52": ("Closeness to the 52-week high", z("hi52")),
-        "rs": ("IBD-style relative strength", z("rs")),
+        "mom": ("12-month momentum (skip the last month)", pct("mom")),
+        "mom_va": ("Momentum per unit of volatility", pct("mom_va")),
+        "hi52": ("Closeness to the 52-week high", pct("hi52")),
+        "rs": ("IBD-style relative strength", pct("rs")),
         "core": ("Momentum/vol + 52w high + industry strength", core),
         "core_smooth": ("Core + steady climb", core + z("smooth")),
         "core_smooth_gap": ("Core + steady climb + recent power gap", core + z("smooth") + z("pgap")),
