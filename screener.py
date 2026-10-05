@@ -440,7 +440,7 @@ def analyze(t, d):
         from_hi=(px / hi252 - 1) * 100,
         vs10=(px / e10.iloc[-1] - 1) * 100, vs20=(px / e20.iloc[-1] - 1) * 100, vs50=(px / e50.iloc[-1] - 1) * 100,
         p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core,
-        cross=crossed, days_since_cross=days_since_cross,
+        cross=crossed, days_since_cross=days_since_cross, brk20=bool(px > prior20hi),
         stack=bool(e10.iloc[-1] > e20.iloc[-1] > e50.iloc[-1] > m150.iloc[-1] > m200.iloc[-1]),
     )
 
@@ -823,7 +823,8 @@ def chain_rows(ch, S, exp, dte, min_oi):
             continue
         g = bs_call(S, o.strike, T, CFG["RISK_FREE"], iv)
         rows.append({**g, "strike": o.strike, "iv": iv * 100, "bid": o.bid, "ask": o.ask, "last": o.lastPrice,
-                     "spr": o.spr, "oi": int(o.openInterest) if oi_known else None, "exp": exp, "dte": dte, "quote": quote})
+                     "spr": o.spr, "oi": int(o.openInterest) if oi_known else None, "exp": exp, "dte": dte, "quote": quote,
+                     "symbol": o.get("contractSymbol")})
     if not rows:
         return [], f"{exp}: {quote} quotes but none usable"
     return rows, quote
@@ -1415,7 +1416,8 @@ def main():
         prem = lambda o: ((o["bid"] + o["ask"]) / 2 if o["quote"] == "live" else o["last"]) if o else None
         pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price", "vol1", "vol5")},
                            **{f"call_{c}": oc(r["ticker"]).get(c) for c in ("exp", "dte", "strike", "delta", "oi", "quote", "fits")},
-                           call_premium=prem(oc(r["ticker"])), call_misses="+".join(oc(r["ticker"]).get("miss") or []))
+                           call_premium=prem(oc(r["ticker"])), call_misses="+".join(oc(r["ticker"]).get("miss") or []),
+                           ai_rank=r.get("rank"), why="; ".join(r.get("why") or []))
                       for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
     except Exception as e:                 # never block the scan on the lists
         import traceback
