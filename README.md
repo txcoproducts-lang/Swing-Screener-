@@ -10,7 +10,7 @@ Nightly swing-trade screener for the S&P 500 + Nasdaq 100 with market and sector
 
 **Change the rules:** edit the `CFG` block at the top of `screener.py` (min volume, delta target, DTE, SMA vs EMA for the 150/200).
 
-**Run on your own PC instead:** the files in `windows/` set up a local nightly run (put them next to `screener.py`).
+**Run on your own PC instead:** `setup_windows.bat` and `run_screener.bat` (in the repo root, next to `screener.py`) set up a local nightly run.
 
 Uptrend rule: price > EMA50 and EMA10 > EMA20, liquid stocks only (20-day avg volume ≥ 1M).
 Not financial advice.
