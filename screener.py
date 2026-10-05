@@ -241,7 +241,7 @@ def write_stock_charts(tickers, out, demo=False):
             return f
         daily = fetch(period="10y", interval="1d")
         monthly = fetch(period="max", interval="1mo")
-        hourly = fetch(period="730d", interval="60m")
+        hourly = fetch(period="720d", interval="60m")   # 730d trips Yahoo's limit for some tickers
     dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
     n = 0
     for t in tickers:
@@ -431,7 +431,9 @@ def pick_call(t, S):
     _, exp, dte = min(exps)
     T = dte / 365
     ch = tk.option_chain(exp).calls
-    ch = ch[ch.openInterest.fillna(0) >= CFG["MIN_OI"]].copy()
+    oi_known = ch.openInterest.fillna(0).gt(0).any()   # Yahoo often zeroes OI on weekends
+    if oi_known:
+        ch = ch[ch.openInterest.fillna(0) >= CFG["MIN_OI"]].copy()
     if ch.empty:
         return None, f"{exp}: no strikes with OI >= {CFG['MIN_OI']}"
     live = ch[(ch.bid > 0) & (ch.ask > 0)].copy()
@@ -449,7 +451,7 @@ def pick_call(t, S):
             continue
         g = bs_call(S, o.strike, T, CFG["RISK_FREE"], iv)
         rows.append({**g, "strike": o.strike, "iv": iv * 100, "bid": o.bid, "ask": o.ask, "last": o.lastPrice,
-                     "spr": o.spr, "oi": int(o.openInterest), "exp": exp, "dte": dte, "quote": quote})
+                     "spr": o.spr, "oi": int(o.openInterest) if oi_known else None, "exp": exp, "dte": dte, "quote": quote})
     if not rows:
         return None, f"{exp}: {quote} quotes but none usable"
     return min(rows, key=lambda r: abs(r["delta"] - CFG["TARGET_DELTA"])), quote
@@ -533,7 +535,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
         o = r.get("opt")
         if isinstance(o, dict):
             oc = [f'{o["exp"]} {o["dte"]}d ${o["strike"]:g}C', f'{o["delta"]:.2f}', f'{o["gamma"]:.3f}', f'{o["theta"]:.2f}',
-                  f'{o["vega"]:.2f}', f'{o["iv"]:.0f}%', (f'{o["bid"]:.2f}/{o["ask"]:.2f}' if o.get("quote") != "last" else f'last {o["last"]:.2f}'), f'{o["oi"]:,}']
+                  f'{o["vega"]:.2f}', f'{o["iv"]:.0f}%', (f'{o["bid"]:.2f}/{o["ask"]:.2f}' if o.get("quote") != "last" else f'last {o["last"]:.2f}'), (f'{o["oi"]:,}' if o["oi"] is not None else 'n/a')]
         else:
             oc = [""] * 8
         dsc = r.days_since_cross
