@@ -207,7 +207,7 @@ def to_period(d, rule):
     return b
 
 
-def trend_series(b, n_show, intraday=False):
+def trend_series(b, n_show, intraday=False, blocks=False):
     """OHLC + EMA10/20/50 + 150 MA + trend state (1 up, -1 down, 0 neither) for the last n_show bars.
     Uptrend = EMA10 > EMA20, close > EMA50 and close > 150 MA; downtrend is the mirror image."""
     c = b.Close
@@ -221,7 +221,7 @@ def trend_series(b, n_show, intraday=False):
     t = ([int(i.timestamp()) for i in b.index[k]] if intraday else [i.strftime("%Y-%m-%d") for i in b.index[k]])
     return dict(t=t, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(c), v=[int(x) for x in b.Volume.iloc[k]],
                 e10=r2(e10), e20=r2(e20), e50=r2(e50), m150=r2(m150), tr=[int(x) for x in tr.iloc[k]],
-                ob=order_blocks(b, n_show, t))
+                **({"ob": order_blocks(b, n_show, t)} if blocks else {}))
 
 
 # ------------------------------------------------------------ order blocks
@@ -337,7 +337,7 @@ def write_stock_charts(tickers, out, demo=False):
         d = daily.get(t)
         if d is None or len(d) < 60:
             continue
-        rec = {"D": trend_series(d, STOCK_BARS["D"]), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
+        rec = {"D": trend_series(d, STOCK_BARS["D"], blocks=True), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
         if t in monthly and len(monthly[t]) > 20:
             rec["M"] = trend_series(monthly[t], STOCK_BARS["M"])
         if t in hourly and len(hourly[t]) > 60:
@@ -691,7 +691,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart: the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
-Order blocks (Trend view): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
+Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
@@ -749,7 +749,7 @@ cm.hidden=false;document.body.style.overflow='hidden';draw()}}
 function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
 let cmSrc='trend',cmOB=true;const dataCache={{}};
-function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=document.querySelector('.obb').hidden=cmSrc!=='trend'}}
+function draw(){{cmSrc==='trend'?trendDraw():tvDraw();document.getElementById('cmlg').hidden=cmSrc!=='trend';document.querySelector('.obb').hidden=cmSrc!=='trend'||cmIv!=='D'}}
 // order block boxes: [start, end, top, bottom, side, fresh], drawn under the candles; fresh ones run to the right edge
 function obPrim(zs){{let ch,se,rs=[];
 const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,vr=sc.verticalPixelRatio,lw=Math.max(1,Math.round(hr));
@@ -781,12 +781,12 @@ k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[
 const l=c.addLineSeries({{color:col,lineWidth:key==='m150'?2:1,lineStyle:ls,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}});
 l.setData(s.t.map((t,i)=>s[key][i]==null?{{time:t}}:{{time:t,value:s[key][i]}}))}});
 const mk=[];for(let i=1;i<s.t.length;i++)if(s.tr[i]!==s.tr[i-1]&&s.tr[i]!==0)mk.push(s.tr[i]>0?{{time:s.t[i],position:'belowBar',color:UP,shape:'arrowUp'}}:{{time:s.t[i],position:'aboveBar',color:DN,shape:'arrowDown'}});
-k.setMarkers(mk);if(cmOB&&s.ob)k.attachPrimitive(obPrim(s.ob));c.timeScale().fitContent();
+k.setMarkers(mk);if(cmOB&&tf==='D'&&s.ob)k.attachPrimitive(obPrim(s.ob));c.timeScale().fitContent();
 let i=s.tr.length-1;const st=s.tr[i];while(i>0&&s.tr[i-1]===st)i--;
 const since=typeof s.t[i]==='number'?new Date(s.t[i]*1000).toISOString().slice(0,10):s.t[i];
 const last=s.c[s.c.length-1],fresh=(s.ob||[]).filter(z=>z[5]),pct=v=>{{const p=(v/last-1)*100;return(p>=0?'+':'')+p.toFixed(1)+'%'}};
 const sup=fresh.filter(z=>z[4]>0&&z[2]<=last).sort((a,b)=>b[2]-a[2])[0],res=fresh.filter(z=>z[4]<0&&z[3]>=last).sort((a,b)=>a[3]-b[3])[0];
-const obTxt=!cmOB?'':' · <span title="Order block: the last opposite candle before a strong move, where traders got caught on the wrong side. Blue = bullish (support), orange = bearish (resistance). A box ends where price first came back; solid boxes are still untouched.">order blocks</span>: '+
+const obTxt=!cmOB||tf!=='D'?'':' · <span title="Order block: the last opposite candle before a strong move, where traders got caught on the wrong side. Blue = bullish (support), orange = bearish (resistance). A box ends where price first came back; solid boxes are still untouched.">order blocks</span>: '+
 (sup?'<span style="color:#2962ff">support '+sup[3].toFixed(2)+'–'+sup[2].toFixed(2)+' ('+pct(sup[2])+')</span>':'no untouched support')+', '+
 (res?'<span style="color:#f57c00">resistance '+res[3].toFixed(2)+'–'+res[2].toFixed(2)+' ('+pct(res[3])+')</span>':'no untouched resistance');
 lg.innerHTML=(st>0?'<span class="up">Uptrend</span>':st<0?'<span class="dn">Downtrend</span>':'<b>No trend</b>')+' since '+since+
