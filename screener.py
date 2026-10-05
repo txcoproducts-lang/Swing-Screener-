@@ -319,7 +319,8 @@ def analyze(t, d):
 
     return dict(
         ticker=t, setup=setup, score=round(score, 1), close=px,
-        chg1d=(px / c.iloc[-2] - 1) * 100, rsi=r.iloc[-1], atr_pct=atr_pct, relvol=relv,
+        open=d["Open"].iloc[-1], chg1d=(px / c.iloc[-2] - 1) * 100,
+        chg5d=(px / c.iloc[-6] - 1) * 100, chg1m=(px / c.iloc[-22] - 1) * 100, rsi=r.iloc[-1], atr_pct=atr_pct, relvol=relv,
         from_hi=(px / hi252 - 1) * 100,
         vs10=(px / e10.iloc[-1] - 1) * 100, vs20=(px / e20.iloc[-1] - 1) * 100, vs50=(px / e50.iloc[-1] - 1) * 100,
         p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core,
@@ -490,7 +491,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
 
     def num(v, f="{:.1f}"): return "" if v is None or v != v else f.format(v)
     def flag(b): return '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
-    head = ["Ticker", "Setup", "Score", "Close", "1D %", "RSI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
+    head = ["Ticker", "Setup", "Score", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
             ">150", ">200", "50x150", "Contract", "Δ", "Γ", "Θ/day", "Vega", "IV", "Bid/Ask", "OI"]
     rows = []
     for _, r in picks.iterrows():
@@ -502,11 +503,12 @@ def render(picks, breadth, secb, df, asof, demo, charts=None):
             oc = [""] * 8
         dsc = r.days_since_cross
         cross = f'new ({int(dsc)}d ago)' if r.cross else ("above" if dsc == dsc and dsc is not None else "")
+        pct = lambda v: f'<span class="{"up" if v > 0 else "dn"}">{v:+.1f}</span>'
         cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', r.setup, f"{r.score:.0f}", f"{r.close:.2f}",
-                 f'<span class="{"up" if r.chg1d > 0 else "dn"}">{r.chg1d:+.1f}</span>', num(r.rsi, "{:.0f}"), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
+                 f"{r.open:.2f}", pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), num(r.rsi, "{:.0f}"), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
                  num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
                  flag(r.p150), flag(r.p200), cross] + oc
-        raw = [r.ticker, r.setup, r.score, r.close, r.chg1d, r.rsi, r.atr_pct, r.relvol, r.from_hi, r.vs10, r.vs20, r.vs50] + [""] * 11
+        raw = [r.ticker, r.setup, r.score, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.atr_pct, r.relvol, r.from_hi, r.vs10, r.vs20, r.vs50] + [""] * 11
         tds = "".join(f'<td data-v="{raw[i]}">{c}</td>' for i, c in enumerate(cells))
         rows.append(f'<tr data-setup="{r.setup}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
     th = "".join(f"<th>{h}</th>" for h in head)
@@ -526,7 +528,7 @@ h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
 .bar button{{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-right:6px;font-size:13px}}.bar button.on{{border-color:var(--acc);color:var(--acc)}}
 .wrap{{overflow-x:auto;margin-top:10px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
 th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--bg);cursor:pointer;color:var(--mut);font-weight:600}}
-td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(15),td:nth-child(16){{text-align:left}}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(18),td:nth-child(19){{text-align:left}}
 td:first-child,th:first-child{{position:sticky;left:0;background:var(--bg);z-index:1}}th:first-child{{z-index:2}}
 .sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
 .demo{{background:var(--dn);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}}
