@@ -21,7 +21,7 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.evaluate(() => { const e = document.getElementById("pp"); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 60); });
   log(`[${name}] paper tiles: ${(await p.$$eval(".pp-tile", ts => ts.map(t => t.innerText.replace(/\n/g, " | ")))).join(" || ") || "none: " + (await p.$eval("#pp", e => e.textContent).catch(() => "no section"))}`);
   await p.screenshot({ path: `${out}/${name}-0-paper.png` });
-  for (const id of ["A", "B"]) {
+  for (const id of ["A", "C", "B"]) {
     if (!(await p.$(`.pp-tile[data-acct="${id}"]`))) continue;
     await p.click(`.pp-tile[data-acct="${id}"]`); await p.waitForTimeout(400);
     log(`[${name}] paper ${id}: ${await p.$$eval("#pm .pm-cards .card", cs => cs.map(c => c.innerText.replace(/\n/g, " ")).join(" | "))}`);

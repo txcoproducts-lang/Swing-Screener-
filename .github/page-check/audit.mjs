@@ -203,7 +203,7 @@ const paper = await p.evaluate(async () => {
   const SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/";
   const money = v => (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const lines = [];
-  for (const id of ["A", "B"]) {
+  for (const id of ["A", "C", "B"]) {
     let a; try { a = await (await fetch(SRC + id + ".json?v=" + Date.now(), { cache: "no-store" })).json(); } catch (e) { lines.push(`${id}: could not load (${e})`); continue; }
     const bad = [], near = (x, y, tol = 0.05) => Math.abs(x - y) <= tol;
     const all = a.positions.concat(a.closed);
@@ -222,7 +222,8 @@ const paper = await p.evaluate(async () => {
       if (!near(q.pnl, q.sell.proceeds - q.buy.cost, 0.011)) bad.push(`${q.label}: P&L ${q.pnl} != ${(q.sell.proceeds - q.buy.cost).toFixed(2)}`);
       if (!a.log.some(e => e.kind === "sell" && e.t === q.sell.t && e.text.includes(q.ticker))) bad.push(`${q.label}: no log line for the sale`);
     }
-    if (a.id === "A" && a.positions.length > 2) bad.push(`${a.positions.length} positions, more than 2`);
+    if (a.id !== "B" && a.positions.length > 2) bad.push(`${a.positions.length} positions, more than 2`);
+    if (a.id === "C") for (const q of all) if (q.buy.t.slice(11, 16) < "15:00") bad.push(`${q.label}: bought at ${q.buy.t.slice(11, 16)} ET, before 2 PM Central`);
     if (a.equity.length && a.equity[0].v !== a.start_cash) bad.push(`chart starts at ${a.equity[0].v}`);
     for (let i = 1; i < a.equity.length; i++) if (!(a.equity[i].d > a.equity[i - 1].d)) bad.push(`chart dates out of order at ${a.equity[i].d}`);
     const tile = document.querySelector(`.pp-tile[data-acct="${id}"] .pp-val`);

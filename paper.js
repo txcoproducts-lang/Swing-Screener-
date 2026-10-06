@@ -1,12 +1,13 @@
-// Paper trading widgets. paper.py trades two $1,000 paper accounts on GitHub Actions and saves them on the
+// Paper trading widgets. paper.py trades three $1,000 paper accounts on GitHub Actions and saves them on the
 // paper-trading branch; this reads them from GitHub, draws a tile per account and opens the full breakdown
 // (chart against SPY, open positions, closed trades with reasons, the daily log, the rules) on click.
 // screener.py puts this file inside the page. Text from the accounts is only ever set with textContent.
 (function () {
 const SRC = 'https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/';
 const REPO = 'https://github.com/txcoproducts-lang/Swing-Screener-';
-const IDS = ['A', 'B'];
-const SUB = {A: 'Your screener setups and option rules', B: 'My AI picks list, as shares'};
+const IDS = ['A', 'C', 'B'];
+const SUB = {A: 'Your screener setups and option rules', C: 'Your rules, buying only after 2 PM Central', B: 'My AI picks list, as shares'};
+const WHEN = {A: '10:00 AM New York time', C: '2:00 PM Central', B: '10:00 AM New York time'};
 const KIND = {buy: 'Bought', sell: 'Sold', close: 'Close', day: 'Decision', note: 'Note'};
 const box = document.getElementById('pp');
 if (!box) return;
@@ -136,7 +137,7 @@ function tile(a) {
     started
       ? el('div', {class: 'pp-d'}, el('span', {class: cls(st.pnl), text: arrow(st.pnl) + smoney(st.pnl) + ' (' + pct(st.ret) + ')'}),
            ' since ' + md(a.start), st.spyRet != null ? el('span', {class: 'mut', text: ' · SPY ' + pct(st.spyRet)}) : null)
-      : el('div', {class: 'pp-d mut', text: 'Starts ' + wd(a.start) + ' at about 10:00 AM New York time.'}),
+      : el('div', {class: 'pp-d mut', text: 'Starts ' + wd(a.start) + ' at about ' + (WHEN[a.id] || WHEN.A) + '.'}),
     spark(a),
     el('div', {class: 'pp-f mut'},
        el('span', {text: started ? plural(a.positions.length, 'open position') + ' · ' + plural(a.closed.length, 'closed trade') : 'Runs to ' + mdy(a.end)}),
@@ -337,14 +338,16 @@ window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTi
 let accts = {};
 function load() {
   const v = Math.floor(Date.now() / 60000);
-  return Promise.all(IDS.map(id => fetch(SRC + id + '.json?v=' + v, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })))
-    .then(list => {
+  return Promise.allSettled(IDS.map(id => fetch(SRC + id + '.json?v=' + v, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })))
+    .then(res => {
+      const list = res.filter(r => r.status === 'fulfilled').map(r => r.value);   // an account that fails to load is skipped
+      if (!list.length) {
+        if (!Object.keys(accts).length) box.replaceChildren(el('div', {class: 'hint', text: 'The paper trading accounts could not be loaded right now. Try again in a few minutes.'}));
+        return;
+      }
       accts = {};
       list.forEach(a => { accts[a.id] = a; });
       box.replaceChildren(...list.map(tile));
-    })
-    .catch(() => {
-      if (!Object.keys(accts).length) box.replaceChildren(el('div', {class: 'hint', text: 'The paper trading accounts could not be loaded right now. Try again in a few minutes.'}));
     });
 }
 box.replaceChildren(el('div', {class: 'hint', text: 'Loading the paper trading accounts…'}));

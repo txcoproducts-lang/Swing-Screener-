@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Paper trading trial: two accounts start with $1,000 each on 2026-10-06 and trade for six months.
+"""Paper trading trial: three accounts start with $1,000 each and trade until 2027-04-06 (six months from 2026-10-06).
 
   A  "Your system": last night's screener setups (Momentum and Pullback) and your option rules
      (calls 15-30 days out, delta 0.50-0.80, open interest over 500), up to half the account a trade, or one
      contract with up to all the cash when every call that fits costs more. Shares when no call fits.
+  C  "Your system, after 2 PM": the same rules as A, but it only buys after 2:00 PM Central (3:00 PM New York).
+     It sells on the same signals as A. Started 2026-10-07, at the user's request.
   B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), as shares.
 
 GitHub Actions runs this every 30 minutes on weekdays (.github/workflows/paper.yml). On a market day the
-first run at or after 10:00 New York time sells and buys, later runs check stops and targets, and the first
-run after 4 PM records the closing value. The accounts are saved on the paper-trading branch
-(paper/A.json, paper/B.json), which the page reads. Every buy, sell and daily decision is logged with
-its reason. An account that hits an error mid-run is left as it was, and the next run tries again.
+first run at or after 10:00 New York time sells and buys (C only sells), later runs check stops and targets,
+C buys at the first run at or after 3:00 PM, and the first run after 4 PM records the closing value. The
+accounts are saved on the paper-trading branch (paper/A.json, B.json, C.json), which the page reads. Every
+buy, sell and daily decision is logged with its reason. An account that hits an error mid-run is left as it
+was, and the next run tries again.
 
   python paper.py --state DIR [--history DIR] [--dry-run] [--at "2026-10-06 10:05"] [--test-quotes]
 """
@@ -22,6 +25,7 @@ import screener as SC
 NY = "America/New_York"
 P = dict(
     START="2026-10-06", MONTHS=6, CASH=1000.0,
+    C_START="2026-10-07",         # C was asked for on Oct 6 after 2 PM Central, so it starts the next day; all end together
     OPEN=dt.time(10, 0),          # the first run at or after this sells and buys (GitHub can start the 9:35 run late)
     CLOSE=dt.time(16, 0),         # the first run at or after this records the day's closing value
     STALE_MIN=20,                 # Yahoo's latest 1-minute bar must be this fresh to trade on it
@@ -34,10 +38,13 @@ P = dict(
     A_TARGET=0.50, A_STOP=0.50,   # calls: sell at +50% (bid) or -50% (mid)
     A_EXIT_DTE=5,                 # calls: sell this many days before expiry
     A_SHARE_STOP=0.08,            # shares: sell on an 8% drop
+    # C: A's rules, buying only in the afternoon
+    C_BUY=dt.time(15, 0),         # 2:00 PM Central: the first run at or after this buys
     # B: my AI picks
     B_SLOTS=10,
 )
-NAMES = {"A": "Your system", "B": "Claude's picks"}
+IDS = "ABC"
+NAMES = {"A": "Your system", "B": "Claude's picks", "C": "Your system, after 2 PM"}
 FILLS = ("Paper trades, no real money. Shares fill at Yahoo's latest 1-minute price, 0.05% worse, and fractional "
          "shares are allowed. Calls fill at the ask to buy and the bid to sell, plus $0.65 per contract each way. "
          "Yahoo's option quotes can lag by up to 15 minutes. Dividends are ignored.")
@@ -46,12 +53,16 @@ FILLS = ("Paper trades, no real money. Shares fill at Yahoo's latest 1-minute pr
 def rules(aid):
     lo, hi = SC.CFG["PK_DTE"]
     dlo, dhi = SC.CFG["PK_DELTA"]
-    if aid == "A":
+    if aid in ("A", "C"):
+        when = ("Buys and sells at about 10:00 New York time, once the opening half hour's swings settle and option "
+                "spreads narrow, then checks stops and targets every 30 minutes until the close." if aid == "A" else
+                "Buys only after 2:00 PM Central (3:00 PM New York), at the first check after that, using the same "
+                "setups and option rules as Your system. Sells on the same signals: the trend check at about 10:00 New "
+                "York time, then stops and targets every 30 minutes until the close.")
         return [
             "Uses your screener: last night's setups (Momentum and Pullback), in the stock table's order.",
             f"Holds {P['A_SLOTS']} positions at a time, each up to half the account (a call can take more, see below). "
-            "Buys and sells at about 10:00 New York time, once the opening half hour's swings settle and option "
-            "spreads narrow, then checks stops and targets every 30 minutes until the close.",
+            + when,
             f"Buys a call by your rules ({lo}-{hi} days out, delta {dlo:.2f}-{dhi:.2f}, open interest over "
             f"{SC.CFG['PK_OI_OVER']}, bid/ask spread under {SC.CFG['MAX_SPREAD_PCT']:.0f}%), the one nearest "
             f"{(dlo + dhi) / 2:.2f} delta, on the first of the top {P['A_SCAN']} setups that has one within half the "
@@ -202,9 +213,13 @@ class Day:
 
 
 # ------------------------------------------------------------------ accounts and fills
+def start_day(aid):
+    return max(P["START"], P["C_START"]) if aid == "C" else P["START"]
+
+
 def new_account(aid):
-    end = (pd.Timestamp(P["START"]) + pd.DateOffset(months=P["MONTHS"])).date().isoformat()
-    return dict(id=aid, name=NAMES[aid], start=P["START"], end=end, start_cash=P["CASH"], cash=P["CASH"],
+    end = (pd.Timestamp(P["START"]) + pd.DateOffset(months=P["MONTHS"])).date().isoformat()   # the same end for all
+    return dict(id=aid, name=NAMES[aid], start=start_day(aid), end=end, start_cash=P["CASH"], cash=P["CASH"],
                 rules=rules(aid), fills=FILLS, positions=[], closed=[], log=[], equity=[], mark=None,
                 days={}, next_id=1, updated=None, over=False)
 
@@ -651,7 +666,7 @@ def step(a, day, spy_daily):
     """One account's part of a run. Returns what it did in a few words, or None when only prices moved."""
     now, today = day.now, day.today.isoformat()
     steps = a["days"].get(today, [])
-    if a.get("over") or now.time() < P["OPEN"]:
+    if a.get("over") or today < a["start"] or now.time() < P["OPEN"]:
         return None
     if now.time() >= P["CLOSE"]:
         if "close" in steps or spy_daily.index[-1].date() != day.today:
@@ -668,26 +683,27 @@ def step(a, day, spy_daily):
         return None
     n0 = len(a["log"])
     first = "morning" not in steps
+    late = a["id"] == "C" and now.time() >= P["C_BUY"] and "buys" not in steps and today < a["end"]
     if first:
         start(a, day, spy_daily)
     if today >= a["end"]:
         end_trial(a, day)
-    elif a["id"] == "A":
+    elif a["id"] in ("A", "C"):
         if first:
             splits(a, day)
         a_exits(a, day, trend=first)
-        if first:
+        if (first and a["id"] == "A") or late:      # A buys in the morning, C at the first run after 2 PM Central
             a_buys(a, day)
     else:
         if first:
             splits(a, day)
         b_trade(a, day, quiet=not first)
         b_marks(a, day)
-    if first:
-        a["days"][today] = steps + ["morning"]
+    if first or late:
+        a["days"][today] = steps + (["morning"] if first else []) + (["buys"] if late else [])
     trades = sum(e["kind"] in ("buy", "sell") for e in a["log"][n0:])
-    if first:
-        return f"morning, {plural(trades, 'trade')}"
+    if first or late:
+        return f"{'morning' if first else 'afternoon'}{' and buys' if first and late else ''}, {plural(trades, 'trade')}"
     return plural(trades, "trade") if trades else None
 
 
@@ -705,7 +721,10 @@ def save(state_dir, accts):
 def run(state_dir, mkt, now, hist, dry=False, test_quotes=False):
     """One scheduled run. Returns (what each account did, the accounts, accounts that hit an error),
     or None when there's nothing to do (before the trial, or the market hasn't traded today)."""
-    accts = {aid: load(state_dir, aid) for aid in "AB"}
+    accts = {aid: load(state_dir, aid) for aid in IDS}
+    for a in accts.values():
+        if not a["equity"]:
+            a["start"] = start_day(a["id"])           # not started yet: follow the settings (and --start in dry runs)
     if now.date().isoformat() < P["START"]:
         return None
     day = Day(mkt, now, hist, test_quotes)
@@ -739,7 +758,7 @@ def run(state_dir, mkt, now, hist, dry=False, test_quotes=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--state", required=True, help="folder with A.json and B.json (created if missing)")
+    ap.add_argument("--state", required=True, help="folder with the account files, A.json, B.json and C.json (created if missing)")
     ap.add_argument("--history", default=str(Path(__file__).resolve().parent / "history"))
     ap.add_argument("--dry-run", action="store_true", help="print what would happen, save nothing")
     ap.add_argument("--at", help='pretend it is this New York time, e.g. "2026-10-06 10:05" (prices are still the latest)')
@@ -750,7 +769,7 @@ def main():
     if (a.test_quotes or a.start) and not a.dry_run:
         sys.exit("--test-quotes and --start are only for dry runs")
     if a.start:
-        P["START"] = a.start
+        P["START"] = P["C_START"] = a.start
     now = pd.Timestamp(a.at, tz=NY) if a.at else pd.Timestamp.now(tz=NY)
     res = run(a.state, Yahoo(), now, a.history, a.dry_run, a.test_quotes)
     if res is None:

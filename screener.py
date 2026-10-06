@@ -917,9 +917,10 @@ def card(label, value, sub, series, good=None):
 
 
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
-PAPER_HINT = ("Two paper accounts with $1,000 each, trading for six months from Oct 6, 2026. <b>Your system</b> trades your "
-              "screener setups and option rules; <b>Claude's picks</b> trades my AI picks list. They trade on their own at about "
-              "10:00 AM New York time and check every 30 minutes. Click one for every trade and the reason behind it.")
+PAPER_HINT = ("Three paper accounts with $1,000 each, trading until Apr 6, 2027. <b>Your system</b> trades your screener "
+              "setups and option rules at about 10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but "
+              "only buys after 2:00 PM Central; <b>Claude's picks</b> trades my AI picks list. They trade on their own and "
+              "check every 30 minutes. Click one for every trade and the reason behind it.")
 
 PICK_TEXT = {    # how each list is ordered, in plain words, for the versions in use (others fall back to their description)
     "nu": {"all": "Strongest relative strength (RS, 1-99) first."},

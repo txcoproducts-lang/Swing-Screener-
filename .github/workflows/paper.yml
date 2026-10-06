@@ -3,8 +3,9 @@ name: Paper trading
 on:
   schedule:
     # Every 30 minutes on weekdays, 13:05-21:35 UTC (9:05 AM-5:35 PM New York in summer, 8:05 AM-4:35 PM in winter).
-    # paper.py decides what to do from the New York time: sell and buy at the first run after 10:00, check stops
-    # and targets until the close, and record the day's close at the first run after 4 PM.
+    # paper.py decides what to do from the New York time: sell and buy at the first run after 10:00 (the after-2 PM
+    # account buys at the first run after 3:00 instead), check stops and targets until the close, and record the
+    # day's close at the first run after 4 PM.
     - cron: "5,35 13-21 * * 1-5"
   workflow_dispatch:
     inputs:
