@@ -7,7 +7,7 @@
   B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), as shares.
 
 GitHub Actions runs this every 30 minutes on weekdays (.github/workflows/paper.yml). On a market day the
-first run at or after 9:45 New York time sells and buys, later runs check stops and targets, and the first
+first run at or after 10:00 New York time sells and buys, later runs check stops and targets, and the first
 run after 4 PM records the closing value. The accounts are saved on the paper-trading branch
 (paper/A.json, paper/B.json), which the page reads. Every buy, sell and daily decision is logged with
 its reason. An account that hits an error mid-run is left as it was, and the next run tries again.
@@ -22,7 +22,7 @@ import screener as SC
 NY = "America/New_York"
 P = dict(
     START="2026-10-06", MONTHS=6, CASH=1000.0,
-    OPEN=dt.time(9, 45),          # the first run at or after this sells and buys
+    OPEN=dt.time(10, 0),          # the first run at or after this sells and buys (GitHub can start the 9:35 run late)
     CLOSE=dt.time(16, 0),         # the first run at or after this records the day's closing value
     STALE_MIN=20,                 # Yahoo's latest 1-minute bar must be this fresh to trade on it
     STALE_DAYS=5,                 # if a nightly run failed, trade on screener files up to this many days old
