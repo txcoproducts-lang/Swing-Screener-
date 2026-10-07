@@ -49,6 +49,19 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
     log(`[${name}] heatmap: ${await p.$$eval("#hm .hmr", rs => rs.map(r => r.innerText.replace(/\n/g, " ").trim()).filter(Boolean).join(" | "))}`);
     await p.screenshot({ path: `${out}/${name}-1-breadth.png` });
   }
+  if (await at("#bln")) {
+    await p.waitForTimeout(300);
+    const line = async () => `${await p.$eval("#blg", e => e.options[e.selectedIndex].text)}: ${await p.$eval("#blk", e => e.innerText.replace(/\n/g, " | "))}`;
+    log(`[${name}] breadth line: ${await line()}`);
+    await p.screenshot({ path: `${out}/${name}-1-breadth-line.png` });
+    const tech = await p.$$eval("#blg option", o => (o.find(x => x.text === "Technology") || {}).value);
+    if (tech != null) {
+      await p.selectOption("#blg", tech); await p.waitForTimeout(400);
+      log(`[${name}] breadth line: ${await line()}`);
+      await p.screenshot({ path: `${out}/${name}-1-breadth-line-tech.png` });
+      await p.selectOption("#blg", "0"); await p.waitForTimeout(200);
+    }
+  }
   if (await at(".charts")) {
     await p.waitForTimeout(500);
     log(`[${name}] strips: ${await p.$$eval(".ch .bl", bs => bs.map(b => b.closest(".ch").dataset.sector + ": " + b.innerText).join(" | "))}`);

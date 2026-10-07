@@ -516,9 +516,11 @@ def breadth_history(frames, sectors, members):
         if name not in SECTOR_ETF or len(cols) < 5:
             continue
         r = rise[cols].mean(axis=1) * 100
-        b = pd.DataFrame(dict(rise=r, avg=r.ewm(span=10, adjust=False).mean(), up=up[cols].mean(axis=1) * 100))
-        r1, a1 = b.rise.round(1), b.avg.round(1)    # the numbers the page shows; a tie keeps the day before's state
-        b["on"] = pd.Series(np.where(r1 > a1, 1.0, np.where(r1 < a1, 0.0, np.nan)), index=b.index).ffill().fillna(0.0)
+        b = pd.DataFrame(dict(rise=r, avg=r.ewm(span=10, adjust=False).mean(), a5=r.ewm(span=5, adjust=False).mean(),
+                              up=up[cols].mean(axis=1) * 100))
+        r1 = b.rise.round(1)                         # the numbers the page shows; a tie keeps the day before's state
+        above = lambda a1: pd.Series(np.where(r1 > a1, 1.0, np.where(r1 < a1, 0.0, np.nan)), index=b.index).ffill().fillna(0.0)
+        b["on"], b["on5"] = above(b.avg.round(1)), above(b.a5.round(1))     # Rising above its 10-day / 5-day average
         b.index = pd.DatetimeIndex([pd.Timestamp(i.strftime("%Y-%m-%d")) for i in b.index])
         out[name] = b.iloc[30:]                      # skip the EMA warm-up at the start of the 2 years
     return out
@@ -1504,6 +1506,23 @@ def heat_html(bh, days=63):
             f'<div class="hmk"><span>0%</span>{key}<span>100% of stocks rising</span></div><div id="hmtip" class="hmtip" hidden></div></div>'), data
 
 
+def line_data(bh):
+    """The breadth line chart's numbers: for the S&P 500 and each sector, Rising and its 5-day and 10-day averages by
+    day (rounded the same way the above / below states were decided, so the chart can't disagree with them), and those
+    states as strings of 1 (above) and 0 (below)."""
+    if not bh or "S&P 500" not in bh:
+        return None
+    names = ["S&P 500"] + sorted((n for n in bh if n != "S&P 500"), key=lambda n: SHORT_SECTOR.get(n, n))
+    idx = bh["S&P 500"].index
+    r1 = lambda v: [None if x != x else float(x) for x in v.round(1)]
+    ud = lambda v: "".join("1" if x == 1 else "0" for x in v)
+    g = []
+    for n in names:
+        b = bh[n].reindex(idx)
+        g.append(dict(n=n, s=SHORT_SECTOR.get(n, n), r=r1(b.rise), a5=r1(b.a5), a10=r1(b.avg), u5=ud(b.on5), u10=ud(b.on)))
+    return dict(t=[d.strftime("%Y-%m-%d") for d in idx], g=g)
+
+
 def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
@@ -1554,10 +1573,24 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
             f'<td data-v="{s_.adv - s_.dec}">{s_.adv} / {s_.dec}</td>'
             f'<td data-v="{s_.nh - s_.nl}">{s_.nh} / {s_.nl}</td></tr>')
     heat, hm_data = heat_html(bh)
+    try:
+        bl_data = line_data(bh)
+    except Exception as e:                 # an extra; never block the page
+        print("  breadth line failed:", e)
+        bl_data = None
+    line_html = ('<div class="hint">The breadth line: Rising for the S&amp;P 500 or the sector you pick (or tap its row in the '
+                 'heatmap), day by day, with its 5-day and 10-day averages (both exponential moving averages). Rising crossing '
+                 'above its 10-day average is what the heatmap calls an upswing.</div>'
+                 '<div class="bln" id="bln"><div class="blh"><b>Breadth line</b><select id="blg" aria-label="S&amp;P 500 or sector">'
+                 + "".join(f'<option value="{i}">{html_esc(g["s"])}</option>' for i, g in enumerate(bl_data["g"]))
+                 + '</select><div class="bar blr">'
+                 + "".join(f'<button data-r="{k}"' + (' class="on"' if k == 63 else '') + f'>{lbl}</button>'
+                           for lbl, k in (("3M", 63), ("6M", 126), ("1Y", 252), ("All", 0)))
+                 + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     sector_html = ('<h2>Sector breadth</h2>'
                    + ('<div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 (the fast half of '
                       'your uptrend rule), by day for the last 3 months; greener = more stocks rising. ▲ = an upswing (Rising '
-                      'above its own 10-day average), ▼ = fading. Tap or hover a row for the numbers.</div>' + heat if heat else "")
+                      'above its own 10-day average), ▼ = fading. Tap or hover a row for the numbers.</div>' + heat + line_html if heat else "")
                    + '<div class="hint">Click a sector to filter the stock list. ± is the change vs 5 trading days ago. '
                    + ('Rising counts S&amp;P 500 stocks only, so each sector matches its SPDR ETF; the other columns count '
                       'every stock in the scan.' if heat else '')
@@ -1616,8 +1649,8 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swing Screener {asof}</title><style>
-:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7}}
-@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff}}}}
+:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7;--b5:#c96a12;--b10:#2a5bd7}}
+@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff;--b5:#c98232;--b10:#5d8cf2}}}}
 body{{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px -apple-system,system-ui,sans-serif}}
 h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
 .reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
@@ -1659,6 +1692,14 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hmk{{display:flex;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
 .hm i.h0{{background:color-mix(in srgb,var(--dn) 95%,var(--line))}}.hm i.h1{{background:color-mix(in srgb,var(--dn) 78%,var(--line))}}.hm i.h2{{background:color-mix(in srgb,var(--dn) 60%,var(--line))}}.hm i.h3{{background:color-mix(in srgb,var(--dn) 42%,var(--line))}}.hm i.h4{{background:color-mix(in srgb,var(--dn) 22%,var(--line))}}.hm i.h5{{background:color-mix(in srgb,var(--up) 22%,var(--line))}}.hm i.h6{{background:color-mix(in srgb,var(--up) 42%,var(--line))}}.hm i.h7{{background:color-mix(in srgb,var(--up) 60%,var(--line))}}.hm i.h8{{background:color-mix(in srgb,var(--up) 78%,var(--line))}}.hm i.h9{{background:color-mix(in srgb,var(--up) 95%,var(--line))}}
+.hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
+.bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
+.blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
+.blh select{{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:13px}}
+.bar.blr{{margin-left:auto}}.bar.blr button{{padding:4px 10px;margin:0 0 0 4px}}
+.blk{{font-size:12px;color:var(--mut);margin:8px 0 4px;line-height:1.6;min-height:38px}}.blk b{{color:var(--fg);font-variant-numeric:tabular-nums}}
+.blk .li{{display:inline-block;white-space:nowrap;margin-right:14px}}.blk .lk{{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}}
+.blc{{height:240px}}.blc[hidden]{{display:none}}
 .tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
 #cm{{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center}}#cm[hidden]{{display:none}}
 #cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
@@ -1690,7 +1731,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
-const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))};
+const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
 const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric'}});
 (function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
 if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
@@ -1763,12 +1804,51 @@ tip.style.left=Math.max(0,Math.min(e.clientX-h.left+12,h.width-tip.offsetWidth))
 hm.querySelectorAll('.hmc').forEach(c=>{{c.addEventListener('pointermove',show);c.addEventListener('pointerdown',show);
 c.addEventListener('pointerleave',e=>{{if(e.pointerType==='mouse')off()}})}});
 document.addEventListener('pointerdown',e=>{{if(!e.target.closest('.hmc'))off()}})}})();
+// breadth line: Rising for the S&P 500 or one sector by day, with its 5-day and 10-day averages
+(function(){{const el=document.getElementById('bln');if(!el||!BL)return;
+const box=el.querySelector('.blc'),lg=document.getElementById('blk'),sel=document.getElementById('blg'),N=BL.t.length;
+if(!window.LightweightCharts){{box.hidden=true;lg.textContent='The chart could not load (chart library blocked).';return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();let g=0,span=63;
+const c=LightweightCharts.createChart(box,{{autoSize:true,localization:{{locale:'en-US',priceFormatter:v=>+v.toFixed(1)+'%'}},
+layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11,attributionLogo:false}},grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},
+rightPriceScale:{{borderVisible:false,scaleMargins:{{top:0.1,bottom:0.1}}}},timeScale:{{borderVisible:false,lockVisibleTimeRangeOnResize:true}},
+crosshair:{{horzLine:{{visible:false,labelVisible:false}}}},handleScroll:false,handleScale:false}});
+const line=col=>c.addLineSeries({{color:col,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerRadius:4}});
+const s10=line(V('--b10')),s5=line(V('--b5')),sr=line(V('--fg'));          // Rising drawn last, on top
+sr.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:false}});
+const f1=v=>v==null?'–':v.toFixed(1)+'%',item=(v,lbl,x)=>'<span class="li"><i class="lk" style="background:var('+v+')"></i>'+lbl+' <b>'+f1(x)+'</b></span>';
+const DAY=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
+const hrows=HM?[...document.querySelectorAll('#hm .hmc')].map(x=>[x.closest('.hmr'),HM.rows[+x.dataset.i].n]):[];
+// the numbers and above / below states for one day (or tonight, with the day each state began)
+function leg(i){{const G=BL.g[g],last=i==null||i<0||i>=N-1;if(last)i=N-1;if(G.r[i]==null){{lg.textContent='';return}}
+const st=(u,lbl)=>{{const on=u[i]==='1';let k=i;while(last&&k>0&&u[k-1]===u[i])k--;
+return '<span class="li '+(on?'up':'dn')+'">'+(on?'▲ above':'▼ below')+' its '+lbl+(last?' since '+MD(BL.t[k]):'')+'</span>'}};
+lg.innerHTML='<div>'+(last?'':'<span class="li"><b>'+DAY(BL.t[i])+'</b></span>')+item('--fg','Rising',G.r[i])+item('--b5','5-day avg',G.a5[i])
++item('--b10','10-day avg',G.a10[i])+'</div><div>'+st(G.u5,'5-day average')+st(G.u10,'10-day average')+'</div>'}}
+function fit(){{const ts=c.timeScale();if(!span||span>=N)ts.fitContent();else ts.setVisibleLogicalRange({{from:N-span-0.5,to:N-0.5}})}}
+function show(){{const G=BL.g[g],f=a=>BL.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
+sr.setData(f(G.r));s5.setData(f(G.a5));s10.setData(f(G.a10));fit();requestAnimationFrame(()=>requestAnimationFrame(fit));leg(null);
+hrows.forEach(([row,n])=>row.classList.toggle('sel',n===G.n))}}
+const save=()=>{{try{{localStorage.setItem('bl',JSON.stringify({{n:BL.g[g].n,span}}))}}catch(e){{}}}};
+const btns=[...el.querySelectorAll('.blr button')],setSpan=k=>{{span=k;btns.forEach(b=>b.classList.toggle('on',+b.dataset.r===k))}};
+function pick(n){{const j=BL.g.findIndex(x=>x.n===n);if(j<0)return;g=j;sel.value=String(j);save();show()}}
+sel.onchange=()=>{{g=+sel.value;save();show()}};
+btns.forEach(b=>b.onclick=()=>{{setSpan(+b.dataset.r);save();fit()}});
+hrows.forEach(([row,n])=>row.addEventListener('click',()=>pick(n)));
+c.subscribeCrosshairMove(p=>leg(p.point&&p.logical!=null?Math.round(p.logical):null));
+// on a phone, tap the chart for that day's numbers; a tap anywhere else goes back to tonight's
+box.addEventListener('pointerdown',e=>{{if(e.pointerType==='mouse')return;const l=c.timeScale().coordinateToLogical(e.clientX-box.getBoundingClientRect().left);
+if(l==null)return;const i=Math.max(0,Math.min(N-1,Math.round(l))),v=BL.g[g].r[i];if(v==null)return;c.setCrosshairPosition(v,BL.t[i],sr);leg(i)}});
+document.addEventListener('pointerdown',e=>{{if(e.pointerType!=='mouse'&&!box.contains(e.target)){{c.clearCrosshairPosition();leg(null)}}}});
+try{{const s=JSON.parse(localStorage.getItem('bl')||'null'),j=s?BL.g.findIndex(x=>x.n===s.n):-1;
+if(j>=0){{g=j;sel.value=String(j)}}if(s&&btns.some(b=>+b.dataset.r===s.span))setSpan(s.span)}}catch(e){{}}
+show()}})();
 const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
 const chip=document.getElementById('secf');
 function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st!=='Uptrend':st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
-document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
+document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
 document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
 chip.onclick=()=>{{fSec=null;apply()}};
 function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;

@@ -203,6 +203,42 @@ const bw = await p.evaluate(() => {
 if (!bw) log("breadth view: not on the page");
 else log(`breadth view: ${bw.rows} heatmap rows x ${bw.days} days, ${bw.strips} strip canvases, problems: ${bw.out.length ? bw.out.join("; ") : "none"}`);
 
+// ---- breadth line: each group's legend shows its last day, which matches the heatmap; the above / below states follow
+// the numbers (a tie keeps the day before's); tapping a heatmap row switches the line to that group
+const bln = await p.evaluate(async () => {
+  if (typeof BL === "undefined" || !BL) return null;
+  const sel = document.getElementById("blg"), lg = document.getElementById("blk"), out = [], N = BL.t.length, i = N - 1;
+  const wait = () => new Promise(r => setTimeout(r, 80)), nums = s => [...s.matchAll(/(\d+(?:\.\d)?)%/g)].map(m => +m[1]);
+  const hm = {}; (typeof HM !== "undefined" && HM ? HM.rows : []).forEach(R => { hm[R.n] = R; });
+  if (sel.options.length !== BL.g.length) out.push(`${sel.options.length} choices for ${BL.g.length} groups`);
+  for (let j = 0; j < BL.g.length; j++) {
+    const G = BL.g[j]; sel.value = String(j); sel.dispatchEvent(new Event("change")); await wait();
+    const [r, a5, a10] = nums(lg.textContent);
+    if (r !== G.r[i] || a5 !== G.a5[i] || a10 !== G.a10[i]) out.push(`${G.s}: legend "${lg.textContent}" vs ${G.r[i]} / ${G.a5[i]} / ${G.a10[i]}`);
+    if (lg.textContent.includes("above its 5-day") !== (G.u5[i] === "1") || lg.textContent.includes("above its 10-day") !== (G.u10[i] === "1"))
+      out.push(`${G.s}: legend says "${lg.textContent}" but the states are ${G.u5[i]} / ${G.u10[i]}`);
+    const R = hm[G.n], k = R ? R.r.length - 1 : -1;
+    if (!R) out.push(`${G.s}: no heatmap row`);
+    else {
+      if (Math.abs(R.r[k] - G.r[i]) > 0.051 || Math.abs(R.a[k] - G.a10[i]) > 0.051) out.push(`${G.s}: line ${G.r[i]} / ${G.a10[i]} vs heatmap ${R.r[k]} / ${R.a[k]}`);
+      if (R.s[k] !== +G.u10[i]) out.push(`${G.s}: 10-day state ${G.u10[i]} vs heatmap ${R.s[k]}`);
+    }
+    for (const [u, a, lbl] of [[G.u5, G.a5, "5-day"], [G.u10, G.a10, "10-day"]])
+      for (let d = 1; d < N; d++) {
+        if (G.r[d] == null || a[d] == null) continue;
+        const want = G.r[d] > a[d] ? "1" : G.r[d] < a[d] ? "0" : u[d - 1];
+        if (u[d] !== want) { out.push(`${G.s} ${BL.t[d]}: ${lbl} state ${u[d]} for ${G.r[d]} vs ${a[d]}`); break; }
+      }
+  }
+  const row = document.querySelectorAll("#hm .hml")[1];
+  if (row) { row.click(); await wait(); const want = BL.g.find(G => G.n === HM.rows[1].n);
+    if (!want || sel.options[sel.selectedIndex].text !== want.s) out.push(`tapping the "${row.textContent}" row shows ${sel.options[sel.selectedIndex].text}`); }
+  sel.value = "0"; sel.dispatchEvent(new Event("change")); await wait();
+  return { groups: BL.g.length, days: N, from: BL.t[0], canvases: document.querySelectorAll("#bln canvas").length, out };
+});
+if (!bln) log("breadth line: not on the page");
+else log(`breadth line: ${bln.groups} groups x ${bln.days} days from ${bln.from}, ${bln.canvases} canvases, problems: ${bln.out.length ? bln.out.join("; ") : "none"}`);
+
 // ---- Plan M list: the summary's counts match the table, and "Plan M is on / off" in the Market box opens it
 const pm = await p.evaluate(async () => {
   const d = document.getElementById("ovm"); if (!d) return null;
