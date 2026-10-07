@@ -267,5 +267,7 @@
   "setups": 0,
   "earn_checked": true
  },
+ "dropped": [],
+ "prev_asof": null,
  "live_at": null
 }
