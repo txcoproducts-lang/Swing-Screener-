@@ -181,6 +181,28 @@ for (let i = 2; i <= 13; i++) {
 log(`sorted ${cols} columns checked 2-13, ${sortBad} bad`);
 for (const tf of ["D", "W", "M"]) await p.click(`.bar.tf button[data-tf="${tf}"]`);
 
+// ---- breadth view: the heatmap, the Sector breadth table, the S&P 500 card and the chart strips agree on tonight's numbers
+await p.click('.bar.tf button[data-tf="D"]'); await p.waitForTimeout(300);
+const bw = await p.evaluate(() => {
+  if (typeof HM === "undefined" || !HM) return null;
+  const pct = s => { const m = /(\d+)%/.exec(s || ""); return m ? +m[1] : null; };
+  const out = [], last = {};
+  HM.rows.forEach((R, i) => { const v = R.r[R.r.length - 1]; last[R.n] = v;
+    const shown = pct(document.querySelectorAll("#hm .hmv")[i].textContent);
+    if (v == null || Math.round(v) !== shown) out.push(`heatmap ${R.n}: ${v} vs shown ${shown}`); });
+  const head = [...document.querySelectorAll("#s thead th")].map(h => h.textContent), k = head.findIndex(h => h.startsWith("Rising"));
+  document.querySelectorAll("#s tbody tr").forEach(tr => { const n = tr.dataset.sector; if (k < 0 || !(n in last)) return;
+    const shown = pct(tr.cells[k].textContent); if (Math.round(last[n]) !== shown) out.push(`table ${n}: ${shown} vs heatmap ${last[n]}`); });
+  const card = [...document.querySelectorAll(".card")].find(c => c.textContent.includes("stocks rising"));
+  if (!card) out.push("no S&P 500 rising card");
+  else if (Math.round(last["S&P 500"]) !== pct(card.querySelector(".val").textContent)) out.push(`card ${card.querySelector(".val").textContent} vs heatmap ${last["S&P 500"]}`);
+  document.querySelectorAll(".ch").forEach(ch => { const n = ch.dataset.sector, bl = ch.querySelector(".bl"); if (!bl || !(n in last)) return;
+    if (pct(bl.textContent) !== Math.round(last[n])) out.push(`strip ${n}: "${bl.textContent}" vs heatmap ${last[n]}`); });
+  return { rows: HM.rows.length, days: HM.t.length, strips: document.querySelectorAll(".ch .bv canvas").length, out };
+});
+if (!bw) log("breadth view: not on the page");
+else log(`breadth view: ${bw.rows} heatmap rows x ${bw.days} days, ${bw.strips} strip canvases, problems: ${bw.out.length ? bw.out.join("; ") : "none"}`);
+
 // ---- 3. open every ticker's Trend chart on every timeframe
 const tks = await p.$$eval(".tk", e => [...new Set(e.map(x => x.dataset.tk))]);
 let opened = 0; const chartErr = [];

@@ -10,6 +10,8 @@ Nightly swing-trade screener for the S&P 500 + Nasdaq 100 with market and sector
 
 **Change the rules:** edit the `CFG` block at the top of `screener.py` (min volume, delta target, DTE, the Top picks call rules `PK_DTE` / `PK_DELTA` / `PK_OI_OVER`, SMA vs EMA for the 150/200).
 
+**Breadth over time:** the *Sector breadth* heatmap and the strip under each sector chart show Rising, the share of S&P 500 stocks with the 10 EMA above the 20 (for the S&P 500 and each sector, counting S&P 500 stocks only so each sector matches its SPDR ETF), with the share in the full uptrend as a slower line. An upswing is Rising above its own 10-day average. Built nightly by `breadth_history()` in `screener.py` from the 2 years of prices it already downloads.
+
 **OVTLYR plan:** the page's *OVTLYR plan* section rebuilds OVTLYR's Plan M, Plan ETF and Plan #SICADFU checks from the screener's data each night, with stand-ins for OVTLYR's private heatmap and signals (listed on the page). Its settings are the `OV` block in `screener.py`.
 
 **Run on your own PC instead:** `setup_windows.bat` and `run_screener.bat` (in the repo root, next to `screener.py`) set up a local nightly run.
