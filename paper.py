@@ -84,6 +84,9 @@ def rules(aid):
             "account. If none does, it buys one contract that costs more, with up to all the cash. If no call fits "
             "even that, it buys shares of the top setup.",
             "Skips a setup that has dropped below its 50-day EMA by the time it buys.",
+            f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
+            f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
+            f"sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
             f"Sells a call at +{P['A_TARGET']:.0%} (at the bid), at -{P['A_STOP']:.0%}, {P['A_EXIT_DTE']} days before "
             "expiry, or after a close below the 50-day EMA or 150-day average.",
             f"Sells shares if they drop {P['A_SHARE_STOP']:.0%} or after a close below the 50-day EMA or 150-day average.",
@@ -95,6 +98,9 @@ def rules(aid):
         "3 months, 20% each on 6, 9 and 12).",
         "Trades at about 10:00 New York time: sells stocks that left the list the night before and buys the new "
         "ones, about a tenth of the account each. Empty spots stay in cash.",
+        f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
+        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
+        "A pick it skipped for being overbought is bought later, once it isn't, while it's still on the list.",
         f"A stock stays while it ranks in the top {SC.CFG['AI_KEEP']}. No stop-loss: in my 2014-2026 test, also "
         "selling below the 50-day EMA cut the return from 17.4% to 9.1% a year.",
         "Shares, not options: the edge in my test came from holding leaders for weeks, which 15-30 day calls lose "
@@ -133,6 +139,9 @@ def d_rules():
         f"to {ov['ZONE_ATR']:g} ATR above it) and no order block {ov['ETF_OB_AGE']}+ days old within {ov['OB_GAP']:.0%}. "
         "Sells at about 10:00 the morning after QQQ's (or SPY's) 10/20 bearish cross, a close more than "
         f"{ov['HOT_ATR']:g} ATR above its 20 EMA, or reaching a {ov['ETF_OB_AGE']}+ day old order block.",
+        f"Your overbought rule, on top of the plan: no Plan M stock with RSI over {SC.CFG['OB_RSI']} or CCI over "
+        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), no Plan ETF buy while QQQ or SPY is, and nothing "
+        f"while the market's breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line.",
         "Plan #SICADFU: cash with nothing else to do waits in SGOV (Treasury bills). It sells what a new trade needs, "
         "sells it all on the last market day of each month and buys back on the first, as the deck says.",
         f"After {P['D_LOSERS']} losing trades in one day, no new trades for {P['D_PAUSE']} days (it keeps the ones it has).",
@@ -277,6 +286,15 @@ class Day:
         d = dt.date.fromisoformat(files[-1].stem[7:]) if files else None
         return (d, json.loads(files[-1].read_text(encoding="utf-8"))) if self.recent(d) else (d, None)
 
+    def breadth(self):
+        """Last night's breadth from the screener (the page's Rising: the share of each group's S&P 500 stocks with the
+        10 EMA over the 20): {"S&P 500" or a sector: %}, or {} when the file is missing or too old."""
+        files = sorted(f for f in self.hist.glob("breadth_*.csv") if f.stem[8:] < self.today.isoformat())
+        d = dt.date.fromisoformat(files[-1].stem[8:]) if files else None
+        if not self.recent(d):
+            return {}
+        return {r.group: float(r.rise) for r in pd.read_csv(files[-1]).itertuples() if r.rise == r.rise}
+
     def ai(self):
         """My AI picks list as of its last nightly update, plus each pick's rank and reasons from that night's
         Top picks file."""
@@ -286,9 +304,9 @@ class Day:
         if tp.exists():
             d = pd.read_csv(tp)
             for _, r in d[d.list == "ai"].iterrows():
-                rk, why = r.get("ai_rank"), r.get("why")
+                rk, why, sec = r.get("ai_rank"), r.get("why"), r.get("sector")
                 info[r.ticker] = dict(rank=int(rk) if rk is not None and rk == rk else None,
-                                      why=why if isinstance(why, str) else "")
+                                      why=why if isinstance(why, str) else "", sector=sec if isinstance(sec, str) else "")
         return st, info
 
 
@@ -431,6 +449,37 @@ def fitting_calls(day, t, S):
     return out
 
 
+def market_hot(day):
+    """Your overbought rule for the whole market: last night's S&P 500 breadth over the 75 line. The reason, or ""."""
+    return SC.breadth_hot(None, day.breadth())
+
+
+def hot_now(day, items):
+    """Your overbought rule at buying time: {ticker: why} for each (ticker, sector) in items that is overbought now:
+    RSI over 70 or CCI over 100 on its daily bars plus today's trading so far, or last night's breadth for its sector
+    over the 75 line (the market's is market_hot). A ticker whose bars don't load is judged on its sector alone."""
+    tks = sorted({t for t, _ in items})
+    if not tks:
+        return {}
+    br = day.breadth()
+    bars = day.mkt.daily(tks, day.prev_day)
+    sess = day.mkt.session(tks, day.today)
+    px = day.price(tks)
+    out = {}
+    for t, sec in items:
+        why = []
+        d = bars.get(t)
+        if d is not None and len(d) > 3 * SC.CFG["CCI_N"]:
+            if t in sess and day.fresh(t):
+                d = with_today(d, sess[t], px[t][0], day.today)
+            why = SC.hot(float(SC.rsi(d["Close"]).iloc[-1]), float(SC.cci(d.tail(3 * SC.CFG["CCI_N"])).iloc[-1]))
+        if isinstance(sec, str) and sec and SC.breadth_hot(sec, br):
+            why.append(SC.breadth_hot(sec, br))
+        if why:
+            out[t] = " and ".join(why)
+    return out
+
+
 def a_exits(a, day, trend):
     """Stops, targets and time exits; with trend=True (the morning run) also last night's close against the
     50-day EMA and 150-day average."""
@@ -494,6 +543,10 @@ def a_buys(a, day):
     if len(a["positions"]) >= P["A_SLOTS"]:
         note(a, now, f"No new buy: both slots are taken ({'; '.join(p['label'] for p in a['positions'])}).", "day")
         return
+    mh = market_hot(day)
+    if mh:
+        note(a, now, f"No new buy: the market is overbought ({mh}, last night). Your rule: nothing gets bought then.", "day")
+        return
     sd, scr = day.screener()
     if scr is None:
         note(a, now, "No new buy: the screener hasn't finished a nightly run in the last few days"
@@ -507,6 +560,7 @@ def a_buys(a, day):
     sold_today = {p["ticker"] for p in a["closed"] if p["sell"]["t"][:10] == day.today.isoformat()}
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]
     px = day.price([r.ticker for _, r in scan])
+    hot = hot_now(day, [(r.ticker, r.get("sector")) for _, r in scan if r.ticker not in sold_today and day.fresh(r.ticker)])
     mid = sum(SC.CFG["PK_DELTA"]) / 2
     cost = lambda f: f["ask"] * 100 + P["FEE"]
     best = lambda fs: min(fs, key=lambda f: (abs(f["delta"] - mid), -f["oi"]))
@@ -531,6 +585,9 @@ def a_buys(a, day):
             e50 = r.close / (1 + r.vs50 / 100)
             if S <= e50:
                 skipped.append(f"{t} was at {money(S)}, below its 50-day EMA ({money(e50)})")
+                continue
+            if t in hot:
+                skipped.append(f"{t} was overbought: {hot[t]}")
                 continue
             valid.append((n, r, S))
             looked += 1
@@ -638,6 +695,15 @@ def b_trade(a, day, quiet=False):
         acted += 1
     have = {p["ticker"] for p in a["positions"]}
     new = [t for t in picks if t not in have]
+    mh = market_hot(day)
+    hot = ({t: mh for t in new} if mh else
+           hot_now(day, [(t, info.get(t, {}).get("sector", "")) for t in new if day.fresh(t)]))
+    if hot and not quiet:
+        note(a, now, (f"Not buying {', '.join(hot)}: the market is overbought ({mh}, last night)." if mh else
+                      "Not buying " + "; ".join(f"{t} (overbought: {w})" for t, w in hot.items()) + ".")
+             + " Your rule: nothing overbought gets bought. It checks again every 30 minutes, and on later days while "
+               "the pick is on the list.", "note")
+    new = [t for t in new if t not in hot]
     for i, t in enumerate(new):
         if not day.fresh(t):
             waiting.append(f"buy {t}")
@@ -661,7 +727,7 @@ def b_trade(a, day, quiet=False):
         return
     if waiting:
         note(a, now, f"Waiting for a live price to {', '.join(waiting)}; trying again every 30 minutes.", "note")
-    if not acted and not waiting:
+    if not acted and not waiting and not hot:
         hold = sorted(p["ticker"] for p in a["positions"])
         note(a, now, f"No trades: my list didn't change{' last night' if as_of == day.prev_day else ''}, so I'm holding "
                      f"{plural(len(hold), 'stock')}"
@@ -873,7 +939,10 @@ def d_buys(a, day, sd, plan, bars):
         s20 = float(SC.ema(spy["Close"], 20).iloc[-1]) if spy is not None and len(spy) > 60 else None
         held = {p["ticker"] for p in a["positions"]}
         cand = [s for s in plan["setups"] if s["ticker"] not in held and s["ticker"] not in sold_today]
-        if not m["ok"]:
+        mh = market_hot(day)
+        if mh:
+            news.append(f"Plan M waits: the market is overbought ({mh}, last night), and your rule buys nothing then")
+        elif not m["ok"]:
             news.append("Plan M is off: " + "; ".join(lc(c["text"]) for c in m["checks"] if not c["ok"]))
         elif s20 is None:
             news.append("Plan M waits: SPY's daily prices didn't load")
@@ -893,12 +962,16 @@ def d_buys(a, day, sd, plan, bars):
             news.append(f"Plan M: no setups in {src}" + (f" ({'; '.join(why)})" if f["signal"] else ""))
         else:
             px = day.price([s["ticker"] for s in cand])
+            hot = hot_now(day, [(s["ticker"], s["sector"]) for s in cand if day.fresh(s["ticker"])])
             skipped = []
             for s in cand:
                 t = s["ticker"]
                 earn = s["earn"] if s["earn"] and s["earn"] >= today.isoformat() else None   # a date already past doesn't count
                 if not day.fresh(t):
                     skipped.append(f"{t} had no live price")
+                    continue
+                if t in hot:
+                    skipped.append(f"{t} was overbought: {hot[t]}")
                     continue
                 S = px[t][0]
                 if S <= s["e10"]:
@@ -967,6 +1040,10 @@ def d_buys(a, day, sd, plan, bars):
             q = day.price([u, fund])
             if not day.fresh(u) or not day.fresh(fund):
                 etf_news.append(f"{fund} had no live price")
+                continue
+            h = mh and f"the market is overbought ({mh}, last night)" or hot_now(day, [(u, "")]).get(u)
+            if h:
+                etf_news.append(f"{fund} isn't bought: " + (h if mh else f"{u} is overbought ({h})"))
                 continue
             lo, hi = e["e20"], e["e20"] + SC.OV["ZONE_ATR"] * e["atr"]
             if not lo <= q[u][0] <= hi:

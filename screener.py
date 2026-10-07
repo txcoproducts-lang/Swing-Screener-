@@ -50,6 +50,12 @@ CFG = dict(
     AI_N=10, AI_KEEP=20, AI_CAP=3,   # hold 10, at most 3 per sector; a pick stays while it ranks in the top 20
     AI_TREND_EXIT=False,     # True = also drop a pick on a close below its EMA50 (tested worse)
     AI_MARKET_FILTER=False,  # True = no new picks while SPY is below its 200-day average (tested no better)
+    # overbought / oversold, the user's rule (2026-10-07): nothing overbought gets a setup, a buy signal or a buy,
+    # anywhere (the setups, the Top picks lists, the OVTLYR plan and all four paper accounts)
+    OB_RSI=70, OS_RSI=30,    # 14-day RSI
+    CCI_N=20,                # 20-day CCI; it swings around 0 (most days between -100 and +100), so its levels are +-100
+    OB_CCI=100, OS_CCI=-100,
+    OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of stocks with the 10 EMA over the 20), market or sector
 )
 
 # ----------------------------------------------------------------- universe
@@ -381,6 +387,36 @@ def atr(d, n=14):
     pc = d["Close"].shift()
     tr = pd.concat([d["High"] - d["Low"], (d["High"] - pc).abs(), (d["Low"] - pc).abs()], axis=1).max(axis=1)
     return tr.ewm(alpha=1 / n, adjust=False).mean()
+
+def cci(d, n=None):
+    """Commodity Channel Index: how far the typical price ((high + low + close) / 3) is from its n-day average, in
+    units of 0.015 x its mean deviation, so most days land between -100 and +100."""
+    n = n or CFG["CCI_N"]
+    tp = (d["High"] + d["Low"] + d["Close"]) / 3
+    dev = tp.rolling(n).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+    return (tp - tp.rolling(n).mean()) / (0.015 * dev)
+
+def lvl(v, lim):
+    """A reading next to its line: whole, or with one decimal when it would round to the line (70.4 -> "70.4")."""
+    return f"{v:.1f}" if round(v) == lim else f"{v:.0f}"
+
+def hot(r, c):
+    """Why a stock is overbought by the user's rule (RSI over 70, CCI over 100), as short phrases; empty when it isn't."""
+    out = []
+    if r is not None and r == r and r > CFG["OB_RSI"]:
+        out.append(f"RSI {lvl(r, CFG['OB_RSI'])} is over {CFG['OB_RSI']}")
+    if c is not None and c == c and c > CFG["OB_CCI"]:
+        out.append(f"CCI {lvl(c, CFG['OB_CCI'])} is over {CFG['OB_CCI']}")
+    return out
+
+def breadth_hot(sector, br):
+    """Overbought breadth, over the 75 line: the market's (sector=None) or one sector's. br: {group: Rising %}, the
+    breadth view's numbers (S&P 500 stocks only). Returns the reason, or "" when it isn't."""
+    v, lim = br.get(sector or "S&P 500"), CFG["OB_BREADTH"]
+    if v is None or v != v or v <= lim:
+        return ""
+    name = "market" if not sector else SHORT_SECTOR.get(sector, sector)
+    return f"{name} breadth {lvl(v, lim)}% is over {lim}"
 
 
 def analyze(t, d):
