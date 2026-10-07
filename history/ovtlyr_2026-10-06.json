@@ -49,9 +49,9 @@
    "rsi": 44.9,
    "rsi_prev": 44.9,
    "miss": [
-    "breadth 23% not above its 10-day average 23%",
+    "breadth 22.7% not above its 10-day average 23.0%",
     "RSI 45 not above SPY's 63",
-    "RSI 45 not rising (was 45)"
+    "RSI 44.9 not rising (was 44.9)"
    ]
   },
   "Consumer Discretionary": {
@@ -85,7 +85,7 @@
    "rsi": 52.9,
    "rsi_prev": 51.0,
    "miss": [
-    "breadth 29% not above its 10-day average 29%",
+    "breadth 28.6% not above its 10-day average 29.1%",
     "RSI 53 not above SPY's 63"
    ]
   },
@@ -181,7 +181,7 @@
     {
      "k": "heat",
      "ok": false,
-     "text": "QQQ heatmap (RSI) 70 (needs under 70)"
+     "text": "QQQ heatmap (RSI) 70.1 (needs under 70)"
     },
     {
      "k": "signal",
