@@ -1,0 +1,271 @@
+{
+ "asof": "2026-10-06",
+ "market": {
+  "ok": true,
+  "checks": [
+   {
+    "k": "heat",
+    "ok": true,
+    "text": "SPY heatmap (RSI) 63, up from 60 (needs under 70 and rising)"
+   },
+   {
+    "k": "signal",
+    "ok": true,
+    "text": "SPY buy signal: 10 EMA 769.65 above the 20 EMA 767.21"
+   },
+   {
+    "k": "trend",
+    "ok": true,
+    "text": "SPY 10/20/50 uptrend: close 779.09 above the 50 EMA 761.58"
+   },
+   {
+    "k": "breadth",
+    "ok": true,
+    "text": "Market breadth: 27% of stocks have the 10 EMA above the 20, above its 10-day average of 26%"
+   }
+  ],
+  "spy": {
+   "date": "2026-10-06",
+   "close": 779.09,
+   "high": 781.62,
+   "e10": 769.65,
+   "e20": 767.21,
+   "e50": 761.58,
+   "rsi": 62.7,
+   "rsi_prev": 59.6,
+   "atr": 6.76
+  },
+  "breadth": {
+   "pct": 27.2,
+   "ema": 25.6
+  }
+ },
+ "sectors": {
+  "Communication Services": {
+   "ok": false,
+   "n": 22,
+   "bull": 22.7,
+   "bull_ema": 23.0,
+   "rsi": 44.9,
+   "rsi_prev": 44.9,
+   "miss": [
+    "breadth 23% not above its 10-day average 23%",
+    "RSI 45 not above SPY's 63",
+    "RSI 45 not rising (was 45)"
+   ]
+  },
+  "Consumer Discretionary": {
+   "ok": false,
+   "n": 47,
+   "bull": 21.3,
+   "bull_ema": 18.1,
+   "rsi": 44.8,
+   "rsi_prev": 41.6,
+   "miss": [
+    "RSI 45 not above SPY's 63"
+   ]
+  },
+  "Consumer Staples": {
+   "ok": false,
+   "n": 33,
+   "bull": 12.1,
+   "bull_ema": 14.3,
+   "rsi": 43.4,
+   "rsi_prev": 40.2,
+   "miss": [
+    "breadth 12% not above its 10-day average 14%",
+    "RSI 43 not above SPY's 63"
+   ]
+  },
+  "Energy": {
+   "ok": false,
+   "n": 21,
+   "bull": 28.6,
+   "bull_ema": 29.1,
+   "rsi": 52.9,
+   "rsi_prev": 51.0,
+   "miss": [
+    "breadth 29% not above its 10-day average 29%",
+    "RSI 53 not above SPY's 63"
+   ]
+  },
+  "Financials": {
+   "ok": false,
+   "n": 76,
+   "bull": 2.6,
+   "bull_ema": 6.2,
+   "rsi": 40.5,
+   "rsi_prev": 39.5,
+   "miss": [
+    "breadth 3% not above its 10-day average 6%",
+    "RSI 41 not above SPY's 63"
+   ]
+  },
+  "Health Care": {
+   "ok": false,
+   "n": 60,
+   "bull": 38.3,
+   "bull_ema": 43.1,
+   "rsi": 48.5,
+   "rsi_prev": 50.1,
+   "miss": [
+    "excluded in the plan",
+    "breadth 38% not above its 10-day average 43%",
+    "RSI 48 not above SPY's 63",
+    "RSI 48 not rising (was 50)"
+   ]
+  },
+  "Industrials": {
+   "ok": false,
+   "n": 81,
+   "bull": 33.3,
+   "bull_ema": 25.0,
+   "rsi": 47.3,
+   "rsi_prev": 45.5,
+   "miss": [
+    "RSI 47 not above SPY's 63"
+   ]
+  },
+  "Information Technology": {
+   "ok": false,
+   "n": 74,
+   "bull": 71.6,
+   "bull_ema": 64.6,
+   "rsi": 58.8,
+   "rsi_prev": 57.7,
+   "miss": [
+    "RSI 59 not above SPY's 63"
+   ]
+  },
+  "Materials": {
+   "ok": false,
+   "n": 25,
+   "bull": 8.0,
+   "bull_ema": 8.7,
+   "rsi": 42.5,
+   "rsi_prev": 41.0,
+   "miss": [
+    "breadth 8% not above its 10-day average 9%",
+    "RSI 42 not above SPY's 63"
+   ]
+  },
+  "Real Estate": {
+   "ok": false,
+   "n": 30,
+   "bull": 3.3,
+   "bull_ema": 3.8,
+   "rsi": 37.3,
+   "rsi_prev": 33.2,
+   "miss": [
+    "breadth 3% not above its 10-day average 4%",
+    "RSI 37 not above SPY's 63"
+   ]
+  },
+  "Utilities": {
+   "ok": false,
+   "n": 31,
+   "bull": 9.7,
+   "bull_ema": 5.0,
+   "rsi": 49.8,
+   "rsi_prev": 40.2,
+   "miss": [
+    "RSI 50 not above SPY's 63"
+   ]
+  }
+ },
+ "etf": {
+  "TQQQ": {
+   "under": "QQQ",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": false,
+     "text": "QQQ heatmap (RSI) 70 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": true,
+     "text": "QQQ buy signal: 10 EMA above the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": true,
+     "text": "QQQ uptrend: close 759.66 above the 50 EMA 723.70"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "QQQ value zone: close 759.66, zone 736.24-754.60 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "QQQ order blocks 30+ days old: none within 2%"
+    }
+   ],
+   "sell": [],
+   "date": "2026-10-06",
+   "close": 759.66,
+   "high": 762.86,
+   "e10": 745.05,
+   "e20": 736.24,
+   "e50": 723.7,
+   "rsi": 70.1,
+   "rsi_prev": 68.6,
+   "atr": 9.18
+  },
+  "SPXL": {
+   "under": "SPY",
+   "ok": true,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "SPY heatmap (RSI) 63 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": true,
+     "text": "SPY buy signal: 10 EMA above the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": true,
+     "text": "SPY uptrend: close 779.09 above the 50 EMA 761.58"
+    },
+    {
+     "k": "zone",
+     "ok": true,
+     "text": "SPY value zone: close 779.09, zone 767.21-780.73 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "SPY order blocks 30+ days old: none within 2%"
+    }
+   ],
+   "sell": [],
+   "date": "2026-10-06",
+   "close": 779.09,
+   "high": 781.62,
+   "e10": 769.65,
+   "e20": 767.21,
+   "e50": 761.58,
+   "rsi": 62.7,
+   "rsi_prev": 59.6,
+   "atr": 6.76
+  }
+ },
+ "setups": [],
+ "funnel": {
+  "signal": 28,
+  "rules": 21,
+  "sector": 0,
+  "near_ob": 0,
+  "earnings": 0,
+  "setups": 0,
+  "earn_checked": true
+ },
+ "live_at": null
+}
