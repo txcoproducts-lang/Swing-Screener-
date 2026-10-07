@@ -418,6 +418,19 @@ def breadth_hot(sector, br):
     name = "market" if not sector else SHORT_SECTOR.get(sector, sector)
     return f"{name} breadth {lvl(v, lim)}% is over {lim}"
 
+def overbought(frames, sectors, br):
+    """Tonight's overbought stocks by the user's rule: {ticker: (own, sec)}, where own lists the reasons from its RSI /
+    CCI and sec is its sector's breadth over the 75 line ("" when it isn't). Stocks with neither are left out."""
+    out = {}
+    for t, d in frames.items():
+        if len(d) <= 3 * CFG["CCI_N"]:
+            continue
+        own = hot(float(rsi(d["Close"]).iloc[-1]), float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]))
+        sec = breadth_hot(sectors.get(t), br) if sectors.get(t) else ""
+        if own or sec:
+            out[t] = (own, sec)
+    return out
+
 
 def analyze(t, d):
     c = d["Close"]
@@ -473,7 +486,8 @@ def analyze(t, d):
     return dict(
         ticker=t, setup=setup, score=round(score, 1), close=px,
         open=d["Open"].iloc[-1], chg1d=(px / c.iloc[-2] - 1) * 100,
-        chg5d=(px / c.iloc[-6] - 1) * 100, chg1m=(px / c.iloc[-22] - 1) * 100, rsi=r.iloc[-1], atr_pct=atr_pct, relvol=relv,
+        chg5d=(px / c.iloc[-6] - 1) * 100, chg1m=(px / c.iloc[-22] - 1) * 100, rsi=r.iloc[-1],
+        cci=float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), atr_pct=atr_pct, relvol=relv,
         from_hi=(px / hi252 - 1) * 100,
         vs10=(px / e10.iloc[-1] - 1) * 100, vs20=(px / e20.iloc[-1] - 1) * 100, vs50=(px / e50.iloc[-1] - 1) * 100,
         p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core,
@@ -723,10 +737,10 @@ def breakout_lists(F, ok):
     }
 
 
-def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=()):
+def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=(), skip=()):
     """One night of the AI picks list. held: the current picks; score: today's AI score for every liquid
     stock (Series). A pick stays while it ranks in the top `keep` and isn't in `sell`; open slots go to
-    the best-ranked stocks, at most `cap` per sector. Returns (kept, added, dropped)."""
+    the best-ranked stocks not in `skip` (overbought tonight), at most `cap` per sector. Returns (kept, added, dropped)."""
     order = score.dropna().sort_values(ascending=False, kind="stable").index[:keep]
     top = set(order)
     kept = [t for t in held if t in top and t not in sell]
@@ -738,13 +752,13 @@ def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=()):
         for t in order:
             if len(kept) + len(added) >= n:
                 break
-            if t not in kept and t not in dropped and t not in sell and cnt[grp(t)] < cap:
+            if t not in kept and t not in dropped and t not in sell and t not in skip and cnt[grp(t)] < cap:
                 added.append(t)
                 cnt[grp(t)] += 1
     return kept, added, dropped
 
 
-def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow_new=True):
+def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow_new=True, skip=()):
     """Step the saved AI picks list once per trading day. State: {as_of, picks, closed}; each pick keeps
     the day it was added and that day's close (and SPY's) so the page can show how it has done."""
     st = prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[])
@@ -753,7 +767,7 @@ def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow
     old = {p["ticker"]: p for p in st["picks"]}
     gone = [t for t in old if t not in present]       # no prices tonight: hold, don't guess
     kept, added, dropped = ai_step([t for t in old if t in present], score, sector, n=CFG["AI_N"] - len(gone),
-                                   keep=CFG["AI_KEEP"], cap=CFG["AI_CAP"], allow_new=allow_new, sell=sell)
+                                   keep=CFG["AI_KEEP"], cap=CFG["AI_CAP"], allow_new=allow_new, sell=sell, skip=skip)
     px = lambda t: round(float(close[t]), 2)
     spy = round(float(spy_now), 2) if spy_now == spy_now and spy_now is not None else None
     closed = list(st.get("closed", []))
@@ -765,9 +779,12 @@ def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow
     return dict(as_of=asof, picks=picks, closed=closed)
 
 
-def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
+def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True, ob=None, mkt_hot=""):
     """The three lists for tonight. Returns (lists for the page, new AI picks state).
-    step=False (a run before the close) shows the saved AI picks without changing them."""
+    step=False (a run before the close) shows the saved AI picks without changing them.
+    The user's overbought rule: ob = {ticker: why} for stocks overbought tonight, left off New uptrends and Breakout
+    watch and never added to the AI picks; mkt_hot = why the whole market is overbought (then all three add nothing)."""
+    ob = ob or {}
     idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
     P = {k: wide(frames, k, idx) for k in ("Open", "High", "Low", "Close", "Volume")}
     F = pick_features(P, sectors, subs)
@@ -791,15 +808,17 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
 
     desc, cand, rank = new_up_lists(F, ok, ai)[CFG["NEW_UP"]]
     tks = list(ranked(rank if rank is not None else F["rs"], cand).index)       # the whole list is shown strongest RS first
-    nu = dict(desc=desc, total=int((F["new_up"].iloc[-1] & ok.iloc[-1]).sum()), rows=[
+    cool = lambda ts: [] if mkt_hot else [t for t in ts if t not in ob]
+    hot_out = lambda ts: [] if mkt_hot else [dict(ticker=t, why=ob[t]) for t in ts if t in ob]
+    nu = dict(desc=desc, total=int((F["new_up"].iloc[-1] & ok.iloc[-1]).sum()), hot=hot_out(tks), rows=[
         row(t, days_out=None if last["days_out"][t] != last["days_out"][t] else int(last["days_out"][t]),
-            relvol=float(last["relvol"][t])) for t in tks[:CFG["NEW_UP_N"]]])
+            relvol=float(last["relvol"][t])) for t in cool(tks)[:CFG["NEW_UP_N"]]])
 
     desc, cand, rank = breakout_lists(F, ok)[CFG["BREAKOUT"]]
     s = ranked(rank, cand)
-    bo = dict(desc=desc, total=int(cand.iloc[-1].sum()), rows=[
+    bo = dict(desc=desc, total=int(cand.iloc[-1].sum()), hot=hot_out(s.index[:CFG["BREAKOUT_N"]]), rows=[
         row(t, piv=float(last["piv"][t]), dist=float(last["dist"][t]) * 100, base_days=int(last["base_days"][t]),
-            tight=float(last["tight"][t]) * 100, dry=float(last["dry"][t])) for t in s.index[:CFG["BREAKOUT_N"]]])
+            tight=float(last["tight"][t]) * 100, dry=float(last["dry"][t])) for t in cool(s.index)[:CFG["BREAKOUT_N"]]])
 
     score = ai.iloc[-1].dropna()
     present = set(c.dropna().index)
@@ -808,7 +827,7 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
     market_ok = True
     if CFG["AI_MARKET_FILTER"] and spy is not None and len(spy) > 200:
         market_ok = bool(spy.iloc[-1] > spy.rolling(200).mean().iloc[-1])
-    st = (ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok) if step else
+    st = (ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok and not mkt_hot, set(ob)) if step else
           prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[]))
     rank_now = score.rank(ascending=False, method="first")
     ind = pr("ind") if "ind" in F else None
@@ -828,7 +847,7 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
                 why.append(f"strong industry ({subs.get(t) or sectors.get(t) or 'its group'})")
         now = float(c[t]) if t in c.index and c[t] == c[t] else None
         old_pick = p["added"] < asof                         # picked today: nothing to measure yet
-        ai_rows.append(row(t, added=p["added"], price=p["price"], now=now,
+        ai_rows.append(row(t, added=p["added"], price=p["price"], now=now, ob=ob.get(t, ""),
                            ret=(now / p["price"] - 1) * 100 if now and old_pick else None,
                            spy_ret=(spy_now / p["spy"] - 1) * 100 if p.get("spy") and spy_now == spy_now and old_pick else None,
                            rank=int(rank_now[t]) if t in rank_now.index else None, why=why) if t in c.index else
@@ -840,10 +859,10 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
     for r in ai_rows:
         if r.get("ret") is not None:
             track.append((r["ret"], r.get("spy_ret")))
-    ai_list = dict(desc=A[CFG["AI_SCORE"]][0], rows=ai_rows, market_ok=market_ok, as_of=st["as_of"],
+    ai_list = dict(desc=A[CFG["AI_SCORE"]][0], rows=ai_rows, market_ok=market_ok, as_of=st["as_of"], step=step,
                    dropped=[p for p in st["closed"] if p["dropped"] == asof], since=min(
                        [p["added"] for p in st["picks"]] + [p["added"] for p in st["closed"]], default=asof), track=track)
-    return dict(asof=asof, nu=nu, bo=bo, ai=ai_list), st
+    return dict(asof=asof, nu=nu, bo=bo, ai=ai_list, mkt_hot=mkt_hot), st
 
 # -------------------------------------------------------------- OVTLYR plan
 # OVTLYR's Plan M (stocks), Plan ETF (TQQQ / SPXL) and Plan #SICADFU (SGOV), from the trading-plan deck the user shared
@@ -903,20 +922,25 @@ def ob_hit(blocks, last, min_age=0):
 
 
 def idx_state(d):
-    """SPY or QQQ tonight: close, high, 10 / 20 / 50-day EMAs, RSI today and the day before, ATR."""
+    """SPY or QQQ tonight: close, high, 10 / 20 / 50-day EMAs, RSI today and the day before, CCI, ATR."""
     c = d["Close"]
     e = {n: ema(c, n).iloc[-1] for n in (10, 20, 50)}
     r = rsi(c)
     return dict(date=d.index[-1].date().isoformat(), close=round(float(c.iloc[-1]), 2), high=round(float(d["High"].iloc[-1]), 2),
                 e10=round(float(e[10]), 2), e20=round(float(e[20]), 2), e50=round(float(e[50]), 2),
-                rsi=round(float(r.iloc[-1]), 1), rsi_prev=round(float(r.iloc[-2]), 1), atr=round(float(atr(d).iloc[-1]), 2))
+                rsi=round(float(r.iloc[-1]), 1), rsi_prev=round(float(r.iloc[-2]), 1), atr=round(float(atr(d).iloc[-1]), 2),
+                cci=round(float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), 1))
 
 
-def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
+def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_own=None):
     """Tonight's OVTLYR plan: the market and sector checks, Plan ETF's checks and sell signals, and the Plan M setups
     (stocks passing every stock and sector rule, freshest signal first). frames: the universe's daily bars; spy / qqq:
     daily bars; earn: a function giving next earnings dates for a list of tickers (None skips that check); prev: the
-    last saved plan, so the Plan M list shows which stocks are new and why any of the last list's stocks left."""
+    last saved plan, so the Plan M list shows which stocks are new and why any of the last list's stocks left.
+    The user's overbought rule on top of the plan: br = tonight's breadth view numbers ({group: Rising %}); the market or
+    a sector over the 75 line fails its check; hot_own = {ticker: why} for stocks with RSI over 70 or CCI over 100."""
+    br, hot_own = br or {}, hot_own or {}
+    mkt_hot = breadth_hot(None, br)
     idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
     C, H, L, V = (wide(frames, k, idx) for k in ("Close", "High", "Low", "Volume"))
     e10, e20, e50 = (ema(C, n) for n in (10, 20, 50))
@@ -951,6 +975,12 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
         dict(k="breadth", ok=bp > be, text=f"Market breadth: {f0(bp, be)}% of stocks have the 10 EMA above the 20, "
                                            f"{'above' if bp > be else 'below'} its 10-day average of {f0(be, bp)}%"),
     ]
+    hot_check = None
+    if "S&P 500" in br:
+        v, lim = br["S&P 500"], CFG["OB_BREADTH"]
+        hot_check = dict(k="hot", ok=not mkt_hot, text=f"Your overbought rule: {lvl(v, lim)}% of S&P 500 stocks rising, "
+                                                       + (f"over the {lim} line" if mkt_hot else f"not over the {lim} line"))
+        checks.append(hot_check)
     market = dict(ok=all(c["ok"] for c in checks), checks=checks, spy=s, breadth=dict(pct=round(bp, 1), ema=round(be, 1)))
 
     # sectors: breadth above its 10-day average, average RSI above SPY's, under 70 and rising; Health Care is out
@@ -966,6 +996,9 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
         miss = []
         if name in OV["EXCLUDE"]:
             miss.append("excluded in the plan")
+        if breadth_hot(name, br):
+            miss.append(f"overbought by your rule: {lvl(br[name], CFG['OB_BREADTH'])}% of its S&P 500 stocks rising, over "
+                        f"the {CFG['OB_BREADTH']} line")
         if p_ <= e_:
             miss.append(f"breadth {f0(p_, e_)}% not above its 10-day average {f0(e_, p_)}%")
         if r_ <= s["rsi"]:
@@ -988,10 +1021,11 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
     sig = liquid & c_.between(lo, hi) & (age <= OV["SIGNAL_DAYS"] - 1)
     rules = (sig & (e10.iloc[-1] > e20.iloc[-1]) & (c_ > e50.iloc[-1]) & (c_ > e10.iloc[-1]) & (R.iloc[-1] > R.iloc[-2]))
     in_sec = [t for t in rules.index[rules.to_numpy(bool)] if secs.get(sectors.get(t) or "Other", {}).get("ok")]
+    cool = [t for t in in_sec if t not in hot_own]                   # the user's overbought rule
     n_back = lambda n: C.iloc[-1] / C.iloc[-1 - n] - 1 if len(C) > n else np.nan
     rs = (0.4 * n_back(63) + 0.2 * n_back(126) + 0.2 * n_back(189) + 0.2 * n_back(252)).where(liquid).rank(pct=True)
     clear, near_n = [], 0
-    for t in in_sec:
+    for t in cool:
         blocks = ov_blocks(frames[t])
         if ob_near(blocks, float(c_[t]), asof):
             near_n += 1
@@ -1041,6 +1075,8 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
         v = secs.get(sec)
         if not v or not v["ok"]:
             return f"its sector, {sec}, stopped passing" + (f": {v['miss'][0]}" if v and v["miss"] else "")
+        if t in hot_own:
+            return f"overbought by your rule: {hot_own[t]}"
         near = ob_near(ov_blocks(frames[t]), px, asof)
         if near:
             return f"within {OV['OB_GAP']:.0%} of an order block ({near[1]['bot']:.2f}-{near[1]['top']:.2f})"
@@ -1077,7 +1113,12 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
               dict(k="zone", ok=x["e20"] <= x["close"] <= zone, text=f"{und} value zone: close {x['close']:.2f}, zone {x['e20']:.2f}-{zone:.2f} "
                                                                     "(20 EMA to 2 ATR above it)"),
               dict(k="ob", ok=near is None, text=f"{und} order blocks 30+ days old: " + (
-                  "none within 2%" if near is None else f"{near[1]['bot']:.2f}-{near[1]['top']:.2f} is {near[0] * 100:.1f}% away"))]
+                  "none within 2%" if near is None else f"{near[1]['bot']:.2f}-{near[1]['top']:.2f} is {near[0] * 100:.1f}% away")),
+              dict(k="cci", ok=not x["cci"] > CFG["OB_CCI"], text=f"Your overbought rule: {und} CCI {lvl(x['cci'], CFG['OB_CCI'])} "
+                                                                  + ("is over" if x["cci"] > CFG["OB_CCI"] else "is not over")
+                                                                  + f" {CFG['OB_CCI']}")]
+        if hot_check:
+            ch.append(hot_check)
         sell = (([f"{und}'s 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"] if x["e10"] < x["e20"] else [])
                 + ([f"{und} closed more than {OV['HOT_ATR']:g} ATR above its 20 EMA"] if x["close"] > x["e20"] + OV["HOT_ATR"] * x["atr"] else []))
         hit = ob_hit(blocks, day, OV["ETF_OB_AGE"])
@@ -1085,8 +1126,8 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
             sell.append(f"{und} reached an order block from {hit['start']:%b} {hit['start'].day} ({hit['bot']:.2f}-{hit['top']:.2f})")
         etf[fund] = dict(under=und, ok=all(c["ok"] for c in ch), checks=ch, sell=sell, **x)
 
-    funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), near_ob=near_n, earnings=earn_n,
-                  setups=len(setups), earn_checked=bool(earn))
+    funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), hot=len(in_sec) - len(cool), near_ob=near_n,
+                  earnings=earn_n, setups=len(setups), earn_checked=bool(earn))
     return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel, dropped=dropped,
                 prev_asof=(prev or {}).get("asof"))
 
@@ -1364,6 +1405,17 @@ def picks_html(L, earn=None, calls=None):
                                          for i, (c, v) in enumerate(r)) + "</tr>" for r in rows)
         return f'<div class="wrap"><table id="{tid}" class="pkt"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
     note = lambda k: f'<div class="note">{PICK_NOTES[k]}</div>' if PICK_NOTES.get(k) else ""
+    mh = L.get("mkt_hot") or ""
+    def left_out(hot):
+        """The stocks a list left out tonight under the user's overbought rule, with why."""
+        if not hot:
+            return ""
+        return ('<div class="hint obo">Left out as overbought (your rule: RSI over ' f'{CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} '
+                f'or the sector\'s breadth over {CFG["OB_BREADTH"]}): '
+                + "; ".join(f'<span class="tk" data-tk="{h["ticker"]}">{h["ticker"]}</span> ({html_esc(h["why"])})' for h in hot)
+                + '</div>')
+    hot_empty = (f'None tonight: the market is overbought ({html_esc(mh)}), and your rule gives nothing a buy signal then.'
+                 if mh else "")
 
     nu, bo, ai = L["nu"], L["bo"], L["ai"]
     E = "Earnings"
@@ -1374,7 +1426,9 @@ def picks_html(L, earn=None, calls=None):
                f'{PICK_TEXT["nu"].get(CFG["NEW_UP"], nu["desc"])} "Out" = days it had been out of an uptrend. '
                f'Vol vs avg = that day\'s volume vs the 20-day average.</div>'
                + table("pk-nu", ["Ticker", "Close", "1D %", "Out (days)", "RS", "From 52w hi", "Vol vs avg"] + VO + [E], nu_rows,
-                       f"No stock turned into an uptrend on {L['asof']}.") + note("nu"))
+                       hot_empty or (f"Every stock that turned into an uptrend on {L['asof']} is overbought, so none is listed."
+                                     if nu.get("hot") else f"No stock turned into an uptrend on {L['asof']}."))
+               + left_out(nu.get("hot")) + note("nu"))
     bo_rows = [[tk(r), num(r["close"]), num(r["piv"]), pc((r["close"] / r["piv"] - 1) * 100), num(r["base_days"], "{:.0f}"), num(r["tight"], "{:.1f}%"),
                 num(r["dry"], "{:.2f}x"), num(r["rs"], "{:.0f}")] + vo(r) + [er(r["ticker"])] for r in bo["rows"]]
     bo_txt = PICK_TEXT["bo"].get(CFG["BREAKOUT"], "{n} stocks fit: " + bo["desc"] + ".")
@@ -1382,10 +1436,14 @@ def picks_html(L, earn=None, calls=None):
                f'Range = high to low of the last 10 days; '
                f'Vol 10d/50d = average volume of the last 10 days vs the last 50.</div>'
                + table("pk-bo", ["Ticker", "Close", "Breakout level", "Below it", "Base (days)", "10-day range", "Vol 10d/50d", "RS"] + VO + [E],
-                       bo_rows, "No stock fits the breakout rules today.") + note("bo"))
+                       bo_rows, hot_empty or ("Every stock that fits the breakout rules today is overbought, so none is listed."
+                                              if bo.get("hot") else "No stock fits the breakout rules today."))
+               + left_out(bo.get("hot")) + note("bo"))
     new = lambda r, cell: ('<span class="mut">new today</span>', 0) if r["added"] == L["asof"] else cell
+    why = lambda r: ", ".join(r["why"]) + (f'{", " if r["why"] else ""}<span class="warn">overbought tonight: {html_esc(r["ob"])}</span>'
+                                           if r.get("ob") else "")
     ai_rows = [[tk(r), num(r.get("rank"), "{:.0f}"), (r["added"], r["added"]), num(r["price"]), num(r.get("now")),
-                new(r, pc(r.get("ret"))), new(r, pc(r.get("spy_ret")))] + vo(r) + [(", ".join(r["why"]), ""), er(r["ticker"])]
+                new(r, pc(r.get("ret"))), new(r, pc(r.get("spy_ret")))] + vo(r) + [(why(r), ""), er(r["ticker"])]
                for r in ai["rows"]]
     tr = ai["track"]
     track = f'<div class="hint">Track record starts {ai["since"]}: each pick is measured from its close on the day it was picked.</div>'
@@ -1397,18 +1455,28 @@ def picks_html(L, earn=None, calls=None):
     dropped = "".join(f'<span class="tk" data-tk="{p["ticker"]}">{p["ticker"]}</span> ({(p["out"] / p["price"] - 1) * 100:+.1f}%, {p["why"]}) '
                       for p in ai["dropped"])
     mkt = "" if ai["market_ok"] else '<div class="hint warn">Market filter is on: SPY is below its 200-day average, so no new picks until it recovers.</div>'
+    if mh and ai.get("step", True):
+        mkt += (f'<div class="hint warn">No new picks tonight: the market is overbought ({html_esc(mh)}), and your rule adds '
+                'nothing then. The picks already on the list stay.</div>')
     if L.get("live_at"):
         mkt += (f'<div class="hint warn">This page was built at {L["live_at"]} New York time, before the close, so these are the '
                 f'picks from the last run after a close, with prices as of {L["live_at"]}. The list only changes on a run after the close.</div>')
     ai_html = (f'<div class="hint">My own list, rebuilt every night by rules I chose and tested: {PICK_TEXT["ai"].get(CFG["AI_SCORE"], ai["desc"])}. '
                f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per sector. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
                f'open spots go to the best-ranked stocks in the top {CFG["AI_KEEP"]} that fit the sector limit, and a spot stays empty '
-               f'(cash) when none fits, as in the test. Rank = today\'s rank of all liquid stocks.</div>'
+               f'(cash) when none fits, as in the test. Your overbought rule: a stock that is overbought on the night a spot opens '
+               f'(RSI over {CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} or its sector\'s breadth over {CFG["OB_BREADTH"]}) is passed '
+               f'over for the next one, and nothing is added while the market\'s breadth is over {CFG["OB_BREADTH"]}. '
+               f'Rank = today\'s rank of all liquid stocks.</div>'
                + mkt + table("pk-ai", ["Ticker", "Rank", "Picked", "Price then", "Now", "Since picked", "SPY since"] + VO + ["Why", E],
                              ai_rows, "No picks yet.")
                + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
     tab = lambda k, label, n, on: f'<button{" class=on" if on else ""} data-pk="{k}">{label} <span class="n">{n}</span></button>'
-    return ('<h2>Top picks</h2><div class="bar pk">' + tab("nu", "New uptrends", nu["total"], True)
+    n_nu = 0 if mh else max(0, nu["total"] - len(nu.get("hot") or []))
+    return ('<h2>Top picks</h2>'
+            + (f'<div class="hint warn obn">The market is overbought tonight ({html_esc(mh)}), so by your rule nothing gets a '
+               'buy signal: New uptrends and Breakout watch are empty, and AI picks adds no new stocks.</div>' if mh else "")
+            + '<div class="bar pk">' + tab("nu", "New uptrends", n_nu, True)
             + tab("bo", "Breakout watch", len(bo["rows"]), False) + tab("ai", "AI picks", len(ai["rows"]), False) + '</div>'
             + f'<div class="pkl" data-pk="nu">{nu_html}</div><div class="pkl" data-pk="bo" hidden>{bo_html}</div>'
             + f'<div class="pkl" data-pk="ai" hidden>{ai_html}</div>'
@@ -1429,14 +1497,15 @@ def ov_html(ov):
     li = lambda c: f'<li>{ok(c["ok"])} {html_esc(c["text"])}</li>'
     m, f = ov["market"], ov["funnel"]
     mk = (f'<div class="ovb"><div class="ovh">Market <a href="#ovm" class="ovl {"up" if m["ok"] else "dn"}">Plan M is {"on" if m["ok"] else "off"} ›</a></div>'
-          f'<ul>{"".join(li(c) for c in m["checks"])}</ul><div class="mut">All four must pass for new Plan M trades.</div></div>')
+          f'<ul>{"".join(li(c) for c in m["checks"])}</ul><div class="mut">All {len(m["checks"])} must pass for new Plan M trades.</div></div>')
     secs = sorted(ov["sectors"].items(), key=lambda kv: (not kv[1]["ok"], kv[0]))
     n_ok = sum(v["ok"] for _, v in secs)
     sc = (f'<div class="ovb"><div class="ovh">Sectors <span class="mut">{n_ok} of {len(secs)} pass</span></div><ul>'
           + "".join(f'<li>{ok(v["ok"])} {html_esc(k)} <span class="mut">breadth {v["bull"]:.0f}% vs {v["bull_ema"]:.0f}% avg, RSI {v["rsi"]:.0f}'
                     + (f' · {html_esc(v["miss"][0])}' if v["miss"] else "") + '</span></li>' for k, v in secs)
           + '</ul><div class="mut">Breadth above its 10-day average, average RSI above SPY\'s, under 70 and rising. '
-            'Health Care is excluded in the plan.</div></div>')
+            'Health Care is excluded in the plan. Your overbought rule: no sector whose breadth on the breadth view (its '
+            f'S&amp;P 500 stocks with the 10 EMA over the 20) is over the {CFG["OB_BREADTH"]} line.</div></div>')
     et = ('<div class="ovb"><div class="ovh">Plan ETF <span class="mut">spare cash</span></div>'
           + "".join(f'<div><b>{k}</b> {ok(e["ok"])} <span class="mut">on {e["under"]}\'s signals</span></div><ul>'
                     + "".join(li(c) for c in e["checks"]) + "</ul>"
@@ -1486,7 +1555,9 @@ def ov_html(ov):
                 else "earnings dates were not checked (demo)")
     funnel = (f'<div class="hint">Plan M setups tonight: {f["signal"]} liquid stocks priced ${OV["PRICE"][0]:.0f}-${OV["PRICE"][1]:.0f} had a buy '
               f'signal in the last {OV["SIGNAL_DAYS"]} trading days; {f["rules"]} also had the 10/20/50 uptrend, price over the 10 EMA '
-              f'and a rising RSI; {f["sector"]} of those were in passing sectors; {f["near_ob"]} were within {OV["OB_GAP"]:.0%} of an '
+              f'and a rising RSI; {f["sector"]} of those were in passing sectors; '
+              + (f'{f["hot"]} were overbought by your rule (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); ' if "hot" in f else "")
+              + f'{f["near_ob"]} were within {OV["OB_GAP"]:.0%} of an '
               f'order block and {earn_txt}, which leaves {f["setups"]}. Freshest signal first, then relative strength (RS, 1-99).'
               + ("" if m["ok"] else " The market rules fail tonight, so the paper account won't buy these.") + "</div>")
     live = (f'<div class="hint warn">Built at {ov["live_at"]} New York time, before the close, from prices that are not closes yet. '
@@ -1658,7 +1729,16 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
 
     def num(v, f="{:.1f}"): return "" if v is None or v != v else f.format(v)
     def flag(b): return '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
-    head = ["Ticker", "Setup", "Score", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
+    def zone(v, hi, lo):
+        """RSI or CCI with the user's lines: OB over the overbought line, OS under the oversold one."""
+        if v is None or v != v:
+            return ""
+        tag = ('<span class="obt" title="Overbought (over ' f'{hi})">OB</span>' if v > hi else
+               '<span class="ost" title="Oversold (under ' f'{lo})">OS</span>' if v < lo else "")
+        txt = f"{v:.1f}" if round(v) in (hi, lo) else f"{v:.0f}"         # 70.4 reads "70.4", not "70", next to its tag
+        return f"{txt}{' ' + tag if tag else ''}"
+    mkt_hot = breadth_hot(None, {g: round(float(b.rise.iloc[-1]), 1) for g, b in (bh or {}).items()})
+    head = ["Ticker", "Setup", "Score", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "CCI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
             ">150", ">200", "50x150", "Contract", "Δ", "Γ", "Θ/day", "Vega", "IV", "Bid/Ask", "OI"]
     rows = []
     for _, r in picks.iterrows():
@@ -1671,22 +1751,31 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         dsc = r.days_since_cross
         cross = f'new ({int(dsc)}d ago)' if r.cross else ("above" if dsc == dsc and dsc is not None else "")
         pct = lambda v: f'<span class="{"up" if v > 0 else "dn"}">{v:+.1f}</span>'
-        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', r.setup, f"{r.score:.0f}", f"{r.close:.2f}",
-                 f"{r.open:.2f}", pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), num(r.rsi, "{:.0f}"), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
+        why_ob = r.get("ob") or (mkt_hot if r.get("blocked") else "")
+        st = (f'<span class="obl">Overbought</span><div class="sec">{html_esc(why_ob)}</div>' if r.setup == "Overbought" else r.setup)
+        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', st, f"{r.score:.0f}", f"{r.close:.2f}",
+                 f"{r.open:.2f}", pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), zone(r.rsi, CFG["OB_RSI"], CFG["OS_RSI"]),
+                 zone(r.get("cci"), CFG["OB_CCI"], CFG["OS_CCI"]), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
                  num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
                  flag(r.p150), flag(r.p200), cross] + oc
-        raw = [r.ticker, r.setup, r.score, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.atr_pct, r.relvol, r.from_hi, r.vs10, r.vs20, r.vs50] + [""] * 11
+        raw = [r.ticker, r.setup, r.score, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
+               r.vs20, r.vs50] + [""] * 11
         tds = "".join(f'<td data-v="{raw[i]}">{c}</td>' for i, c in enumerate(cells))
         rows.append(f'<tr data-setup="{r.setup}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
     th = "".join(f"<th>{h}</th>" for h in head)
     banner = '<div class="demo">DEMO DATA, not real stocks</div>' if demo else ""
     n_m = int((picks.setup == "Momentum").sum()); n_p = int((picks.setup == "Pullback").sum())
+    n_ob = int(picks.blocked.sum()) if "blocked" in picks else 0
+    ob_html = ('<div class="hint warn obn">' + (f'The market is overbought tonight ({html_esc(mkt_hot)}), so by your rule no stock '
+               'gets a setup: the ones that would have are marked Overbought.' if mkt_hot else
+               f'Your overbought rule left out {n_ob} setup{"s" if n_ob != 1 else ""} tonight: they are marked Overbought, with why.')
+               + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
     paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swing Screener {asof}</title><style>
-:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7;--b5:#c96a12;--b10:#2a5bd7}}
-@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff;--b5:#c98232;--b10:#5d8cf2}}}}
+:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7;--b5:#c96a12;--b10:#2a5bd7;--warn:#fab219}}
+@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff;--b5:#c98232;--b10:#5d8cf2;--warn:#fab219}}}}
 body{{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px -apple-system,system-ui,sans-serif}}
 h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
 .reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
@@ -1697,7 +1786,10 @@ h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
 .bar button{{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-right:6px;font-size:13px}}.bar button.on{{border-color:var(--acc);color:var(--acc)}}
 .wrap{{overflow-x:auto;margin-top:10px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
 th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--bg);cursor:pointer;color:var(--mut);font-weight:600}}
-td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(18),td:nth-child(19){{text-align:left}}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(19),td:nth-child(20){{text-align:left}}
+.obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--warn) 45%,transparent)}}
+.ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
+#t td:nth-child(2) .sec{{white-space:normal;min-width:150px;max-width:220px}}
 td:first-child,th:first-child{{position:sticky;left:0;background:var(--bg);z-index:1}}th:first-child{{z-index:2}}
 .sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
 .demo{{background:var(--dn);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}}
@@ -1716,6 +1808,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .new{{display:inline-block;font-size:11px;font-weight:700;color:var(--up);background:color-mix(in srgb,var(--up) 18%,transparent);padding:1px 7px;border-radius:99px}}
 .ovd{{font-size:12px;margin-top:10px;line-height:1.5}}.ovd ul{{margin:2px 0;padding-left:18px}}.ovm .hint,.ovm+.hint{{margin-top:8px}}
 .pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
+.obn{{color:var(--fg);font-weight:400;background:color-mix(in srgb,var(--warn) 18%,transparent);border-radius:8px;padding:6px 10px;margin:8px 0}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .bv{{height:64px}}.bl{{font-size:11px;color:var(--mut);margin-top:2px;min-height:15px}}.bl b{{color:var(--fg)}}.bv[hidden],.bl[hidden]{{display:none}}
@@ -1744,7 +1837,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
 {banner}<h1>Swing Screener<span class="reg {rcls}">{reg}</span></h1>
-<div class="meta">Data as of {asof}{f" {live_at} New York time (market open, so prices are not closes)" if live_at else ""} · {n_m} momentum · {n_p} pullback · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
+<div class="meta">Data as of {asof}{f" {live_at} New York time (market open, so prices are not closes)" if live_at else ""} · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · stocks averaging 1M+ shares/day · S&amp;P 500 + Nasdaq 100</div>
 <div class="cards">{cards}</div>
 {paper_html}
 {picks_html(lists, earn, calls)}
@@ -1752,10 +1845,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {sector_html}
 {chart_html}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
-<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="all">All uptrend</button></div>
+{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
-Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip). Options shown for top {CFG["OPT_TOP_N"]} picks:
+Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
+Your overbought rule: a stock with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
@@ -1881,7 +1975,7 @@ if(j>=0){{g=j;sel.value=String(j)}}if(s&&btns.some(b=>+b.dataset.r===s.span))set
 show()}})();
 const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
 const chip=document.getElementById('secf');
-function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st!=='Uptrend':st===fSet);
+function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st==='Momentum'||st==='Pullback':st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
 document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
@@ -1997,16 +2091,28 @@ def main():
     rows = [r for r in (analyze(t, d) for t, d in frames.items()) if r]
     df = pd.DataFrame(rows)
     df["sector"] = df.ticker.map(sectors).fillna("")
-    secb = sector_breadth(frames, df, sectors)
     bh = {}
     try:
         bh = breadth_history(frames, sectors, sp500)
     except Exception as e:                 # extras; never block the scan
         print("  breadth history failed:", e)
-    df["has_setup"] = df.setup.notna()
-    df["setup"] = df.setup.fillna("Uptrend")
-    picks = df[df.has_setup | df.core].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
+    # the user's overbought rule: nothing with RSI over 70, CCI over 100, or its sector's or the market's breadth over the
+    # 75 line gets a setup ("Overbought" instead), a Top picks spot, a Plan M spot or a paper buy
+    br = {g: round(float(b.rise.iloc[-1]), 1) for g, b in bh.items()}       # tonight's breadth, as the page shows it
+    mkt_hot = breadth_hot(None, br)
+    obr = overbought(frames, sectors, br)
+    ob = {t: " and ".join(own + ([sec] if sec else [])) for t, (own, sec) in obr.items()}
+    df["ob"] = df.ticker.map(ob).fillna("")
+    would = df.setup.notna()
+    df["blocked"] = would & ((df.ob != "") | bool(mkt_hot))
+    df["has_setup"] = would & ~df.blocked
+    df["setup"] = np.where(df.has_setup, df.setup, np.where((df.ob != "") | df.blocked, "Overbought", "Uptrend"))
+    secb = sector_breadth(frames, df, sectors)
+    picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
     print(f"{int(df.core.sum())} of {len(df)} liquid stocks in uptrend; {int(picks.has_setup.sum())} setups ({(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
+    print(f"  overbought: {len(ob)} stocks (RSI over {CFG['OB_RSI']}, CCI over {CFG['OB_CCI']} or sector breadth over "
+          f"{CFG['OB_BREADTH']}); the market is {'overbought: ' + mkt_hot if mkt_hot else 'not overbought'}; "
+          f"{int(df.blocked.sum())} setups left out")
 
     picks["opt"] = None
     if not a.demo and not a.no_options:
@@ -2052,7 +2158,7 @@ def main():
         state_file = Path(__file__).resolve().parent / "history" / "ai_picks.json"   # yesterday's AI picks
         prev = None if a.demo or not state_file.exists() else json.loads(state_file.read_text(encoding="utf-8"))
         spy = etf_frames["SPY"]["Close"] if "SPY" in etf_frames else None
-        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo, step=live_at is None)
+        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo, step=live_at is None, ob=ob, mkt_hot=mkt_hot)
         lists["live_at"] = live_at
         if live_at is None:                # the saved list only moves on closing prices
             (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
@@ -2094,7 +2200,8 @@ def main():
             qqq = yf_batch(["QQQ"], period="2y", interval="1d").get("QQQ")
         saved = sorted(f for f in (Path(__file__).resolve().parent / "history").glob("ovtlyr_*.json") if f.stem[7:] < asof)
         prev_ov = None if a.demo or not saved else json.loads(saved[-1].read_text(encoding="utf-8"))   # the last list
-        ov = ovtlyr_plan(frames, sectors, etf_frames["SPY"], qqq, None if a.demo else next_earnings, prev_ov)
+        ov = ovtlyr_plan(frames, sectors, etf_frames["SPY"], qqq, None if a.demo else next_earnings, prev_ov, br,
+                         {t: " and ".join(own) for t, (own, _) in obr.items() if own})
         ov["live_at"] = live_at
         if live_at is None:                # paper.py's OVTLYR account trades the next morning on closing prices only
             (out / f"ovtlyr_{asof}.json").write_text(json.dumps(ov, indent=1), encoding="utf-8")
@@ -2108,6 +2215,7 @@ def main():
         traceback.print_exc()
         print("  OVTLYR plan failed:", e)
     listed = [r["ticker"] for k in ("nu", "bo", "ai") for r in (lists or {}).get(k, {}).get("rows", [])]
+    listed += [h["ticker"] for k in ("nu", "bo") for h in (lists or {}).get(k, {}).get("hot", [])]
     listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
     chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values())))
     print(f"Building trend charts for {len(chart_tks)} tickers...")
@@ -2120,6 +2228,10 @@ def main():
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)
     secb.round(1).to_csv(out / f"sectors_{asof}.csv", index=False)
+    if bh:                                 # paper.py's overbought rule reads the market's and each sector's breadth from here
+        pd.DataFrame([dict(group=g, date=b.index[-1].date().isoformat(), rise=br[g], avg5=round(float(b.a5.iloc[-1]), 1),
+                           avg10=round(float(b.avg.iloc[-1]), 1), upswing=int(b.on.iloc[-1]), overbought=int(br[g] > CFG["OB_BREADTH"]),
+                           oversold=int(br[g] < CFG["OS_BREADTH"])) for g, b in bh.items()]).to_csv(out / f"breadth_{asof}.csv", index=False)
     print(f"Done. Open {out / 'latest.html'}")
 
 

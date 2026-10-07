@@ -11,10 +11,20 @@ await p.goto(URL, { waitUntil: "networkidle" }); await p.waitForTimeout(1000);
 // ---- 1. data files for every clickable ticker
 const res = await p.evaluate(async () => {
   const tks = [...new Set([...document.querySelectorAll(".tk")].map(e => e.dataset.tk))];
+  const H = [...document.querySelectorAll("#t thead th")].map(h => h.textContent), CI = H.indexOf("Contract"), RI = H.indexOf("RSI"), CC = H.indexOf("CCI");
   const rows = Object.fromEntries([...document.querySelectorAll("#t tbody tr")].map(r => {
-    const v = [...r.cells].map(c => c.dataset.v); return [v[0], { close: +v[3], open: +v[4], d1: +v[5], d5: +v[6], m1: +v[7], contract: r.cells[18]?.textContent || "" }];
+    const v = [...r.cells].map(c => c.dataset.v);
+    return [v[0], { close: +v[3], open: +v[4], d1: +v[5], d5: +v[6], m1: +v[7], rsi: RI < 0 ? NaN : +v[RI], cci: CC < 0 ? NaN : +v[CC],
+                    contract: (CI < 0 ? "" : r.cells[CI]?.textContent) || "" }];
   }));
-  const issues = [], stats = { tickers: tks.length, missingFile: [], missingTf: {}, numMismatch: [] };
+  // RSI (14, Wilder) and CCI (20) recomputed from the chart data, as screener.py computes them
+  const rsi14 = c => { let up = null, dn = null; const a = 1 / 14;
+    for (let i = 1; i < c.length; i++) { const d = c[i] - c[i - 1], u = Math.max(d, 0), w = Math.max(-d, 0);
+      if (up === null) { up = u; dn = w; } else { up = (1 - a) * up + a * u; dn = (1 - a) * dn + a * w; } }
+    return dn ? 100 - 100 / (1 + up / dn) : NaN; };
+  const cci20 = (h, l, c) => { const n = c.length, tp = []; for (let i = n - 20; i < n; i++) tp.push((h[i] + l[i] + c[i]) / 3);
+    const m = tp.reduce((a, b) => a + b) / 20, md = tp.reduce((a, b) => a + Math.abs(b - m), 0) / 20; return (tp[19] - m) / (0.015 * md); };
+  const issues = [], stats = { tickers: tks.length, missingFile: [], missingTf: {}, numMismatch: [], oscMismatch: [], oscChecked: 0 };
   for (const tk of tks) {
     let D; try { const r = await fetch("data/" + encodeURIComponent(tk) + ".json"); if (!r.ok) throw r.status; D = await r.json(); }
     catch (e) { stats.missingFile.push(tk); continue; }
@@ -53,6 +63,11 @@ const res = await p.evaluate(async () => {
       const n = s.c.length, pc = (a, b) => (a / b - 1) * 100;
       const chk = { close: [r.close, s.c[n - 1]], open: [r.open, s.o[n - 1]], d1: [r.d1, pc(s.c[n - 1], s.c[n - 2])], d5: [r.d5, pc(s.c[n - 1], s.c[n - 6])], m1: [r.m1, pc(s.c[n - 1], s.c[n - 22])] };
       for (const [k, [a, b2]] of Object.entries(chk)) { const tol = k === "close" || k === "open" ? 0.02 : 0.15; if (Math.abs(a - b2) > tol) stats.numMismatch.push(`${tk} ${k}: table ${a.toFixed(2)} vs data ${b2.toFixed(2)}`); }
+      if (!isNaN(r.rsi) && !isNaN(r.cci) && n > 300) {
+        const R = rsi14(s.c), C = cci20(s.h, s.l, s.c); stats.oscChecked++;
+        if (Math.abs(R - r.rsi) > 1) stats.oscMismatch.push(`${tk} RSI: table ${r.rsi.toFixed(1)} vs data ${R.toFixed(1)}`);
+        if (Math.abs(C - r.cci) > 5) stats.oscMismatch.push(`${tk} CCI: table ${r.cci.toFixed(0)} vs data ${C.toFixed(0)}`);
+      }
     }
   }
   stats.withContract = Object.values(rows).filter(r => r.contract.trim()).length;
@@ -66,6 +81,7 @@ log(`missing data files: ${res.stats.missingFile.join(", ") || "none"}`);
 for (const [tf, l] of Object.entries(res.stats.missingTf)) log(`missing ${tf}: ${l.length} (${l.slice(0, 15).join(", ")})`);
 log(`data issues: ${res.issues.length}`); res.issues.slice(0, 40).forEach(i => log("  " + i));
 log(`table vs data mismatches: ${res.stats.numMismatch.length}`); res.stats.numMismatch.slice(0, 40).forEach(i => log("  " + i));
+log(`RSI / CCI vs data: ${res.stats.oscChecked} stocks checked, ${res.stats.oscMismatch.length} off`); res.stats.oscMismatch.slice(0, 20).forEach(i => log("  " + i));
 log(`rows with an options contract: ${res.stats.withContract}`);
 
 // ---- 1b. top picks lists against the chart data
@@ -159,11 +175,43 @@ await p.click('.bar.pk button[data-pk="nu"]');
 
 // ---- 2. controls
 const vis = () => p.$$eval("#t tbody tr", r => r.filter(x => x.style.display !== "none").length);
-for (const f of ["setups", "Momentum", "Pullback", "all"]) {
+for (const f of ["setups", "Momentum", "Pullback", "Overbought", "all"]) {
+  if (!await p.$(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="${f}"]`)) { log(`filter ${f}: no button`); continue; }
   await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="${f}"]`);
-  const n = await vis(); const bad = await p.$$eval("#t tbody tr", (r, f) => r.filter(x => x.style.display !== "none" && !(f === "all" || (f === "setups" ? x.dataset.setup !== "Uptrend" : x.dataset.setup === f))).length, f);
+  const n = await vis(); const bad = await p.$$eval("#t tbody tr", (r, f) => r.filter(x => x.style.display !== "none" && !(f === "all" || (f === "setups" ? ["Momentum", "Pullback"].includes(x.dataset.setup) : x.dataset.setup === f))).length, f);
   log(`filter ${f}: ${n} rows, ${bad} wrong`);
 }
+await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="setups"]`);
+
+// ---- the user's overbought rule: no setup with RSI over 70 or CCI over 100, OB / OS tags match the numbers, every Overbought
+// row says why, nothing on New uptrends or Breakout watch is marked Overbought, and nothing at all while the market is over 75
+const obr = await p.evaluate(() => {
+  const out = [], H = [...document.querySelectorAll("#t thead th")].map(h => h.textContent), RI = H.indexOf("RSI"), CC = H.indexOf("CCI");
+  if (RI < 0 || CC < 0) return { out: ["no RSI or CCI column"], n: {} };
+  const n = { setups: 0, ob: 0, os: 0 }, label = {};
+  const tag = (cell, v, hi, lo) => (cell.querySelector(".obt") ? "OB" : cell.querySelector(".ost") ? "OS" : "") === (v > hi ? "OB" : v < lo ? "OS" : "");
+  for (const r of document.querySelectorAll("#t tbody tr")) {
+    const st = r.dataset.setup, rs = +r.cells[RI].dataset.v, cc = +r.cells[CC].dataset.v, tk = r.cells[0].dataset.v;
+    label[tk] = st;
+    if (!tag(r.cells[RI], rs, 70, 30)) out.push(`${tk}: RSI ${rs.toFixed(1)} has the wrong tag`);
+    if (!tag(r.cells[CC], cc, 100, -100)) out.push(`${tk}: CCI ${cc.toFixed(0)} has the wrong tag`);
+    if (rs < 30 || cc < -100) n.os++;
+    if (st === "Momentum" || st === "Pullback") { n.setups++; if (rs > 70 || cc > 100) out.push(`${tk}: ${st} with RSI ${rs.toFixed(1)}, CCI ${cc.toFixed(0)}`); }
+    if (st === "Overbought") {
+      n.ob++; const why = r.cells[1].querySelector(".sec")?.textContent || "";
+      if (!why) out.push(`${tk}: Overbought with no reason`);
+      else if (!(rs > 70 || cc > 100) && !/breadth/.test(why)) out.push(`${tk}: Overbought (${why}) with RSI ${rs.toFixed(1)}, CCI ${cc.toFixed(0)}`);
+    }
+  }
+  for (const id of ["pk-nu", "pk-bo"]) for (const r of document.querySelectorAll(`#${id} tbody tr`)) {
+    const tk = r.cells[0].dataset.v; if (label[tk] === "Overbought") out.push(`${id} ${tk}: listed, but Overbought in the stock table`); }
+  const spx = typeof HM !== "undefined" && HM ? HM.rows.find(R => R.n === "S&P 500") : null, mk = spx ? spx.r[spx.r.length - 1] : null;
+  if (mk != null && mk > 75 && (n.setups || document.querySelectorAll("#pk-nu tbody tr, #pk-bo tbody tr").length))
+    out.push(`market breadth ${mk} is over 75, but there are setups or Top picks`);
+  return { out, n, mk };
+});
+log(`overbought rule: ${obr.n.setups} setups, ${obr.n.ob} marked Overbought, ${obr.n.os} oversold, market breadth ${obr.mk}; problems: ${obr.out.length || "none"}`);
+obr.out.slice(0, 30).forEach(i => log("  " + i));
 const secs = await p.$$eval("#s tbody tr", r => r.map(x => x.dataset.sector));
 for (const s of secs) {
   await p.evaluate(s => document.querySelector(`#s tbody tr[data-sector="${s}"]`).click(), s);
