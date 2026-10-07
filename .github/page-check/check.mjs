@@ -70,6 +70,15 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.click('.bar.pk button[data-pk="nu"]');
   await (await p.$("#t")).scrollIntoViewIfNeeded();
   await p.screenshot({ path: `${out}/${name}-2-table.png` });
+  const obf = await p.$('.bar button[data-f="Overbought"]');
+  if (obf) {                         // the user's overbought rule: the stocks it kept from being setups, with why
+    await obf.click(); await p.waitForTimeout(200);
+    await (await p.$("#t")).scrollIntoViewIfNeeded();
+    await p.screenshot({ path: `${out}/${name}-2-table-overbought.png` });
+    await p.click('.bar button[data-f="setups"]'); await p.waitForTimeout(200);
+  }
+  // no setups at all (the market over the 75 line): open a ticker from the full uptrend list instead
+  if (!await p.$("#t tbody tr:not([style*='none']) .tk")) await p.click('.bar button[data-f="all"]');
   const tk = await p.$eval("#t tbody tr:not([style*='none']) .tk", e => e.dataset.tk);
   await p.click("#t tbody tr:not([style*='none']) .tk");
   await p.waitForTimeout(2500);
