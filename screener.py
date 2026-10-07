@@ -749,6 +749,200 @@ def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True):
                        [p["added"] for p in st["picks"]] + [p["added"] for p in st["closed"]], default=asof), track=track)
     return dict(asof=asof, nu=nu, bo=bo, ai=ai_list), st
 
+# -------------------------------------------------------------- OVTLYR plan
+# OVTLYR's Plan M (stocks), Plan ETF (TQQQ / SPXL) and Plan #SICADFU (SGOV), from the trading-plan deck the user shared
+# on 2026-10-07, rebuilt from data this screener already has. OVTLYR's fear & greed heatmap and its buy / sell signals
+# are private, so these stand in for them: heatmap = 14-day RSI (0-100, high = greedy); buy signal = the 10 EMA
+# crossing above the 20 EMA, good for 5 trading days as in the deck; sell signal = the 10 EMA under the 20 EMA;
+# breadth ("bull list %") = the share of stocks with the 10 EMA above the 20 EMA, against its own 10-day EMA.
+# Left out: OVTLYR channels, the deck's per-stock backtest check and option rolls. paper.py's account D trades it.
+OV = dict(
+    SIGNAL_DAYS=5,             # a stock's buy signal counts for this many trading days
+    HEAT_MAX=70,               # SPY and sector heatmaps must be under this, and rising
+    OB_GAP=0.02,               # stay more than 2% away from any untouched order block
+    PRICE=(10.0, 350.0),       # stock price range (in the deck: for option availability and pricing)
+    EXCLUDE=("Health Care",),  # permanently excluded in the deck
+    EARN_DAYS=4,               # buy only with at least this many days to earnings
+    ETF={"TQQQ": "QQQ", "SPXL": "SPY"},   # Plan ETF buys the 3x fund on its index's signals
+    ZONE_ATR=2.0,              # Plan ETF value zone: from the 20 EMA to 2 ATR above it
+    ETF_OB_AGE=30,             # Plan ETF only minds order blocks at least 30 calendar days old
+    HOT_ATR=3.0,               # Plan ETF exit: a close more than 3 ATR above the 20 EMA
+)
+
+
+def ov_blocks(d):
+    """Order blocks in one daily frame (the chart's definition): bot, top, side (1 bullish, -1 bearish),
+    start / end dates and fresh (price hasn't come back to it yet)."""
+    days = [i.date() for i in d.index]
+    return [dict(bot=z[3], top=z[2], side=z[4], start=z[0], end=z[1], fresh=bool(z[5]))
+            for z in order_blocks(d, len(d), days)]
+
+
+def ob_near(blocks, px, asof, gap=None, min_age=0):
+    """The nearest untouched block (at least min_age days old) within `gap` of the price, or containing it:
+    (distance, block), or None when every block is farther away."""
+    gap = OV["OB_GAP"] if gap is None else gap
+    best = None
+    for b in blocks:
+        if not b["fresh"] or (asof - b["start"]).days < min_age:
+            continue
+        dist = 0.0 if b["bot"] <= px <= b["top"] else b["bot"] / px - 1 if px < b["bot"] else 1 - b["top"] / px
+        if dist <= gap and (best is None or dist < best[0]):
+            best = (dist, b)
+    return best
+
+
+def ob_above(blocks, px):
+    """The bottom of the nearest untouched block above the price, where a rise runs into old sellers."""
+    lv = [b["bot"] for b in blocks if b["fresh"] and b["bot"] > px]
+    return min(lv) if lv else None
+
+
+def ob_hit(blocks, last, min_age=0):
+    """A bearish block that price came back to for the first time on the last bar (`last`, a date)."""
+    for b in blocks:
+        if b["side"] < 0 and not b["fresh"] and b["end"] == last and (last - b["start"]).days >= min_age:
+            return b
+    return None
+
+
+def idx_state(d):
+    """SPY or QQQ tonight: close, high, 10 / 20 / 50-day EMAs, RSI today and the day before, ATR."""
+    c = d["Close"]
+    e = {n: ema(c, n).iloc[-1] for n in (10, 20, 50)}
+    r = rsi(c)
+    return dict(date=d.index[-1].date().isoformat(), close=round(float(c.iloc[-1]), 2), high=round(float(d["High"].iloc[-1]), 2),
+                e10=round(float(e[10]), 2), e20=round(float(e[20]), 2), e50=round(float(e[50]), 2),
+                rsi=round(float(r.iloc[-1]), 1), rsi_prev=round(float(r.iloc[-2]), 1), atr=round(float(atr(d).iloc[-1]), 2))
+
+
+def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
+    """Tonight's OVTLYR plan: the market and sector checks, Plan ETF's checks and sell signals, and the Plan M setups
+    (stocks passing every stock and sector rule, freshest signal first). frames: the universe's daily bars; spy / qqq:
+    daily bars; earn: a function giving next earnings dates for a list of tickers (None skips that check)."""
+    idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
+    C, H, L, V = (wide(frames, k, idx) for k in ("Close", "High", "Low", "Volume"))
+    e10, e20, e50 = (ema(C, n) for n in (10, 20, 50))
+    R = rsi(C)
+    pc = C.shift()
+    A = np.fmax(H - L, np.fmax((H - pc).abs(), (L - pc).abs())).ewm(alpha=1 / 14, adjust=False).mean()
+    bull = (e10 > e20).where(C.notna() & e20.notna())               # the "bull list": 10 EMA above the 20 EMA
+    asof = idx[-1].date()
+    f0 = lambda v: f"{v:.0f}"
+
+    def breadth(cols):
+        """Tonight's share of these stocks on the bull list, and its 10-day EMA."""
+        p_ = bull[cols].mean(axis=1) * 100
+        return float(p_.iloc[-1]), float(p_.ewm(span=10, adjust=False).mean().iloc[-1])
+
+    # market: all four must hold for new Plan M trades
+    s = idx_state(spy)
+    bp, be = breadth(list(C.columns))
+    heat_ok = s["rsi"] < OV["HEAT_MAX"] and s["rsi"] > s["rsi_prev"]
+    checks = [
+        dict(k="heat", ok=heat_ok, text=f"SPY heatmap (RSI) {f0(s['rsi'])}, {'up' if s['rsi'] > s['rsi_prev'] else 'down'} from "
+                                        f"{f0(s['rsi_prev'])} (needs under {OV['HEAT_MAX']} and rising)"),
+        dict(k="signal", ok=s["e10"] > s["e20"], text=f"SPY buy signal: 10 EMA {s['e10']:.2f} {'above' if s['e10'] > s['e20'] else 'below'} "
+                                                     f"the 20 EMA {s['e20']:.2f}"),
+        dict(k="trend", ok=s["e10"] > s["e20"] and s["close"] > s["e50"],
+             text=f"SPY 10/20/50 uptrend: close {s['close']:.2f} {'above' if s['close'] > s['e50'] else 'below'} the 50 EMA {s['e50']:.2f}"
+                  + ("" if s["e10"] > s["e20"] else ", 10 EMA under the 20")),
+        dict(k="breadth", ok=bp > be, text=f"Market breadth: {f0(bp)}% of stocks have the 10 EMA above the 20, "
+                                           f"{'above' if bp > be else 'below'} its 10-day average of {f0(be)}%"),
+    ]
+    market = dict(ok=all(c["ok"] for c in checks), checks=checks, spy=s, breadth=dict(pct=round(bp, 1), ema=round(be, 1)))
+
+    # sectors: breadth above its 10-day average, average RSI above SPY's, under 70 and rising; Health Care is out
+    groups = {}
+    for t in C.columns:
+        groups.setdefault(sectors.get(t) or "Other", []).append(t)
+    secs = {}
+    for name, cols in sorted(groups.items()):
+        if len(cols) < 5:
+            continue
+        p_, e_ = breadth(cols)
+        r_, rp = float(R[cols].iloc[-1].mean()), float(R[cols].iloc[-2].mean())
+        miss = []
+        if name in OV["EXCLUDE"]:
+            miss.append("excluded in the plan")
+        if p_ <= e_:
+            miss.append(f"breadth {f0(p_)}% not above its 10-day average {f0(e_)}%")
+        if r_ <= s["rsi"]:
+            miss.append(f"RSI {f0(r_)} not above SPY's {f0(s['rsi'])}")
+        if r_ >= OV["HEAT_MAX"]:
+            miss.append(f"RSI {f0(r_)} not under {OV['HEAT_MAX']}")
+        if r_ <= rp:
+            miss.append(f"RSI {f0(r_)} not rising (was {f0(rp)})")
+        secs[name] = dict(ok=not miss, n=len(cols), bull=round(p_, 1), bull_ema=round(e_, 1), rsi=round(r_, 1),
+                          rsi_prev=round(rp, 1), miss=miss)
+
+    # Plan M stocks: buy signal in the last 5 trading days, 10/20/50 uptrend, price over the 10 EMA, RSI rising,
+    # $10-$350, 1M+ shares a day, in a passing sector, more than 2% from any order block, 4+ days before earnings
+    cross = (e10 > e20) & ~(e10.shift() > e20.shift())
+    age = days_since(cross).iloc[-1]
+    c_ = C.iloc[-1]
+    av = V.rolling(20).mean().iloc[-1]
+    lo, hi = OV["PRICE"]
+    liquid = c_.notna() & (av >= CFG["MIN_AVG_VOL"]) & (c_ >= CFG["MIN_PRICE"])
+    sig = liquid & c_.between(lo, hi) & (age <= OV["SIGNAL_DAYS"] - 1)
+    rules = (sig & (e10.iloc[-1] > e20.iloc[-1]) & (c_ > e50.iloc[-1]) & (c_ > e10.iloc[-1]) & (R.iloc[-1] > R.iloc[-2]))
+    in_sec = [t for t in rules.index[rules.to_numpy(bool)] if secs.get(sectors.get(t) or "Other", {}).get("ok")]
+    n_back = lambda n: C.iloc[-1] / C.iloc[-1 - n] - 1 if len(C) > n else np.nan
+    rs = (0.4 * n_back(63) + 0.2 * n_back(126) + 0.2 * n_back(189) + 0.2 * n_back(252)).where(liquid).rank(pct=True)
+    clear, near_n = [], 0
+    for t in in_sec:
+        blocks = ov_blocks(frames[t])
+        if ob_near(blocks, float(c_[t]), asof):
+            near_n += 1
+            continue
+        clear.append((t, ob_above(blocks, float(c_[t]))))
+    dates = earn([t for t, _ in clear]) if earn and clear else {}
+    entry = (pd.Timestamp(asof) + pd.offsets.BDay(1)).date()       # the account buys the next market day
+    setups, earn_n = [], 0
+    for t, up in clear:
+        e = dates.get(t)
+        if e and (dt.date.fromisoformat(e) - entry).days < OV["EARN_DAYS"]:
+            earn_n += 1
+            continue
+        k = int(age[t])
+        setups.append(dict(ticker=t, sector=sectors.get(t) or "", close=round(float(c_[t]), 2),
+                           e10=round(float(e10[t].iloc[-1]), 2), e20=round(float(e20[t].iloc[-1]), 2), e50=round(float(e50[t].iloc[-1]), 2),
+                           rsi=round(float(R[t].iloc[-1]), 1), rsi_prev=round(float(R[t].iloc[-2]), 1),
+                           atr=round(float(A[t].iloc[-1]), 2), age=k, cross=idx[-1 - k].date().isoformat(),
+                           ob_up=round(up, 2) if up else None, earn=e, rs=int(round(rs[t] * 99)) if rs[t] == rs[t] else None,
+                           vol=int(av[t])))
+    setups.sort(key=lambda x: (x["age"], -(x["rs"] or 0)))
+
+    # Plan ETF: 3x funds on their index's signals, in the value zone, clear of order blocks 30+ days old
+    etf = {}
+    for fund, und in OV["ETF"].items():
+        d = spy if und == "SPY" else qqq
+        if d is None or len(d) < 60:
+            etf[fund] = dict(under=und, ok=False, checks=[dict(k="data", ok=False, text=f"no {und} prices tonight")], sell=[])
+            continue
+        x = idx_state(d)
+        blocks, day = ov_blocks(d.iloc[-504:]), d.index[-1].date()     # 2 years, like the stocks' blocks
+        near = ob_near(blocks, x["close"], day, min_age=OV["ETF_OB_AGE"])
+        zone = round(x["e20"] + OV["ZONE_ATR"] * x["atr"], 2)
+        ch = [dict(k="heat", ok=x["rsi"] < OV["HEAT_MAX"], text=f"{und} heatmap (RSI) {f0(x['rsi'])} (needs under {OV['HEAT_MAX']})"),
+              dict(k="signal", ok=x["e10"] > x["e20"], text=f"{und} buy signal: 10 EMA {'above' if x['e10'] > x['e20'] else 'below'} the 20 EMA"),
+              dict(k="trend", ok=x["e10"] > x["e20"] and x["close"] > x["e50"],
+                   text=f"{und} uptrend: close {x['close']:.2f} {'above' if x['close'] > x['e50'] else 'below'} the 50 EMA {x['e50']:.2f}"),
+              dict(k="zone", ok=x["e20"] <= x["close"] <= zone, text=f"{und} value zone: close {x['close']:.2f}, zone {x['e20']:.2f}-{zone:.2f} "
+                                                                    "(20 EMA to 2 ATR above it)"),
+              dict(k="ob", ok=near is None, text=f"{und} order blocks 30+ days old: " + (
+                  "none within 2%" if near is None else f"{near[1]['bot']:.2f}-{near[1]['top']:.2f} is {near[0] * 100:.1f}% away"))]
+        sell = (([f"{und}'s 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"] if x["e10"] < x["e20"] else [])
+                + ([f"{und} closed more than {OV['HOT_ATR']:g} ATR above its 20 EMA"] if x["close"] > x["e20"] + OV["HOT_ATR"] * x["atr"] else []))
+        hit = ob_hit(blocks, day, OV["ETF_OB_AGE"])
+        if hit:
+            sell.append(f"{und} reached an order block from {hit['start']:%b} {hit['start'].day} ({hit['bot']:.2f}-{hit['top']:.2f})")
+        etf[fund] = dict(under=und, ok=all(c["ok"] for c in ch), checks=ch, sell=sell, **x)
+
+    funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), near_ob=near_n, earnings=earn_n,
+                  setups=len(setups), earn_checked=bool(earn))
+    return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel)
+
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
 
@@ -1079,7 +1273,78 @@ def picks_html(L, earn=None, calls=None):
             f'Black-Scholes from that price; confirm in your broker.</div>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None):
+def ov_html(ov):
+    """OVTLYR plan section: the market, sector and Plan ETF checks, then the Plan M setups."""
+    if not ov:
+        return ""
+    ok = lambda b: '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
+    li = lambda c: f'<li>{ok(c["ok"])} {html_esc(c["text"])}</li>'
+    m, f = ov["market"], ov["funnel"]
+    mk = (f'<div class="ovb"><div class="ovh">Market <span class="{"up" if m["ok"] else "dn"}">Plan M is {"on" if m["ok"] else "off"}</span></div>'
+          f'<ul>{"".join(li(c) for c in m["checks"])}</ul><div class="mut">All four must pass for new Plan M trades.</div></div>')
+    secs = sorted(ov["sectors"].items(), key=lambda kv: (not kv[1]["ok"], kv[0]))
+    n_ok = sum(v["ok"] for _, v in secs)
+    sc = (f'<div class="ovb"><div class="ovh">Sectors <span class="mut">{n_ok} of {len(secs)} pass</span></div><ul>'
+          + "".join(f'<li>{ok(v["ok"])} {html_esc(k)} <span class="mut">breadth {v["bull"]:.0f}% vs {v["bull_ema"]:.0f}% avg, RSI {v["rsi"]:.0f}'
+                    + (f' · {html_esc(v["miss"][0])}' if v["miss"] else "") + '</span></li>' for k, v in secs)
+          + '</ul><div class="mut">Breadth above its 10-day average, average RSI above SPY\'s, under 70 and rising. '
+            'Health Care is excluded in the plan.</div></div>')
+    et = ('<div class="ovb"><div class="ovh">Plan ETF <span class="mut">spare cash</span></div>'
+          + "".join(f'<div><b>{k}</b> {ok(e["ok"])} <span class="mut">on {e["under"]}\'s signals</span></div><ul>'
+                    + "".join(li(c) for c in e["checks"]) + "</ul>"
+                    + ("".join(f'<div class="warn">Sell signal: {html_esc(x)}</div>' for x in e["sell"]))
+                    for k, e in ov["etf"].items())
+          + '<div class="mut">When neither Plan M nor Plan ETF is set up, cash waits in SGOV (Plan #SICADFU).</div></div>')
+
+    def pc(v):
+        return f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.1f}%</span>'
+    rows = []
+    for s in ov["setups"]:
+        cd = dt.date.fromisoformat(s["cross"])
+        sig = f'{cd:%b} {cd.day} <span class="mut">{"today" if s["age"] == 0 else str(s["age"]) + "d ago"}</span>'
+        up = (f'{s["ob_up"]:.2f} <span class="mut">{(s["ob_up"] / s["close"] - 1) * 100:+.1f}%</span>' if s["ob_up"] else
+              '<span class="mut">none</span>')
+        if s["earn"]:
+            ed = dt.date.fromisoformat(s["earn"])
+            er = f'{ed:%b} {ed.day} <span class="mut">{(ed - dt.date.fromisoformat(ov["asof"])).days}d</span>'
+        else:
+            er = '<span class="mut">n/a</span>'
+        cells = [(f'<b class="tk" data-tk="{s["ticker"]}">{s["ticker"]}</b><div class="sec">{s["sector"]}</div>', s["ticker"]),
+                 (sig, s["age"]), (f'{s["close"]:.2f}', s["close"]),
+                 (f'{s["rsi"]:.0f} <span class="mut">from {s["rsi_prev"]:.0f}</span>', s["rsi"]),
+                 (pc((s["close"] / s["e10"] - 1) * 100), round((s["close"] / s["e10"] - 1) * 100, 2)),
+                 (f'{s["atr"]:.2f}', s["atr"]), (up, s["ob_up"] or ""), (er, s["earn"] or ""),
+                 ("" if s["rs"] is None else str(s["rs"]), "" if s["rs"] is None else s["rs"])]
+        rows.append("<tr>" + "".join(f'<td data-v="{v}">{c}</td>' for c, v in cells) + "</tr>")
+    head = ["Ticker", "Buy signal", "Close", "RSI", "vs 10 EMA", "ATR", "Order block above", "Earnings", "RS"]
+    if rows:
+        table = (f'<div class="wrap"><table id="ov-m"><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead>'
+                 f'<tbody>{"".join(rows)}</tbody></table></div>')
+    else:
+        table = '<div class="hint pke">No stock passes every Plan M stock and sector rule tonight.</div>'
+    earn_txt = (f'{f["earnings"]} reported earnings within {OV["EARN_DAYS"]} days of the next market day' if f["earn_checked"]
+                else "earnings dates were not checked (demo)")
+    funnel = (f'<div class="hint">Plan M setups tonight: {f["signal"]} liquid stocks priced ${OV["PRICE"][0]:.0f}-${OV["PRICE"][1]:.0f} had a buy '
+              f'signal in the last {OV["SIGNAL_DAYS"]} trading days; {f["rules"]} also had the 10/20/50 uptrend, price over the 10 EMA '
+              f'and a rising RSI; {f["sector"]} of those were in passing sectors; {f["near_ob"]} were within {OV["OB_GAP"]:.0%} of an '
+              f'order block and {earn_txt}, which leaves {f["setups"]}. Freshest signal first, then relative strength (RS, 1-99).'
+              + ("" if m["ok"] else " The market rules fail tonight, so the paper account won't buy these.") + "</div>")
+    live = (f'<div class="hint warn">Built at {ov["live_at"]} New York time, before the close, from prices that are not closes yet. '
+            'The paper account only trades on the plan from a run after the close.</div>' if ov.get("live_at") else "")
+    return ('<h2>OVTLYR plan</h2><div class="hint">OVTLYR\'s Plan M, Plan ETF and Plan #SICADFU from the trading-plan deck, '
+            'rebuilt from this page\'s data; the <b>OVTLYR plan</b> paper account trades it. OVTLYR\'s fear &amp; greed heatmap and '
+            'buy/sell signals are private, so this uses stand-ins: heatmap = 14-day RSI; buy signal = the 10 EMA crossing above the '
+            f'20 EMA (it counts for {OV["SIGNAL_DAYS"]} trading days); sell signal = the 10 EMA under the 20; breadth = the share of '
+            'stocks with the 10 EMA above the 20, against its 10-day average. Left out: OVTLYR channels and the per-stock backtest '
+            'check.</div>'
+            f'{live}<div class="ovg">{mk}{sc}{et}</div>{funnel}{table}')
+
+
+def html_esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -1186,6 +1451,9 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
+.ovg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:8px 0}}
+.ovb{{background:var(--card);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}}.ovb ul{{margin:2px 0 6px;padding:0;list-style:none}}
+.ovh{{display:flex;justify-content:space-between;gap:8px;font-weight:600;font-size:13px;margin-bottom:2px}}
 .pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
@@ -1201,6 +1469,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="cards">{cards}</div>
 {paper_html}
 {picks_html(lists, earn, calls)}
+{ov_html(ov)}
 {sector_html}
 {chart_html}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
@@ -1255,7 +1524,7 @@ sortable('t');sortable('s');apply();
 document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.bar.pk',b.dataset.pk,'pk');
 document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
 try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
-['pk-nu','pk-bo','pk-ai'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
+['pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
 // ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
 const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
 const tvSym=t=>t.replace(/-/g,'.');
@@ -1433,14 +1702,34 @@ def main():
         import traceback
         traceback.print_exc()
         print("  top picks failed:", e)
+    print("Building the OVTLYR plan...")
+    ov = None
+    try:
+        if a.demo:
+            qqq = list(demo_frames(n=1, days=600).values())[0]
+        else:
+            qqq = yf_batch(["QQQ"], period="2y", interval="1d").get("QQQ")
+        ov = ovtlyr_plan(frames, sectors, etf_frames["SPY"], qqq, None if a.demo else next_earnings)
+        ov["live_at"] = live_at
+        if live_at is None:                # paper.py's OVTLYR account trades the next morning on closing prices only
+            (out / f"ovtlyr_{asof}.json").write_text(json.dumps(ov, indent=1), encoding="utf-8")
+        f = ov["funnel"]
+        print(f"  market {'on' if ov['market']['ok'] else 'off'}, {sum(v['ok'] for v in ov['sectors'].values())} sectors pass, "
+              f"{f['setups']} Plan M setups (of {f['signal']} buy signals), "
+              + ", ".join(f"{k} {'set up' if e['ok'] else 'not set up'}" for k, e in ov["etf"].items()))
+    except Exception as e:                 # never block the scan on it
+        import traceback
+        traceback.print_exc()
+        print("  OVTLYR plan failed:", e)
     listed = [r["ticker"] for k in ("nu", "bo", "ai") for r in (lists or {}).get(k, {}).get("rows", [])]
+    listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
     chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values())))
     print(f"Building trend charts for {len(chart_tks)} tickers...")
     try:
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  stock charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)
