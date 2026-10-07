@@ -1,0 +1,42 @@
+[desktop] title=Swing Screener 2026-10-07 rows=99 sectorCharts=168
+[desktop] paper tiles: Your system | Updated Oct 7, 5:46 PM ET | Your screener setups and option rules | $635.37 | ▼ -$364.63 (-36.5%) since Oct 6 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 7, 5:46 PM ET | Your rules, buying only after 2 PM Central | $971.21 | ▼ -$28.79 (-2.9%) since Oct 7 · SPY -0.3% | 2 open positions · 0 closed trades | Full breakdown → || Claude's picks | Updated Oct 7, 5:46 PM ET | My AI picks list, as shares | $987.21 | ▼ -$12.79 (-1.3%) since Oct 6 · SPY +0.3% | 8 open positions · 0 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 7, 5:46 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $1,011.01 | ▲ +$11.01 (+1.1%) since Oct 7 · SPY -0.3% | 1 open position · 0 closed trades | Full breakdown →
+[desktop] paper A: Value $635.37 -$364.63 since the start | Return -36.5% SPY +0.3% over the same days | Cash $0.02 2 open positions worth $635.35 | Closed trades 0 None yet
+[desktop] paper C: Value $971.21 -$28.79 since the start | Return -2.9% SPY -0.3% over the same days | Cash $86.71 2 open positions worth $884.50 | Closed trades 0 None yet
+[desktop] paper B: Value $987.21 -$12.79 since the start | Return -1.3% SPY +0.3% over the same days | Cash $200.44 8 open positions worth $786.77 | Closed trades 0 None yet
+[desktop] paper D: Value $1,011.01 +$11.01 since the start | Return +1.1% SPY -0.3% over the same days | Cash $0.00 1 open position worth $1,011.01 | Closed trades 0 None yet
+[desktop] top picks nu: 3 rows
+[desktop] top picks bo: 10 rows
+[desktop] top picks ai: 8 rows
+[desktop] Plan M list: Plan M stocks: none tonight
+[desktop] heatmap: S&P 500 27% ▲ OS | Technology 70% ▲ | Health Care 38% ▼ | Industrials 32% ▲ | Energy 29% ▼ OS | Discretionary 23% ▲ OS | Communication 19% ▼ OS | Staples 15% ▲ OS | Utilities 13% ▲ OS | Materials 8% ▼ OS | Real Estate 3% ▼ OS | Financials 3% ▼ OS | Jul Aug Sep Oct
+[desktop] breadth line: S&P 500: Rising 27.3%5-day avg 25.8%10-day avg 25.8% | OS oversold, under 30 since Sep 15▲ above its 5-day average since Oct 2▲ above its 10-day average since Oct 6
+[desktop] breadth line: Technology: Rising 70.3%5-day avg 68.7%10-day avg 65.7% | ▲ above its 5-day average since Oct 1▲ above its 10-day average since Sep 21
+[desktop] strips: S&P 500: Breadth 27% rising, avg 26% · 21% in uptrend · ▲ upswing since Oct 6 · OS oversold | Information Technology: Breadth 70% rising, avg 66% · 61% in uptrend · ▲ upswing since Sep 21 | Health Care: Breadth 38% rising, avg 42% · 37% in uptrend · ▼ fading since Aug 25 | Energy: Breadth 29% rising, avg 29% · 24% in uptrend · ▼ fading since Sep 9 · OS oversold | Industrials: Breadth 32% rising, avg 26% · 20% in uptrend · ▲ upswing since Sep 23 | Communication Services: Breadth 19% rising, avg 19% · 14% in uptrend · ▼ fading since Sep 16 · OS oversold | Consumer Discretionary: Breadth 23% rising, avg 19% · 13% in uptrend · ▲ upswing since Sep 25 · OS oversold | Utilities: Breadth 13% rising, avg 6% · 10% in uptrend · ▲ upswing since Oct 6 · OS oversold | Consumer Staples: Breadth 15% rising, avg 15% · 9% in uptrend · ▲ upswing since Oct 7 · OS oversold | Materials: Breadth 8% rising, avg 9% · 4% in uptrend · ▼ fading since Aug 28 · OS oversold | Financials: Breadth 3% rising, avg 6% · 1% in uptrend · ▼ fading since Sep 8 · OS oversold | Real Estate: Breadth 3% rising, avg 4% · 0% in uptrend · ▼ fading since Aug 27 · OS oversold
+[desktop] opened PLTR: legend="Uptrend since 2026-08-04 · green = uptrend, red = downtrend "
+[desktop] daily 5Y: legend="Uptrend since 2026-08-04 · green = uptrend, red = downtrend "
+[desktop] 240: legend="Uptrend since 2026-09-17 · green = uptrend, red = downtrend "
+[desktop] W: legend="Uptrend since 2026-08-10 · green = uptrend, red = downtrend "
+[desktop] M: legend="No trend since 2020-09-01 · green = uptrend, red = downtrend"
+[desktop] tradingview iframe=1
+[desktop] errors: none
+[phone] title=Swing Screener 2026-10-07 rows=99 sectorCharts=168
+[phone] paper tiles: Your system | Updated Oct 7, 5:46 PM ET | Your screener setups and option rules | $635.37 | ▼ -$364.63 (-36.5%) since Oct 6 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 7, 5:46 PM ET | Your rules, buying only after 2 PM Central | $971.21 | ▼ -$28.79 (-2.9%) since Oct 7 · SPY -0.3% | 2 open positions · 0 closed trades | Full breakdown → || Claude's picks | Updated Oct 7, 5:46 PM ET | My AI picks list, as shares | $987.21 | ▼ -$12.79 (-1.3%) since Oct 6 · SPY +0.3% | 8 open positions · 0 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 7, 5:46 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $1,011.01 | ▲ +$11.01 (+1.1%) since Oct 7 · SPY -0.3% | 1 open position · 0 closed trades | Full breakdown →
+[phone] paper A: Value $635.37 -$364.63 since the start | Return -36.5% SPY +0.3% over the same days | Cash $0.02 2 open positions worth $635.35 | Closed trades 0 None yet
+[phone] paper C: Value $971.21 -$28.79 since the start | Return -2.9% SPY -0.3% over the same days | Cash $86.71 2 open positions worth $884.50 | Closed trades 0 None yet
+[phone] paper B: Value $987.21 -$12.79 since the start | Return -1.3% SPY +0.3% over the same days | Cash $200.44 8 open positions worth $786.77 | Closed trades 0 None yet
+[phone] paper D: Value $1,011.01 +$11.01 since the start | Return +1.1% SPY -0.3% over the same days | Cash $0.00 1 open position worth $1,011.01 | Closed trades 0 None yet
+[phone] top picks nu: 3 rows
+[phone] top picks bo: 10 rows
+[phone] top picks ai: 8 rows
+[phone] Plan M list: Plan M stocks: none tonight
+[phone] heatmap: S&P 500 27% ▲ OS | Technology 70% ▲ | Health Care 38% ▼ | Industrials 32% ▲ | Energy 29% ▼ OS | Discretionary 23% ▲ OS | Communication 19% ▼ OS | Staples 15% ▲ OS | Utilities 13% ▲ OS | Materials 8% ▼ OS | Real Estate 3% ▼ OS | Financials 3% ▼ OS | Jul Aug Sep Oct
+[phone] breadth line: S&P 500: Rising 27.3%5-day avg 25.8%10-day avg 25.8% | OS oversold, under 30 since Sep 15▲ above its 5-day average since Oct 2▲ above its 10-day average since Oct 6
+[phone] breadth line: Technology: Rising 70.3%5-day avg 68.7%10-day avg 65.7% | ▲ above its 5-day average since Oct 1▲ above its 10-day average since Sep 21
+[phone] strips: S&P 500: Breadth 27% rising, avg 26% · 21% in uptrend · ▲ upswing since Oct 6 · OS oversold | Information Technology: Breadth 70% rising, avg 66% · 61% in uptrend · ▲ upswing since Sep 21 | Health Care: Breadth 38% rising, avg 42% · 37% in uptrend · ▼ fading since Aug 25 | Energy: Breadth 29% rising, avg 29% · 24% in uptrend · ▼ fading since Sep 9 · OS oversold | Industrials: Breadth 32% rising, avg 26% · 20% in uptrend · ▲ upswing since Sep 23 | Communication Services: Breadth 19% rising, avg 19% · 14% in uptrend · ▼ fading since Sep 16 · OS oversold | Consumer Discretionary: Breadth 23% rising, avg 19% · 13% in uptrend · ▲ upswing since Sep 25 · OS oversold | Utilities: Breadth 13% rising, avg 6% · 10% in uptrend · ▲ upswing since Oct 6 · OS oversold | Consumer Staples: Breadth 15% rising, avg 15% · 9% in uptrend · ▲ upswing since Oct 7 · OS oversold | Materials: Breadth 8% rising, avg 9% · 4% in uptrend · ▼ fading since Aug 28 · OS oversold | Financials: Breadth 3% rising, avg 6% · 1% in uptrend · ▼ fading since Sep 8 · OS oversold | Real Estate: Breadth 3% rising, avg 4% · 0% in uptrend · ▼ fading since Aug 27 · OS oversold
+[phone] opened PLTR: legend="Uptrend since 2026-08-04 · green = uptrend, red = downtrend "
+[phone] daily 5Y: legend="Uptrend since 2026-08-04 · green = uptrend, red = downtrend "
+[phone] 240: legend="Uptrend since 2026-09-17 · green = uptrend, red = downtrend "
+[phone] W: legend="Uptrend since 2026-08-10 · green = uptrend, red = downtrend "
+[phone] M: legend="No trend since 2020-09-01 · green = uptrend, red = downtrend"
+[phone] tradingview iframe=1
+[phone] errors: none

@@ -1,0 +1,40 @@
+tickers with charts: 111
+order block boxes: 2976 (458 untouched)
+daily bars per ticker: min 414, median 1260, max 1260 (5 years is about 1,260)
+missing data files: none
+data issues: 1
+  XLRE D bad high/low at 2026-10-07
+table vs data mismatches: 0
+RSI / CCI vs data: 99 stocks checked, 0 off
+rows with an options contract: 10
+top picks: 3 new uptrends, 10 breakout watch, 8 AI picks; issues: 0
+pk-nu calls that fit: 0 of 3, closest shown in grey: 1; none for HAS (none fits: no expiry 15-30 days out), WRB (none fits: no expiry 15-30 days out)
+pk-bo calls that fit: 3 of 10, closest shown in grey: 4; none for TECH (none fits: no expiry 15-30 days out), BIIB (none fits: no call 0.50-0.80 delta with OI over 500), EMR (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-ai calls that fit: 3 of 8, closest shown in grey: 5
+filter setups: 17 rows, 0 wrong
+filter Momentum: 7 rows, 0 wrong
+filter Pullback: 10 rows, 0 wrong
+filter Overbought: 42 rows, 0 wrong
+filter all: 99 rows, 0 wrong
+overbought rule: 17 setups, 42 marked Overbought, 4 oversold, market breadth 27.3; problems: none
+sector Information Technology: 5 rows ok
+sector Health Care: 5 rows ok
+sector Energy: 1 rows ok
+sector Industrials: 3 rows ok
+sector Communication Services: 0 rows ok
+sector Consumer Discretionary: 0 rows ok
+sector Utilities: 0 rows ok
+sector Consumer Staples: 2 rows ok
+sector Materials: 0 rows ok
+sector Financials: 1 rows ok
+sector Real Estate: 0 rows ok
+sorted 27 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: none
+breadth line: 12 groups x 471 days from 2024-11-19, 7 canvases, problems: none
+Plan M list: 0 stocks (summary says 0), 0 new (summary says 0), 0 dropped, the Market box link opens it: true
+opened 111 tickers x 4 timeframes (daily also at 5Y), problems: 0
+paper A Your system: $635.37 (updated 2026-10-07 17:46), cash $0.02, 2 open, 0 closed, 6 log lines, 3 closes; problems: none
+paper C Your system, after 2 PM: $971.21 (updated 2026-10-07 17:46), cash $86.71, 2 open, 0 closed, 4 log lines, 2 closes; problems: none
+paper B Claude's picks: $987.21 (updated 2026-10-07 17:46), cash $200.44, 8 open, 0 closed, 12 log lines, 3 closes; problems: none
+paper D OVTLYR plan: $1,011.01 (updated 2026-10-07 17:46), cash $0.00, 1 open, 0 closed, 4 log lines, 2 closes; problems: none
+page errors overall: none
