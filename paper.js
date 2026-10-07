@@ -1,13 +1,14 @@
-// Paper trading widgets. paper.py trades three $1,000 paper accounts on GitHub Actions and saves them on the
+// Paper trading widgets. paper.py trades four $1,000 paper accounts on GitHub Actions and saves them on the
 // paper-trading branch; this reads them from GitHub, draws a tile per account and opens the full breakdown
 // (chart against SPY, open positions, closed trades with reasons, the daily log, the rules) on click.
 // screener.py puts this file inside the page. Text from the accounts is only ever set with textContent.
 (function () {
 const SRC = 'https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/';
 const REPO = 'https://github.com/txcoproducts-lang/Swing-Screener-';
-const IDS = ['A', 'C', 'B'];
-const SUB = {A: 'Your screener setups and option rules', C: 'Your rules, buying only after 2 PM Central', B: 'My AI picks list, as shares'};
-const WHEN = {A: '10:00 AM New York time', C: '2:00 PM Central', B: '10:00 AM New York time'};
+const IDS = ['A', 'C', 'B', 'D'];
+const SUB = {A: 'Your screener setups and option rules', C: 'Your rules, buying only after 2 PM Central', B: 'My AI picks list, as shares',
+  D: "OVTLYR's Plan M, Plan ETF and SGOV, as shares"};
+const WHEN = {A: '10:00 AM New York time', C: '2:00 PM Central', B: '10:00 AM New York time', D: '10:00 AM New York time'};
 const KIND = {buy: 'Bought', sell: 'Sold', close: 'Close', day: 'Decision', note: 'Note'};
 const box = document.getElementById('pp');
 if (!box) return;

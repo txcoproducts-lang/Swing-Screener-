@@ -828,7 +828,10 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
     A = np.fmax(H - L, np.fmax((H - pc).abs(), (L - pc).abs())).ewm(alpha=1 / 14, adjust=False).mean()
     bull = (e10 > e20).where(C.notna() & e20.notna())               # the "bull list": 10 EMA above the 20 EMA
     asof = idx[-1].date()
-    f0 = lambda v: f"{v:.0f}"
+
+    def f0(v, *vs):
+        """A value for the page: whole, or with one decimal when it would read the same as one it's compared with."""
+        return f"{v:.1f}" if any(round(v) == round(x) for x in vs) else f"{v:.0f}"
 
     def breadth(cols):
         """Tonight's share of these stocks on the bull list, and its 10-day EMA."""
@@ -840,15 +843,16 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
     bp, be = breadth(list(C.columns))
     heat_ok = s["rsi"] < OV["HEAT_MAX"] and s["rsi"] > s["rsi_prev"]
     checks = [
-        dict(k="heat", ok=heat_ok, text=f"SPY heatmap (RSI) {f0(s['rsi'])}, {'up' if s['rsi'] > s['rsi_prev'] else 'down'} from "
-                                        f"{f0(s['rsi_prev'])} (needs under {OV['HEAT_MAX']} and rising)"),
+        dict(k="heat", ok=heat_ok, text=f"SPY heatmap (RSI) {f0(s['rsi'], s['rsi_prev'], OV['HEAT_MAX'])}, "
+                                        f"{'up' if s['rsi'] > s['rsi_prev'] else 'down'} from {f0(s['rsi_prev'], s['rsi'])} "
+                                        f"(needs under {OV['HEAT_MAX']} and rising)"),
         dict(k="signal", ok=s["e10"] > s["e20"], text=f"SPY buy signal: 10 EMA {s['e10']:.2f} {'above' if s['e10'] > s['e20'] else 'below'} "
                                                      f"the 20 EMA {s['e20']:.2f}"),
         dict(k="trend", ok=s["e10"] > s["e20"] and s["close"] > s["e50"],
              text=f"SPY 10/20/50 uptrend: close {s['close']:.2f} {'above' if s['close'] > s['e50'] else 'below'} the 50 EMA {s['e50']:.2f}"
                   + ("" if s["e10"] > s["e20"] else ", 10 EMA under the 20")),
-        dict(k="breadth", ok=bp > be, text=f"Market breadth: {f0(bp)}% of stocks have the 10 EMA above the 20, "
-                                           f"{'above' if bp > be else 'below'} its 10-day average of {f0(be)}%"),
+        dict(k="breadth", ok=bp > be, text=f"Market breadth: {f0(bp, be)}% of stocks have the 10 EMA above the 20, "
+                                           f"{'above' if bp > be else 'below'} its 10-day average of {f0(be, bp)}%"),
     ]
     market = dict(ok=all(c["ok"] for c in checks), checks=checks, spy=s, breadth=dict(pct=round(bp, 1), ema=round(be, 1)))
 
@@ -866,13 +870,13 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
         if name in OV["EXCLUDE"]:
             miss.append("excluded in the plan")
         if p_ <= e_:
-            miss.append(f"breadth {f0(p_)}% not above its 10-day average {f0(e_)}%")
+            miss.append(f"breadth {f0(p_, e_)}% not above its 10-day average {f0(e_, p_)}%")
         if r_ <= s["rsi"]:
-            miss.append(f"RSI {f0(r_)} not above SPY's {f0(s['rsi'])}")
+            miss.append(f"RSI {f0(r_, s['rsi'])} not above SPY's {f0(s['rsi'], r_)}")
         if r_ >= OV["HEAT_MAX"]:
-            miss.append(f"RSI {f0(r_)} not under {OV['HEAT_MAX']}")
+            miss.append(f"RSI {f0(r_, OV['HEAT_MAX'])} not under {OV['HEAT_MAX']}")
         if r_ <= rp:
-            miss.append(f"RSI {f0(r_)} not rising (was {f0(rp)})")
+            miss.append(f"RSI {f0(r_, rp)} not rising (was {f0(rp, r_)})")
         secs[name] = dict(ok=not miss, n=len(cols), bull=round(p_, 1), bull_ema=round(e_, 1), rsi=round(r_, 1),
                           rsi_prev=round(rp, 1), miss=miss)
 
@@ -924,7 +928,7 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
         blocks, day = ov_blocks(d.iloc[-504:]), d.index[-1].date()     # 2 years, like the stocks' blocks
         near = ob_near(blocks, x["close"], day, min_age=OV["ETF_OB_AGE"])
         zone = round(x["e20"] + OV["ZONE_ATR"] * x["atr"], 2)
-        ch = [dict(k="heat", ok=x["rsi"] < OV["HEAT_MAX"], text=f"{und} heatmap (RSI) {f0(x['rsi'])} (needs under {OV['HEAT_MAX']})"),
+        ch = [dict(k="heat", ok=x["rsi"] < OV["HEAT_MAX"], text=f"{und} heatmap (RSI) {f0(x['rsi'], OV['HEAT_MAX'])} (needs under {OV['HEAT_MAX']})"),
               dict(k="signal", ok=x["e10"] > x["e20"], text=f"{und} buy signal: 10 EMA {'above' if x['e10'] > x['e20'] else 'below'} the 20 EMA"),
               dict(k="trend", ok=x["e10"] > x["e20"] and x["close"] > x["e50"],
                    text=f"{und} uptrend: close {x['close']:.2f} {'above' if x['close'] > x['e50'] else 'below'} the 50 EMA {x['e50']:.2f}"),
@@ -1111,10 +1115,11 @@ def card(label, value, sub, series, good=None):
 
 
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
-PAPER_HINT = ("Three paper accounts with $1,000 each, trading until Apr 6, 2027. <b>Your system</b> trades your screener "
+PAPER_HINT = ("Four paper accounts with $1,000 each, trading until Apr 6, 2027. <b>Your system</b> trades your screener "
               "setups and option rules at about 10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but "
-              "only buys after 2:00 PM Central; <b>Claude's picks</b> trades my AI picks list. They trade on their own and "
-              "check every 30 minutes. Click one for every trade and the reason behind it.")
+              "only buys after 2:00 PM Central; <b>Claude's picks</b> trades my AI picks list; <b>OVTLYR plan</b> trades the "
+              "OVTLYR plan section below. They trade on their own and check every 30 minutes. Click one for every trade and "
+              "the reason behind it.")
 
 PICK_TEXT = {    # how each list is ordered, in plain words, for the versions in use (others fall back to their description)
     "nu": {"all": "Strongest relative strength (RS, 1-99) first."},
