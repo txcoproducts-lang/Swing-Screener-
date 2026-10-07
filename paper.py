@@ -99,7 +99,8 @@ def rules(aid):
         "Trades at about 10:00 New York time: sells stocks that left the list the night before and buys the new "
         "ones, about a tenth of the account each. Empty spots stay in cash.",
         f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
-        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
+        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
+        f"sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
         "A pick it skipped for being overbought is bought later, once it isn't, while it's still on the list.",
         f"A stock stays while it ranks in the top {SC.CFG['AI_KEEP']}. No stop-loss: in my 2014-2026 test, also "
         "selling below the 50-day EMA cut the return from 17.4% to 9.1% a year.",
@@ -457,13 +458,18 @@ def market_hot(day):
 def hot_now(day, items):
     """Your overbought rule at buying time: {ticker: why} for each (ticker, sector) in items that is overbought now:
     RSI over 70 or CCI over 100 on its daily bars plus today's trading so far, or last night's breadth for its sector
-    over the 75 line (the market's is market_hot). A ticker whose bars don't load is judged on its sector alone."""
+    over the 75 line (the market's is market_hot). Without today's bars it goes by last night's close; a ticker whose
+    daily bars don't load is judged on its sector alone."""
     tks = sorted({t for t, _ in items})
     if not tks:
         return {}
     br = day.breadth()
     bars = day.mkt.daily(tks, day.prev_day)
-    sess = day.mkt.session(tks, day.today)
+    try:
+        sess = day.mkt.session(tks, day.today)
+    except Exception as e:                       # then it goes by last night's close
+        print(f"  today's bars didn't load for the overbought check: {e}")
+        sess = {}
     px = day.price(tks)
     out = {}
     for t, sec in items:
@@ -471,7 +477,10 @@ def hot_now(day, items):
         d = bars.get(t)
         if d is not None and len(d) > 3 * SC.CFG["CCI_N"]:
             if t in sess and day.fresh(t):
-                d = with_today(d, sess[t], px[t][0], day.today)
+                try:
+                    d = with_today(d, sess[t], px[t][0], day.today)
+                except Exception as e:
+                    print(f"  today's bar failed for {t}, so it goes by last night's close: {e}")
             why = SC.hot(float(SC.rsi(d["Close"]).iloc[-1]), float(SC.cci(d.tail(3 * SC.CFG["CCI_N"])).iloc[-1]))
         if isinstance(sec, str) and sec and SC.breadth_hot(sec, br):
             why.append(SC.breadth_hot(sec, br))
