@@ -489,6 +489,13 @@ def hot_now(day, items):
     return out
 
 
+def passed_over(passed, n):
+    """The buy note's line for higher setups (rank under n) your overbought rule left out, or ""."""
+    left = [s for m, s in passed if m < n]
+    more = f" and {len(left) - 5} more" if len(left) > 5 else ""
+    return f" Passed over as overbought (your rule): {', '.join(left[:5])}{more}." if left else ""
+
+
 def a_exits(a, day, trend):
     """Stops, targets and time exits; with trend=True (the morning run) also last night's close against the
     50-day EMA and 150-day average."""
@@ -583,6 +590,7 @@ def a_buys(a, day):
         held = {p["ticker"] for p in a["positions"]}
         valid, skipped, cheapest, looked, failed = [], [], None, 0, 0
         pick = big = None
+        passed = []                            # (rank, "#rank TICKER (why)") left out by your overbought rule, for the buy note
         for n, r in scan:
             t = r.ticker
             if t in held or t in sold_today:
@@ -597,6 +605,7 @@ def a_buys(a, day):
                 continue
             if t in hot:
                 skipped.append(f"{t} was overbought: {hot[t]}")
+                passed.append((n, f"#{n} {t} ({hot[t]})"))
                 continue
             valid.append((n, r, S))
             looked += 1
@@ -641,7 +650,8 @@ def a_buys(a, day):
                       if n_ok == 1 else
                       f"It's the nearest to {mid:.2f} delta of the {n_ok} calls{f' on {t}' if one else ''} that fit your "
                       "rules and ")
-                   + ("the cash." if one else f"the {money(budget)} budget ({within})."))
+                   + ("the cash." if one else f"the {money(budget)} budget ({within}).")
+                   + passed_over(passed, n))
             open_pos(a, ticker=t, kind="call", qty=qty, label=label,
                      option=dict(symbol=f.get("symbol"), exp=f["exp"], strike=float(f["strike"])),
                      buy=dict(t=tstr(now), price=r4(entry), cost=tot, why=why, under=r4(S),
@@ -668,7 +678,8 @@ def a_buys(a, day):
         stop = r4(S * (1 - P["A_SHARE_STOP"]))
         plan = dict(stop=stop, text=f"sell if it drops {P['A_SHARE_STOP']:.0%} (to {money(stop)}) or after {t} closes below "
                                     "its 50-day EMA or 150-day average.")
-        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src)} Why shares, not a call: {reason}", plan) is None:
+        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src)} Why shares, not a call: {reason}{passed_over(passed, n)}",
+                      plan) is None:
             return
 
 
@@ -1030,8 +1041,11 @@ def d_buys(a, day, sd, plan, bars):
                 pos = buy_shares(a, now, t, S, budget, why, pl)
                 if pos:
                     pos.update(leg="M", sector=s["sector"])
+            obs = [s for s in skipped if " was overbought: " in s]
             if skipped and not any(p["leg"] == "M" and p["buy"]["t"] == tstr(now) for p in a["positions"]):
                 news.append("Plan M: " + "; ".join(skipped[:5]))
+            elif obs:                                # a buy went through: still say what your rule left out
+                news.append("Plan M: " + "; ".join(obs[:5]))
         # Plan ETF, with the cash left
         held = {p["ticker"] for p in a["positions"]}
         ready, etf_news = [], []
