@@ -37,6 +37,23 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
     log(`[${name}] top picks ${k}: ${await p.$$eval(`.pkl[data-pk="${k}"] tbody tr`, r => r.length)} rows`);
     await p.screenshot({ path: `${out}/${name}-1-picks-${k}.png` });
   }
+  // the OVTLYR plan's Plan M list (opened), the breadth heatmap, and the sector charts with their breadth strips
+  const at = sel => p.evaluate(s => { const e = document.querySelector(s); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); return !!e; }, sel);
+  if (await p.$("#ovm")) {
+    await p.evaluate(() => { document.getElementById("ovm").open = true; }); await at("#ovm"); await p.waitForTimeout(300);
+    log(`[${name}] Plan M list: ${await p.$eval("#ovm summary", e => e.innerText.replace(/\n/g, " "))}`);
+    await p.screenshot({ path: `${out}/${name}-1-planm.png` });
+  }
+  if (await at("#hm")) {
+    await p.waitForTimeout(200);
+    log(`[${name}] heatmap: ${await p.$$eval("#hm .hmr", rs => rs.map(r => r.innerText.replace(/\n/g, " ").trim()).filter(Boolean).join(" | "))}`);
+    await p.screenshot({ path: `${out}/${name}-1-breadth.png` });
+  }
+  if (await at(".charts")) {
+    await p.waitForTimeout(500);
+    log(`[${name}] strips: ${await p.$$eval(".ch .bl", bs => bs.map(b => b.closest(".ch").dataset.sector + ": " + b.innerText).join(" | "))}`);
+    await p.screenshot({ path: `${out}/${name}-1-sector-charts.png` });
+  }
   await p.click('.bar.pk button[data-pk="nu"]');
   await (await p.$("#t")).scrollIntoViewIfNeeded();
   await p.screenshot({ path: `${out}/${name}-2-table.png` });
