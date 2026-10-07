@@ -576,14 +576,24 @@ def breadth_history(frames, sectors, members):
     return out
 
 
+def bzone(v):
+    """The user's breadth lines: 2 = overbought (over 75), -1 = oversold (under 30), 0 = in between. Over 75 there is no
+    upswing, only overbought (the user's rule)."""
+    return 2 if v > CFG["OB_BREADTH"] else -1 if v < CFG["OS_BREADTH"] else 0
+
+
 def swing_state(b):
     """Tonight's state for one group: Rising, its 10-day average, Uptrend, whether it's an upswing (Rising above the
-    average), the day that state began and how many trading days it has lasted."""
+    average), the day that state began and how many trading days it has lasted; z = its zone (bzone) and zsince the day
+    it entered it."""
     on = b.on > 0
     k = int(np.flatnonzero(on.ne(on.shift()).to_numpy())[-1])
+    z = b.rise.round(1).map(bzone)
+    kz = int(np.flatnonzero(z.ne(z.shift()).to_numpy())[-1])
     x = b.iloc[-1]
     return dict(rise=round(float(x.rise), 1), avg=round(float(x.avg), 1), up=None if x.up != x.up else round(float(x.up), 1),
-                on=bool(on.iloc[-1]), since=b.index[k].date().isoformat(), days=len(b) - k)
+                on=bool(on.iloc[-1]), since=b.index[k].date().isoformat(), days=len(b) - k, z=int(z.iloc[-1]),
+                zsince=b.index[kz].date().isoformat())
 
 
 def chart_breadth(charts, bh):
@@ -1599,18 +1609,30 @@ def heat_html(bh, days=63):
     data, rows = dict(t=[d.strftime("%Y-%m-%d") for d in idx], rows=[]), []
     for i, n in enumerate(names):
         b, st = bh[n].reindex(idx), swing_state(bh[n])
-        cells = "".join(f'<i class="h{min(9, int(v // 10))}"></i>' if v == v else "<i></i>" for v in b.rise)
+        zc = {2: " o", -1: " u", 0: ""}
+        cells = "".join(f'<i class="h{min(9, int(v // 10))}{zc[bzone(round(float(v), 1))]}"></i>' if v == v else "<i></i>"
+                        for v in b.rise)
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
-                    f'<span class="hmc" data-i="{i}">{cells}</span><span class="hmv">{st["rise"]:.0f}% '
-                    f'<span class="{"up" if st["on"] else "dn"}">{"▲" if st["on"] else "▼"}</span></span></div>')
+                    f'<span class="hmc" data-i="{i}">{cells}</span><span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
         data["rows"].append(dict(n=n, r=r1(b.rise), a=r1(b.avg), u=r1(b.up), s=[None if v != v else int(v) for v in b.on]))
     ticks = [(k, d) for k, d in enumerate(idx) if k == 0 or d.month != idx[k - 1].month]
     if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
     key = "".join(f'<i class="h{k}"></i>' for k in range(10))
+    zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
+            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>')
     return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
-            f'<div class="hmk"><span>0%</span>{key}<span>100% of stocks rising</span></div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+            f'<div class="hmk"><span>0%</span>{key}<span>100% of stocks rising</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+
+
+def swing_tag(w, since=True):
+    """A group's state for the page: OB (overbought, over 75: no upswing then, the user's rule), else ▲ upswing / ▼ fading,
+    with OS when it's oversold (under 30); since = add the day the state began."""
+    if w["z"] == 2:
+        return '<span class="obt">OB</span>' + (f' <span class="mut">since {md(w["zsince"])}</span>' if since else "")
+    arrow = f'<span class="{"up" if w["on"] else "dn"}">{"▲" if w["on"] else "▼"}' + (f' since {md(w["since"])}' if since else "") + '</span>'
+    return arrow + (' <span class="ost">OS</span>' if w["z"] == -1 else "")
 
 
 def line_data(bh):
@@ -1647,8 +1669,10 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     sws = {n: swing_state(b) for n, b in (bh or {}).items()}
     w = sws.get("S&P 500")
     rise_card = card("S&amp;P 500 stocks rising (EMA10 &gt; 20)", f"{w['rise']:.0f}%",
-                     f"{'▲ upswing' if w['on'] else '▼ fading'} since {md(w['since'])}, 10-day avg {w['avg']:.0f}%",
-                     bh["S&P 500"].rise.iloc[-60:], w["on"]) if w else ""
+                     (f"overbought (over {CFG['OB_BREADTH']}) since {md(w['zsince'])}" if w["z"] == 2 else
+                      f"{'▲ upswing' if w['on'] else '▼ fading'} since {md(w['since'])}"
+                      + (f", oversold (under {CFG['OS_BREADTH']})" if w["z"] == -1 else ""))
+                     + f", 10-day avg {w['avg']:.0f}%", bh["S&P 500"].rise.iloc[-60:], None if w["z"] == 2 else w["on"]) if w else ""
     cards = (f'<div class="card"><div class="lbl">In uptrend (EMA10 &gt; 20, price &gt; EMA50 &amp; 150)</div>'
              f'<div class="val {"up" if up_pct > 50 else "dn"}">{up_n} / {liq_n}</div>'
              f'<div class="sub">{up_pct:.0f}% of stocks averaging 1M+ shares/day</div></div>') + rise_card + cards
@@ -1665,8 +1689,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
             return ""
         if not w:
             return '<td data-v=""></td>'
-        return (f'<td data-v="{w["rise"] - w["avg"]:.1f}">{w["rise"]:.0f}% <span class="{"up" if w["on"] else "dn"}">'
-                f'{"▲" if w["on"] else "▼"} since {md(w["since"])}</span></td>')
+        return f'<td data-v="{w["rise"] - w["avg"]:.1f}">{w["rise"]:.0f}% {swing_tag(w)}</td>'
     srows = []
     for _, s_ in secb.iterrows():
         srows.append(
@@ -1687,7 +1710,9 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         bl_data = None
     line_html = ('<div class="hint">The breadth line: Rising for the S&amp;P 500 or the sector you pick (or tap its row in the '
                  'heatmap), day by day, with its 5-day and 10-day averages (both exponential moving averages). Rising crossing '
-                 'above its 10-day average is what the heatmap calls an upswing.</div>'
+                 'above its 10-day average is what the heatmap calls an upswing. The dashed lines at '
+                 f'{CFG["OB_BREADTH"]} and {CFG["OS_BREADTH"]} are your overbought and oversold lines: over '
+                 f'{CFG["OB_BREADTH"]} there is no upswing and no buy signal (your rule).</div>'
                  '<div class="bln" id="bln"><div class="blh"><b>Breadth line</b><select id="blg" aria-label="S&amp;P 500 or sector">'
                  + "".join(f'<option value="{i}">{html_esc(g["s"])}</option>' for i, g in enumerate(bl_data["g"]))
                  + '</select><div class="bar blr">'
@@ -1697,7 +1722,9 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     sector_html = ('<h2>Sector breadth</h2>'
                    + ('<div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 (the fast half of '
                       'your uptrend rule), by day for the last 3 months; greener = more stocks rising. ▲ = an upswing (Rising '
-                      'above its own 10-day average), ▼ = fading. Tap or hover a row for the numbers.</div>' + heat + line_html if heat else "")
+                      'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
+                      f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
+                      f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html if heat else "")
                    + '<div class="hint">Click a sector to filter the stock list. ± is the change vs 5 trading days ago. '
                    + ('Rising counts S&amp;P 500 stocks only, so each sector matches its SPDR ETF; the other columns count '
                       'every stock in the scan.' if heat else '')
@@ -1715,7 +1742,8 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                       'Daily shows ~6 months, weekly ~2 years, monthly ~10 years.'
                       + (' The strip under each chart is its breadth: the solid line is Rising (the share of the S&amp;P 500 '
                          'stocks in it with the 10 EMA above the 20), the dotted line the share in your full uptrend. Green '
-                         'shading = an upswing (Rising above its 10-day average), red = fading. Daily and weekly only: the '
+                         'shading = an upswing (Rising above its 10-day average), red = fading, amber = overbought (Rising over '
+                         f'your {CFG["OB_BREADTH"]} line, where there is no upswing). Daily and weekly only: the '
                          'stock prices go back 2 years.' if strip else '') + '</div>'
                       '<div class="bar tf"><button class="on" data-tf="D">Daily</button><button data-tf="W">Weekly</button>'
                       '<button data-tf="M">Monthly</button></div><div class="charts">'
@@ -1813,12 +1841,13 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .bv{{height:64px}}.bl{{font-size:11px;color:var(--mut);margin-top:2px;min-height:15px}}.bl b{{color:var(--fg)}}.bv[hidden],.bl[hidden]{{display:none}}
 .hm{{position:relative;background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px;font-size:12px}}
-.hmr{{display:grid;grid-template-columns:84px 1fr 46px;align-items:center;gap:6px;margin-bottom:2px}}
+.hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
-.hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmc i{{display:block;background:var(--line)}}.hmc i.o{{box-shadow:inset 0 4px var(--warn)}}.hmc i.u{{box-shadow:inset 0 -4px var(--acc)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{box-shadow:inset 0 3px var(--warn)}}.hmz i.u{{box-shadow:inset 0 -3px var(--acc)}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
-.hmk{{display:flex;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
+.hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
 .hm i.h0{{background:color-mix(in srgb,var(--dn) 95%,var(--line))}}.hm i.h1{{background:color-mix(in srgb,var(--dn) 78%,var(--line))}}.hm i.h2{{background:color-mix(in srgb,var(--dn) 60%,var(--line))}}.hm i.h3{{background:color-mix(in srgb,var(--dn) 42%,var(--line))}}.hm i.h4{{background:color-mix(in srgb,var(--dn) 22%,var(--line))}}.hm i.h5{{background:color-mix(in srgb,var(--up) 22%,var(--line))}}.hm i.h6{{background:color-mix(in srgb,var(--up) 42%,var(--line))}}.hm i.h7{{background:color-mix(in srgb,var(--up) 60%,var(--line))}}.hm i.h8{{background:color-mix(in srgb,var(--up) 78%,var(--line))}}.hm i.h9{{background:color-mix(in srgb,var(--up) 95%,var(--line))}}
 .hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
@@ -1862,25 +1891,27 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
+const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};      // your breadth lines: over 75 overbought (no upswing), under 30 oversold
 const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric'}});
 (function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
 if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
 const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();
-const UP=V('--up'),DN=V('--dn'),PW=60;let tf='D';
-// shading behind the strip: one box per run of upswing (green) or fading (red) days
+const UP=V('--up'),DN=V('--dn'),WARN=V('--warn'),PW=60;let tf='D';
+// shading behind the strip: one box per run of upswing (green), fading (red) or overbought (amber, over your 75 line) days
 function bandPrim(){{let ch,runs=[],rs=[];
 const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,H=sc.bitmapSize.height;
 rs.forEach(r=>{{x.fillStyle=r.col;x.fillRect(Math.round(r.x1*hr),0,Math.max(1,Math.round(r.x2*hr)-Math.round(r.x1*hr)),H)}})}})}};
 const view={{zOrder:()=>'bottom',renderer:()=>rend}};
 return {{attached:p=>{{ch=p.chart}},paneViews:()=>[view],set:v=>{{runs=v}},updateAllViews:()=>{{if(!ch)return;const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
-runs.forEach(([a,b,on])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:(on?UP:DN)+'3d'}})}})}}}}}}
+runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?WARN+'59':(z?UP:DN)+'3d'}})}})}}}}}}
 // breadth line under a chart: the bar's (or tonight's) Rising, its 10-day average, Uptrend and the upswing state
 function leg(m,i){{if(!m.bl)return;const s=m.d[tf];if(!s||!s.br){{m.bl.textContent='';return}}
 const L=s.br.length,last=i==null||i<0||i>=L-1||s.br[i]==null;if(last)i=L-1;
 const r=s.br[i],a=s.ba[i],u=s.bu[i],w=m.d.sw;if(r==null||a==null){{m.bl.textContent='';return}}
-const on=last&&w?w.on:s.bs[i]===1;
+const on=last&&w?w.on:s.bs[i]===1,z=last&&w?w.z:r>OBL?2:r<OSL?-1:0;
 m.bl.innerHTML=(last?'':MD(s.t[i])+' · ')+'Breadth <b>'+r.toFixed(0)+'%</b> rising, avg '+a.toFixed(0)+'%'+(u==null?'':' · '+u.toFixed(0)+'% in uptrend')
-+' · <span class="'+(on?'up':'dn')+'">'+(on?'▲ upswing':'▼ fading')+(last&&w?' since '+MD(w.since):'')+'</span>'}}
++' · '+(z===2?'<span class="obt">OB</span> overbought'+(last&&w?' since '+MD(w.zsince):''):
+'<span class="'+(on?'up':'dn')+'">'+(on?'▲ upswing':'▼ fading')+(last&&w?' since '+MD(w.since):'')+'</span>'+(z===-1?' · <span class="ost">OS</span> oversold':''))}}
 const made=boxes.map(b=>{{const d=CH[b.dataset.sector];
 const c=LightweightCharts.createChart(b.querySelector('.cv'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11}},
 grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false,minimumWidth:PW}},timeScale:{{borderVisible:false}},handleScroll:false,handleScale:false}});
@@ -1898,6 +1929,8 @@ const fix=()=>({{priceRange:{{minValue:0,maxValue:100}}}});
 const bu=bc.addLineSeries({{color:V('--mut'),lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
 const br=bc.addLineSeries({{color:V('--fg'),lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
 br.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:true}});
+br.createPriceLine({{price:OBL,color:WARN,lineWidth:1,lineStyle:1,axisLabelVisible:false}});
+br.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:1,axisLabelVisible:false}});
 const band=bandPrim();br.attachPrimitive(band);st={{bc,band,bu,br}}}}
 const m={{b,d,c,k,vol,ln,st,bv,bl}};
 const at=p=>p.point&&p.logical!=null?Math.round(p.logical):null;
@@ -1912,8 +1945,8 @@ m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}
 m.c.timeScale().fitContent();
 if(m.st){{const has=!!s.br;m.bv.hidden=m.bl.hidden=!has;
 if(has){{const f=a=>s.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
-const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const on=s.bs[i]===1,r=runs[runs.length-1];
-if(r&&r[2]===on&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,on,i])}});m.st.band.set(runs);
+const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL?2:s.bs[i]===1?1:0,r=runs[runs.length-1];
+if(r&&r[2]===z&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,z,i])}});m.st.band.set(runs);
 m.st.bu.setData(f(s.bu));m.st.br.setData(f(s.br));m.st.bc.timeScale().fitContent();
 requestAnimationFrame(()=>requestAnimationFrame(()=>m.st.bc.timeScale().fitContent()))}}}}
 leg(m,null);
@@ -1928,7 +1961,8 @@ function show(e){{const c=e.currentTarget,R=HM.rows[+c.dataset.i],r=c.getBoundin
 const i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left)/r.width*n))),v=R.r[i];off();if(v==null)return;
 const a=R.a[i],u=R.u[i],d=new Date(HM.t[i]+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
 tip.innerHTML='<b>'+R.n+'</b> · '+d+'<br>'+v.toFixed(0)+'% rising (10 EMA over the 20), avg '+a.toFixed(0)+'%'
-+(u==null?'':'<br>'+u.toFixed(0)+'% in your uptrend')+'<br><span class="'+(R.s[i]?'up':'dn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>';
++(u==null?'':'<br>'+u.toFixed(0)+'% in your uptrend')+'<br>'+(v>OBL?'<span class="obt">OB</span> overbought (over '+OBL+')':
+'<span class="'+(R.s[i]?'up':'dn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>'+(v<OSL?' · <span class="ost">OS</span> oversold (under '+OSL+')':''));
 c.children[i].classList.add('cur');tip.hidden=false;const h=hm.getBoundingClientRect();
 tip.style.left=Math.max(0,Math.min(e.clientX-h.left+12,h.width-tip.offsetWidth))+'px';tip.style.top=(r.bottom-h.top+6)+'px'}}
 hm.querySelectorAll('.hmc').forEach(c=>{{c.addEventListener('pointermove',show);c.addEventListener('pointerdown',show);
@@ -1946,15 +1980,24 @@ crosshair:{{horzLine:{{visible:false,labelVisible:false}}}},handleScroll:false,h
 const line=col=>c.addLineSeries({{color:col,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerRadius:4}});
 const s10=line(V('--b10')),s5=line(V('--b5')),sr=line(V('--fg'));          // Rising drawn last, on top
 sr.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:false}});
+sr.createPriceLine({{price:OBL,color:V('--warn'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'overbought'}});
+sr.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'oversold'}});
+// keep both lines in view, with a little room past them
+sr.applyOptions({{autoscaleInfoProvider:o=>{{const r=o();if(!r||!r.priceRange)return r;
+r.priceRange.minValue=Math.min(r.priceRange.minValue,OSL-5);r.priceRange.maxValue=Math.max(r.priceRange.maxValue,OBL+5);return r}}}});
 const f1=v=>v==null?'–':v.toFixed(1)+'%',item=(v,lbl,x)=>'<span class="li"><i class="lk" style="background:var('+v+')"></i>'+lbl+' <b>'+f1(x)+'</b></span>';
 const DAY=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
 const hrows=HM?[...document.querySelectorAll('#hm .hmc')].map(x=>[x.closest('.hmr'),HM.rows[+x.dataset.i].n]):[];
 // the numbers and above / below states for one day (or tonight, with the day each state began)
 function leg(i){{const G=BL.g[g],last=i==null||i<0||i>=N-1;if(last)i=N-1;if(G.r[i]==null){{lg.textContent='';return}}
+const zn=d=>G.r[d]==null?0:G.r[d]>OBL?2:G.r[d]<OSL?-1:0,z=zn(i);
 const st=(u,lbl)=>{{const on=u[i]==='1';let k=i;while(last&&k>0&&u[k-1]===u[i])k--;
-return '<span class="li '+(on?'up':'dn')+'">'+(on?'▲ above':'▼ below')+' its '+lbl+(last?' since '+MD(BL.t[k]):'')+'</span>'}};
+return '<span class="li '+(z===2?'':on?'up':'dn')+'">'+(on?'▲ above':'▼ below')+' its '+lbl+(last?' since '+MD(BL.t[k]):'')+'</span>'}};
+let kz=i;while(last&&kz>0&&zn(kz-1)===z)kz--;
+const zl=z===2?'<span class="li"><span class="obt">OB</span> overbought, over '+OBL+(last?' since '+MD(BL.t[kz]):'')+'</span>':
+z===-1?'<span class="li"><span class="ost">OS</span> oversold, under '+OSL+(last?' since '+MD(BL.t[kz]):'')+'</span>':'';
 lg.innerHTML='<div>'+(last?'':'<span class="li"><b>'+DAY(BL.t[i])+'</b></span>')+item('--fg','Rising',G.r[i])+item('--b5','5-day avg',G.a5[i])
-+item('--b10','10-day avg',G.a10[i])+'</div><div>'+st(G.u5,'5-day average')+st(G.u10,'10-day average')+'</div>'}}
++item('--b10','10-day avg',G.a10[i])+'</div><div>'+zl+st(G.u5,'5-day average')+st(G.u10,'10-day average')+'</div>'}}
 function fit(){{const ts=c.timeScale();if(!span||span>=N)ts.fitContent();else ts.setVisibleLogicalRange({{from:N-span-0.5,to:N-0.5}})}}
 function show(){{const G=BL.g[g],f=a=>BL.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
 sr.setData(f(G.r));s5.setData(f(G.a5));s10.setData(f(G.a10));fit();requestAnimationFrame(()=>requestAnimationFrame(fit));leg(null);

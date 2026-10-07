@@ -229,23 +229,38 @@ for (let i = 2; i <= 13; i++) {
 log(`sorted ${cols} columns checked 2-13, ${sortBad} bad`);
 for (const tf of ["D", "W", "M"]) await p.click(`.bar.tf button[data-tf="${tf}"]`);
 
-// ---- breadth view: the heatmap, the Sector breadth table, the S&P 500 card and the chart strips agree on tonight's numbers
+// ---- breadth view: the heatmap, the Sector breadth table, the S&P 500 card and the chart strips agree on tonight's numbers,
+// and each says overbought (OB) over the user's 75 line, with no upswing then, and oversold (OS) under 30
 await p.click('.bar.tf button[data-tf="D"]'); await p.waitForTimeout(300);
 const bw = await p.evaluate(() => {
   if (typeof HM === "undefined" || !HM) return null;
   const pct = s => { const m = /(\d+)%/.exec(s || ""); return m ? +m[1] : null; };
   const out = [], last = {};
+  const OB = typeof OBL === "undefined" ? 75 : OBL, OS = typeof OSL === "undefined" ? 30 : OSL;
+  const zoneOk = (where, v, txt, ob = /\bOB\b|overbought/, os = /\bOS\b|oversold/) => {
+    if (ob.test(txt) !== (v > OB)) out.push(`${where}: ${v}% but "${txt}" (overbought over ${OB})`);
+    if (os.test(txt) !== (v < OS)) out.push(`${where}: ${v}% but "${txt}" (oversold under ${OS})`);
+    if (v > OB && /▲|upswing/.test(txt)) out.push(`${where}: an upswing over the ${OB} line ("${txt}")`); };
   HM.rows.forEach((R, i) => { const v = R.r[R.r.length - 1]; last[R.n] = v;
-    const shown = pct(document.querySelectorAll("#hm .hmv")[i].textContent);
-    if (v == null || Math.round(v) !== shown) out.push(`heatmap ${R.n}: ${v} vs shown ${shown}`); });
+    const txt = document.querySelectorAll("#hm .hmv")[i].textContent, shown = pct(txt);
+    if (v == null || Math.round(v) !== shown) out.push(`heatmap ${R.n}: ${v} vs shown ${shown}`);
+    if (v != null) zoneOk(`heatmap ${R.n}`, v, txt);
+    const cells = document.querySelectorAll("#hm .hmc")[i].children;
+    R.r.forEach((x, d) => { if (x == null) return; const c = cells[d].classList;
+      if (c.contains("o") !== (x > OB) || c.contains("u") !== (x < OS)) out.push(`heatmap ${R.n} ${HM.t[d]}: ${x}% marked "${c}"`); }); });
   const head = [...document.querySelectorAll("#s thead th")].map(h => h.textContent), k = head.findIndex(h => h.startsWith("Rising"));
   document.querySelectorAll("#s tbody tr").forEach(tr => { const n = tr.dataset.sector; if (k < 0 || !(n in last)) return;
-    const shown = pct(tr.cells[k].textContent); if (Math.round(last[n]) !== shown) out.push(`table ${n}: ${shown} vs heatmap ${last[n]}`); });
+    const shown = pct(tr.cells[k].textContent); if (Math.round(last[n]) !== shown) out.push(`table ${n}: ${shown} vs heatmap ${last[n]}`);
+    zoneOk(`table ${n}`, last[n], tr.cells[k].textContent); });
   const card = [...document.querySelectorAll(".card")].find(c => c.textContent.includes("stocks rising"));
   if (!card) out.push("no S&P 500 rising card");
-  else if (Math.round(last["S&P 500"]) !== pct(card.querySelector(".val").textContent)) out.push(`card ${card.querySelector(".val").textContent} vs heatmap ${last["S&P 500"]}`);
+  else {
+    if (Math.round(last["S&P 500"]) !== pct(card.querySelector(".val").textContent)) out.push(`card ${card.querySelector(".val").textContent} vs heatmap ${last["S&P 500"]}`);
+    zoneOk("S&P 500 card", last["S&P 500"], card.querySelector(".sub").textContent);
+  }
   document.querySelectorAll(".ch").forEach(ch => { const n = ch.dataset.sector, bl = ch.querySelector(".bl"); if (!bl || !(n in last)) return;
-    if (pct(bl.textContent) !== Math.round(last[n])) out.push(`strip ${n}: "${bl.textContent}" vs heatmap ${last[n]}`); });
+    if (pct(bl.textContent) !== Math.round(last[n])) out.push(`strip ${n}: "${bl.textContent}" vs heatmap ${last[n]}`);
+    zoneOk(`strip ${n}`, last[n], bl.textContent); });
   return { rows: HM.rows.length, days: HM.t.length, strips: document.querySelectorAll(".ch .bv canvas").length, out };
 });
 if (!bw) log("breadth view: not on the page");
@@ -265,6 +280,10 @@ const bln = await p.evaluate(async () => {
     if (r !== G.r[i] || a5 !== G.a5[i] || a10 !== G.a10[i]) out.push(`${G.s}: legend "${lg.textContent}" vs ${G.r[i]} / ${G.a5[i]} / ${G.a10[i]}`);
     if (lg.textContent.includes("above its 5-day") !== (G.u5[i] === "1") || lg.textContent.includes("above its 10-day") !== (G.u10[i] === "1"))
       out.push(`${G.s}: legend says "${lg.textContent}" but the states are ${G.u5[i]} / ${G.u10[i]}`);
+    const OB = typeof OBL === "undefined" ? 75 : OBL, OS = typeof OSL === "undefined" ? 30 : OSL;
+    if (/overbought/.test(lg.textContent) !== (G.r[i] > OB) || /oversold/.test(lg.textContent) !== (G.r[i] < OS))
+      out.push(`${G.s}: legend says "${lg.textContent}" for ${G.r[i]}% (lines ${OB} / ${OS})`);
+    if (G.r[i] > OB && lg.querySelector(".li.up")) out.push(`${G.s}: a green upswing over the ${OB} line`);
     const R = hm[G.n], k = R ? R.r.length - 1 : -1;
     if (!R) out.push(`${G.s}: no heatmap row`);
     else {
