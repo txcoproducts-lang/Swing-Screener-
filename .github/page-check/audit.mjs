@@ -203,6 +203,19 @@ const bw = await p.evaluate(() => {
 if (!bw) log("breadth view: not on the page");
 else log(`breadth view: ${bw.rows} heatmap rows x ${bw.days} days, ${bw.strips} strip canvases, problems: ${bw.out.length ? bw.out.join("; ") : "none"}`);
 
+// ---- Plan M list: the summary's counts match the table, and "Plan M is on / off" in the Market box opens it
+const pm = await p.evaluate(async () => {
+  const d = document.getElementById("ovm"); if (!d) return null;
+  const txt = d.querySelector("summary").textContent, m = /Plan M stocks:\s*(\d+|none)/.exec(txt), nm = /(\d+) new/.exec(txt);
+  const was = d.open; d.open = false; document.querySelector("a.ovl").click(); await new Promise(r => setTimeout(r, 100));
+  const res = { rows: document.querySelectorAll("#ov-m tbody tr").length, shown: m ? (m[1] === "none" ? 0 : +m[1]) : -1,
+    news: document.querySelectorAll("#ov-m .new").length, newShown: nm ? +nm[1] : 0, opens: d.open, dropped: document.querySelectorAll(".ovd li").length };
+  d.open = was; return res;
+});
+if (!pm) log("Plan M list: not on the page");
+else log(`Plan M list: ${pm.rows} stocks (summary says ${pm.shown}), ${pm.news} new (summary says ${pm.newShown}), ${pm.dropped} dropped, `
+  + `the Market box link opens it: ${pm.opens}` + (pm.rows !== pm.shown || pm.news !== pm.newShown || !pm.opens ? " -- PROBLEM" : ""));
+
 // ---- 3. open every ticker's Trend chart on every timeframe
 const tks = await p.$$eval(".tk", e => [...new Set(e.map(x => x.dataset.tk))]);
 let opened = 0; const chartErr = [];

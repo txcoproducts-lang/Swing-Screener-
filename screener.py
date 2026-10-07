@@ -874,10 +874,11 @@ def idx_state(d):
                 rsi=round(float(r.iloc[-1]), 1), rsi_prev=round(float(r.iloc[-2]), 1), atr=round(float(atr(d).iloc[-1]), 2))
 
 
-def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
+def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None):
     """Tonight's OVTLYR plan: the market and sector checks, Plan ETF's checks and sell signals, and the Plan M setups
     (stocks passing every stock and sector rule, freshest signal first). frames: the universe's daily bars; spy / qqq:
-    daily bars; earn: a function giving next earnings dates for a list of tickers (None skips that check)."""
+    daily bars; earn: a function giving next earnings dates for a list of tickers (None skips that check); prev: the
+    last saved plan, so the Plan M list shows which stocks are new and why any of the last list's stocks left."""
     idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
     C, H, L, V = (wide(frames, k, idx) for k in ("Close", "High", "Low", "Volume"))
     e10, e20, e50 = (ema(C, n) for n in (10, 20, 50))
@@ -975,6 +976,51 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
                            vol=int(av[t])))
     setups.sort(key=lambda x: (x["age"], -(x["rs"] or 0)))
 
+    def why_out(t):
+        """The first Plan M rule that a stock from the last list fails tonight, in the funnel's order."""
+        if t not in C.columns or c_[t] != c_[t]:
+            return "no price tonight (it may have left the S&P 500 / Nasdaq 100)"
+        px = float(c_[t])
+        if not av[t] >= CFG["MIN_AVG_VOL"]:
+            return "volume fell under 1M shares a day (20-day average)"
+        if not lo <= px <= hi:
+            return f"price {px:.2f} is outside ${lo:.0f}-${hi:.0f}"
+        x10, x20, x50 = (float(x[t].iloc[-1]) for x in (e10, e20, e50))
+        if x10 <= x20:
+            return "sell signal: the 10 EMA fell under the 20"
+        if age[t] != age[t]:
+            return "no recent buy signal"
+        if age[t] > OV["SIGNAL_DAYS"] - 1:
+            return f"its buy signal from {md(idx[-1 - int(age[t])].date())} has used up its {OV['SIGNAL_DAYS']} trading days"
+        if px <= x50:
+            return f"closed {px:.2f}, under the 50 EMA ({x50:.2f})"
+        if px <= x10:
+            return f"closed {px:.2f}, under the 10 EMA ({x10:.2f})"
+        r0, r1 = float(R[t].iloc[-1]), float(R[t].iloc[-2])
+        if not r0 > r1:
+            return f"RSI stopped rising ({f0(r0, r1)}, from {f0(r1, r0)})"
+        sec = sectors.get(t) or "Other"
+        v = secs.get(sec)
+        if not v or not v["ok"]:
+            return f"its sector, {sec}, stopped passing" + (f": {v['miss'][0]}" if v and v["miss"] else "")
+        near = ob_near(ov_blocks(frames[t]), px, asof)
+        if near:
+            return f"within {OV['OB_GAP']:.0%} of an order block ({near[1]['bot']:.2f}-{near[1]['top']:.2f})"
+        e = dates.get(t)
+        if e and (dt.date.fromisoformat(e) - entry).days < OV["EARN_DAYS"]:
+            return f"earnings on {md(e)}, too close to buy"
+        return "no longer passes every rule"
+
+    # the Plan M list from one night to the next: when each stock joined, and why any of the last list's stocks left
+    before = {x["ticker"]: x for x in (prev or {}).get("setups", [])}
+    for x in setups:
+        p_ = before.get(x["ticker"])
+        x["since"] = (p_.get("since") or prev["asof"]) if p_ else asof.isoformat()
+        x["new"] = p_ is None
+    now = {x["ticker"] for x in setups}
+    dropped = [dict(ticker=t, sector=p_.get("sector") or sectors.get(t) or "", since=p_.get("since") or prev["asof"],
+                    why=why_out(t)) for t, p_ in before.items() if t not in now]
+
     # Plan ETF: 3x funds on their index's signals, in the value zone, clear of order blocks 30+ days old
     etf = {}
     for fund, und in OV["ETF"].items():
@@ -1003,7 +1049,8 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None):
 
     funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), near_ob=near_n, earnings=earn_n,
                   setups=len(setups), earn_checked=bool(earn))
-    return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel)
+    return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel, dropped=dropped,
+                prev_asof=(prev or {}).get("asof"))
 
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
@@ -1343,7 +1390,7 @@ def ov_html(ov):
     ok = lambda b: '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
     li = lambda c: f'<li>{ok(c["ok"])} {html_esc(c["text"])}</li>'
     m, f = ov["market"], ov["funnel"]
-    mk = (f'<div class="ovb"><div class="ovh">Market <span class="{"up" if m["ok"] else "dn"}">Plan M is {"on" if m["ok"] else "off"}</span></div>'
+    mk = (f'<div class="ovb"><div class="ovh">Market <a href="#ovm" class="ovl {"up" if m["ok"] else "dn"}">Plan M is {"on" if m["ok"] else "off"} ›</a></div>'
           f'<ul>{"".join(li(c) for c in m["checks"])}</ul><div class="mut">All four must pass for new Plan M trades.</div></div>')
     secs = sorted(ov["sectors"].items(), key=lambda kv: (not kv[1]["ok"], kv[0]))
     n_ok = sum(v["ok"] for _, v in secs)
@@ -1361,9 +1408,13 @@ def ov_html(ov):
 
     def pc(v):
         return f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.1f}%</span>'
-    rows = []
+    rows, day = [], dt.date.fromisoformat(ov["asof"])
     for s in ov["setups"]:
         cd = dt.date.fromisoformat(s["cross"])
+        if s.get("new") or not s.get("since"):
+            on_list, n_on = '<span class="new">New</span>', 0
+        else:
+            on_list, n_on = f'since {md(s["since"])}', int(np.busday_count(s["since"], day))
         sig = f'{cd:%b} {cd.day} <span class="mut">{"today" if s["age"] == 0 else str(s["age"]) + "d ago"}</span>'
         up = (f'{s["ob_up"]:.2f} <span class="mut">{(s["ob_up"] / s["close"] - 1) * 100:+.1f}%</span>' if s["ob_up"] else
               '<span class="mut">none</span>')
@@ -1373,18 +1424,26 @@ def ov_html(ov):
         else:
             er = '<span class="mut">n/a</span>'
         cells = [(f'<b class="tk" data-tk="{s["ticker"]}">{s["ticker"]}</b><div class="sec">{s["sector"]}</div>', s["ticker"]),
-                 (sig, s["age"]), (f'{s["close"]:.2f}', s["close"]),
+                 (on_list, n_on), (sig, s["age"]), (f'{s["close"]:.2f}', s["close"]),
                  (f'{s["rsi"]:.0f} <span class="mut">from {s["rsi_prev"]:.0f}</span>', s["rsi"]),
                  (pc((s["close"] / s["e10"] - 1) * 100), round((s["close"] / s["e10"] - 1) * 100, 2)),
                  (f'{s["atr"]:.2f}', s["atr"]), (up, s["ob_up"] or ""), (er, s["earn"] or ""),
                  ("" if s["rs"] is None else str(s["rs"]), "" if s["rs"] is None else s["rs"])]
         rows.append("<tr>" + "".join(f'<td data-v="{v}">{c}</td>' for c, v in cells) + "</tr>")
-    head = ["Ticker", "Buy signal", "Close", "RSI", "vs 10 EMA", "ATR", "Order block above", "Earnings", "RS"]
+    head = ["Ticker", "On the list", "Buy signal", "Close", "RSI", "vs 10 EMA", "ATR", "Order block above", "Earnings", "RS"]
     if rows:
         table = (f'<div class="wrap"><table id="ov-m"><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead>'
                  f'<tbody>{"".join(rows)}</tbody></table></div>')
     else:
         table = '<div class="hint pke">No stock passes every Plan M stock and sector rule tonight.</div>'
+    drop, n_new = ov.get("dropped") or [], sum(1 for s in ov["setups"] if s.get("new"))
+    gone = (f'<div class="ovd"><b>Dropped</b> <span class="mut">(on the {md(ov["prev_asof"])} list, not this one)</span><ul>'
+            + "".join(f'<li><b class="tk" data-tk="{d["ticker"]}">{d["ticker"]}</b> <span class="mut">{html_esc(d["sector"])}, on the '
+                      f'list since {md(d["since"])}</span>: {html_esc(d["why"])}</li>' for d in drop) + '</ul></div>') if drop else ""
+    n = len(ov["setups"])
+    summ = (f'<summary><b>Plan M stocks:</b> <span class="ovc">{n if n else "none tonight"}</span>'
+            + (f' <span class="up">{n_new} new</span>' if n_new else "") + (f' <span class="dn">{len(drop)} dropped</span>' if drop else "")
+            + (' <span class="mut">Plan M is off, so none are buys</span>' if not m["ok"] and n else "") + '</summary>')
     earn_txt = (f'{f["earnings"]} reported earnings within {OV["EARN_DAYS"]} days of the next market day' if f["earn_checked"]
                 else "earnings dates were not checked (demo)")
     funnel = (f'<div class="hint">Plan M setups tonight: {f["signal"]} liquid stocks priced ${OV["PRICE"][0]:.0f}-${OV["PRICE"][1]:.0f} had a buy '
@@ -1400,7 +1459,9 @@ def ov_html(ov):
             f'20 EMA (it counts for {OV["SIGNAL_DAYS"]} trading days); sell signal = the 10 EMA under the 20; breadth = the share of '
             'stocks with the 10 EMA above the 20, against its 10-day average. Left out: OVTLYR channels and the per-stock backtest '
             'check.</div>'
-            f'{live}<div class="ovg">{mk}{sc}{et}</div>{funnel}{table}')
+            f'{live}<div class="ovg">{mk}{sc}{et}</div><details id="ovm" class="ovm">{summ}{table}{gone}{funnel}</details>'
+            '<div class="hint">Click <b>Plan M stocks</b> for every stock that passes the plan tonight. The list is rebuilt each '
+            'night: stocks that newly pass are marked New, and stocks that stop passing drop off, with the reason.</div>')
 
 
 def html_esc(s):
@@ -1579,7 +1640,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
 .ovg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:8px 0}}
 .ovb{{background:var(--card);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}}.ovb ul{{margin:2px 0 6px;padding:0;list-style:none}}
-.ovh{{display:flex;justify-content:space-between;gap:8px;font-weight:600;font-size:13px;margin-bottom:2px}}
+.ovh{{display:flex;justify-content:space-between;gap:8px;font-weight:600;font-size:13px;margin-bottom:2px}}a.ovl{{text-decoration:none}}
+.ovm{{margin-top:10px}}.ovm summary{{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}}
+.ovm summary::-webkit-details-marker{{display:none}}.ovm summary::before{{content:'▸';display:inline-block;width:16px;color:var(--mut)}}.ovm[open] summary::before{{content:'▾'}}
+.ovm summary .ovc{{font-weight:700;margin-left:6px}}.ovm summary span:not(.ovc){{font-size:12px;font-weight:600;margin-left:10px}}
+.new{{display:inline-block;font-size:11px;font-weight:700;color:var(--up);background:color-mix(in srgb,var(--up) 18%,transparent);padding:1px 7px;border-radius:99px}}
+.ovd{{font-size:12px;margin-top:10px;line-height:1.5}}.ovd ul{{margin:2px 0;padding-left:18px}}.ovm .hint,.ovm+.hint{{margin-top:8px}}
 .pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
@@ -1712,6 +1778,10 @@ document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.b
 document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
 try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
 ['pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
+(function(){{const d=document.getElementById('ovm');if(!d)return;
+try{{if(localStorage.getItem('ovm')==='1')d.open=true}}catch(e){{}}
+d.addEventListener('toggle',()=>{{try{{localStorage.setItem('ovm',d.open?'1':'0')}}catch(e){{}}}});
+document.querySelectorAll('a[href="#ovm"]').forEach(a=>a.onclick=e=>{{e.preventDefault();d.open=true;d.scrollIntoView({{behavior:'smooth',block:'start'}})}})}})();
 // ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
 const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
 const tvSym=t=>t.replace(/-/g,'.');
@@ -1906,13 +1976,16 @@ def main():
             qqq = list(demo_frames(n=1, days=600).values())[0]
         else:
             qqq = yf_batch(["QQQ"], period="2y", interval="1d").get("QQQ")
-        ov = ovtlyr_plan(frames, sectors, etf_frames["SPY"], qqq, None if a.demo else next_earnings)
+        saved = sorted(f for f in (Path(__file__).resolve().parent / "history").glob("ovtlyr_*.json") if f.stem[7:] < asof)
+        prev_ov = None if a.demo or not saved else json.loads(saved[-1].read_text(encoding="utf-8"))   # the last list
+        ov = ovtlyr_plan(frames, sectors, etf_frames["SPY"], qqq, None if a.demo else next_earnings, prev_ov)
         ov["live_at"] = live_at
         if live_at is None:                # paper.py's OVTLYR account trades the next morning on closing prices only
             (out / f"ovtlyr_{asof}.json").write_text(json.dumps(ov, indent=1), encoding="utf-8")
         f = ov["funnel"]
         print(f"  market {'on' if ov['market']['ok'] else 'off'}, {sum(v['ok'] for v in ov['sectors'].values())} sectors pass, "
-              f"{f['setups']} Plan M setups (of {f['signal']} buy signals), "
+              f"{f['setups']} Plan M setups (of {f['signal']} buy signals; {sum(x['new'] for x in ov['setups'])} new, "
+              f"{len(ov['dropped'])} dropped since {ov['prev_asof']}), "
               + ", ".join(f"{k} {'set up' if e['ok'] else 'not set up'}" for k, e in ov["etf"].items()))
     except Exception as e:                 # never block the scan on it
         import traceback
