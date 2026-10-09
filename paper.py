@@ -2,8 +2,8 @@
 """Paper trading trial: four accounts start with $1,000 each and trade until 2027-04-06 (six months from 2026-10-06).
 
   A  "Your system": last night's screener setups (Momentum and Pullback) and your option rules
-     (calls 15-30 days out, delta 0.50-0.80, open interest over 500), up to half the account a trade, or one
-     contract with up to all the cash when every call that fits costs more. Shares when no call fits.
+     (calls 15-30 days out, delta 0.50-0.80, open interest over 500), up to 30% of the account a trade; down to
+     0.15 delta when nothing in 0.50-0.80 fits that (the user's rule from 2026-10-09). Shares when no call fits.
   C  "Your system, after 2 PM": the same rules as A, but it only buys after 2:00 PM Central (3:00 PM New York).
      It sells on the same signals as A. Started 2026-10-07, at the user's request.
   B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), as shares.
@@ -36,7 +36,9 @@ P = dict(
     SLIP=0.0005,                  # shares fill 0.05% worse than the last trade
     FEE=0.65,                     # per option contract, each way
     # A: your screener and option rules
-    A_SLOTS=2,                    # positions at a time, each up to half the account (one call contract can take more)
+    A_SLOTS=2,                    # positions at a time
+    A_CAP=0.30,                   # each buy: at most this share of the account's value (your rule, from 2026-10-09)
+    A_DELTA_LO=0.15,              # when no call in your delta range fits the cap, take a cheaper one down to this delta
     A_SCAN=15,                    # how far down the setups to look for a call that fits the budget
     A_TARGET=0.50, A_STOP=0.50,   # calls: sell at +50% (bid) or -50% (mid)
     A_EXIT_DTE=5,                 # calls: sell this many days before expiry
@@ -76,13 +78,14 @@ def rules(aid):
                 "York time, then stops and targets every 30 minutes until the close.")
         return [
             "Uses your screener: last night's setups (Momentum and Pullback), in the stock table's order.",
-            f"Holds {P['A_SLOTS']} positions at a time, each up to half the account (a call can take more, see below). "
-            + when,
+            f"Holds {P['A_SLOTS']} positions at a time, and never spends more than {P['A_CAP']:.0%} of the account "
+            "on one buy. " + when,
             f"Buys a call by your rules ({lo}-{hi} days out, delta {dlo:.2f}-{dhi:.2f}, open interest over "
             f"{SC.CFG['PK_OI_OVER']}, bid/ask spread under {SC.CFG['MAX_SPREAD_PCT']:.0f}%), the one nearest "
-            f"{(dlo + dhi) / 2:.2f} delta, on the first of the top {P['A_SCAN']} setups that has one within half the "
-            "account. If none does, it buys one contract that costs more, with up to all the cash. If no call fits "
-            "even that, it buys shares of the top setup.",
+            f"{(dlo + dhi) / 2:.2f} delta, on the first of the top {P['A_SCAN']} setups that has one within "
+            f"{P['A_CAP']:.0%} of the account. If none does, it takes a cheaper call down to {P['A_DELTA_LO']:.2f} "
+            "delta (same days out, open interest and spread), the highest delta that fits, on the first setup that "
+            "has one. If no call fits even that, it buys shares of the top setup.",
             "Skips a setup that has dropped below its 50-day EMA by the time it buys.",
             f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
             f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
@@ -429,10 +432,10 @@ def setup_why(r, n, src="last night's screener"):
             "20-day average. The trend under it holds: price above the 50-day EMA, 20-day EMA above the 50-day.")
 
 
-def fitting_calls(day, t, S):
-    """Calls that fit your rules right now, with live quotes (a tight bid/ask)."""
+def fitting_calls(day, t, S, dlo=None):
+    """Calls that fit your rules right now, with live quotes (a tight bid/ask). dlo lowers the delta floor."""
     lo, hi = SC.CFG["PK_DTE"]
-    dlo, dhi = SC.CFG["PK_DELTA"]
+    dlo, dhi = (dlo or SC.CFG["PK_DELTA"][0]), SC.CFG["PK_DELTA"][1]
     out = []
     for e in day.mkt.expiries(t):
         dte = (dt.date.fromisoformat(e) - day.today).days
@@ -577,19 +580,20 @@ def a_buys(a, day):
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]
     px = day.price([r.ticker for _, r in scan])
     hot = hot_now(day, [(r.ticker, r.get("sector")) for _, r in scan if r.ticker not in sold_today and day.fresh(r.ticker)])
+    dlo = SC.CFG["PK_DELTA"][0]
     mid = sum(SC.CFG["PK_DELTA"]) / 2
     cost = lambda f: f["ask"] * 100 + P["FEE"]
     best = lambda fs: min(fs, key=lambda f: (abs(f["delta"] - mid), -f["oi"]))
+    top = lambda fs: max(fs, key=lambda f: (f["delta"], f["oi"]))
     while len(a["positions"]) < P["A_SLOTS"]:
-        budget = min(a["cash"], value(a) / P["A_SLOTS"])
+        budget = min(a["cash"], value(a) * P["A_CAP"])
         if budget < 50:
             note(a, now, f"No new buy: only {money(a['cash'])} in cash.", "day")
             return
-        cash = a["cash"]                       # one contract can use all of it when no call fits the budget
-        within = "half the account" if budget < cash else "the cash on hand"
+        within = f"{P['A_CAP']:.0%} of the account" if budget < a["cash"] else "the cash on hand"
         held = {p["ticker"] for p in a["positions"]}
         valid, skipped, cheapest, looked, failed = [], [], None, 0, 0
-        pick = big = None
+        pick = low = None
         passed = []                            # (rank, "#rank TICKER (why)") left out by your overbought rule, for the buy note
         for n, r in scan:
             t = r.ticker
@@ -610,27 +614,27 @@ def a_buys(a, day):
             valid.append((n, r, S))
             looked += 1
             try:
-                fits = fitting_calls(day, t, S)
+                fits = fitting_calls(day, t, S, P["A_DELTA_LO"])
             except Exception as e:
                 failed += 1
                 print(f"  option lookup failed for {t}: {e}")
                 continue
             ok = [f for f in fits if cost(f) <= budget]
-            if ok:
-                pick = (n, r, S, best(ok), len(ok), False)
+            band = [f for f in ok if f["delta"] >= dlo]
+            if band:
+                pick = (n, r, S, best(band), len(band), False)
                 break
-            over = [f for f in fits if cost(f) <= cash]
-            if over and big is None:
-                big = (n, r, S, best(over), len(over), True)
-            if fits and not over:
+            if ok and low is None:                 # only cheaper, lower-delta calls fit: keep looking for one in your range first
+                low = (n, r, S, top(ok), len(ok), True)
+            if fits and not ok:
                 c = min(fits, key=cost)
                 if cheapest is None or cost(c) < cheapest[1]:
                     cheapest = (f"{opt_label(t, c['exp'], c['strike'])} at {money(cost(c))}", cost(c))
-        pick = pick or big
+        pick = pick or low
         if pick:
             n, r, S, f, n_ok, one = pick
             t, entry = r.ticker, float(f["ask"])
-            qty = 1 if one else int(budget // cost(f))
+            qty = int(budget // cost(f))
             tot = r2(qty * cost(f))
             label = opt_label(t, f["exp"], f["strike"])
             exp = dt.date.fromisoformat(f["exp"])
@@ -643,14 +647,13 @@ def a_buys(a, day):
                             f"expiry), or after {t} closes below its 50-day EMA or 150-day average.")
             why = (f"{setup_why(r, n, src)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
                    f"{f['oi']:,}, IV {f['iv']:.0f}%, bid {money(f['bid'])} / ask {money(f['ask'])}. "
-                   + (f"None of the top {P['A_SCAN']} setups had a call that fits your rules for {money(budget)} or less "
-                      f"({within}), so it buys one contract, which can use up to all {money(cash)} in cash. "
-                      if one else "")
-                   + (f"It's the only call{f' on {t}' if one else ''} that fits your rules and "
-                      if n_ok == 1 else
-                      f"It's the nearest to {mid:.2f} delta of the {n_ok} calls{f' on {t}' if one else ''} that fit your "
-                      "rules and ")
-                   + ("the cash." if one else f"the {money(budget)} budget ({within}).")
+                   + (f"None of the top {P['A_SCAN']} setups had a call at {dlo:.2f}-{SC.CFG['PK_DELTA'][1]:.2f} delta "
+                      f"that fits your rules for {money(budget)} or less ({within}), so it takes a cheaper one, down to "
+                      f"{P['A_DELTA_LO']:.2f} delta as you allowed. It's the highest delta of the {plural(n_ok, 'call')} "
+                      f"on {t} that fit." if one else
+                      f"It's the only call that fits your rules and the {money(budget)} budget ({within})." if n_ok == 1 else
+                      f"It's the nearest to {mid:.2f} delta of the {n_ok} calls that fit your rules and the "
+                      f"{money(budget)} budget ({within}).")
                    + passed_over(passed, n))
             open_pos(a, ticker=t, kind="call", qty=qty, label=label,
                      option=dict(symbol=f.get("symbol"), exp=f["exp"], strike=float(f["strike"])),
@@ -670,11 +673,11 @@ def a_buys(a, day):
         if failed == looked:
             reason = "Yahoo's option quotes couldn't be loaded this morning."
         elif cheapest:
-            reason = (f"none of the top {P['A_SCAN']} setups had a call that fits your rules for {money(cash)} or less "
-                      f"(all the cash). The cheapest that fits was the {cheapest[0]}.")
+            reason = (f"none of the top {P['A_SCAN']} setups had a call that fits your rules, even down to "
+                      f"{P['A_DELTA_LO']:.2f} delta, for {money(budget)} or less ({within}). The cheapest was the {cheapest[0]}.")
         else:
             reason = (f"none of the top {P['A_SCAN']} setups had a call that fits your rules this morning (15-30 days out, "
-                      "delta 0.50-0.80, open interest over 500, a tight bid/ask).")
+                      f"delta {P['A_DELTA_LO']:.2f}-0.80, open interest over 500, a tight bid/ask).")
         stop = r4(S * (1 - P["A_SHARE_STOP"]))
         plan = dict(stop=stop, text=f"sell if it drops {P['A_SHARE_STOP']:.0%} (to {money(stop)}) or after {t} closes below "
                                     "its 50-day EMA or 150-day average.")

@@ -352,7 +352,7 @@ const paper = await p.evaluate(async () => {
     if (a.cash < -0.01) bad.push(`negative cash ${a.cash}`);
     for (const q of all) {
       if (!q.buy.why || !q.plan || !q.plan.text) bad.push(`${q.label}: no buy reason or plan`);
-      if (q.kind === "call" && !(q.buy.dte >= 15 && q.buy.dte <= 30 && q.buy.delta >= 0.5 && q.buy.delta <= 0.8 && q.buy.oi > 500)) bad.push(`${q.label}: bought outside your rules (${q.buy.dte}d, delta ${q.buy.delta}, OI ${q.buy.oi})`);
+      if (q.kind === "call" && !(q.buy.dte >= 15 && q.buy.dte <= 30 && q.buy.delta >= (q.buy.t >= "2026-10-09" ? 0.15 : 0.5) && q.buy.delta <= 0.8 && q.buy.oi > 500)) bad.push(`${q.label}: bought outside your rules (${q.buy.dte}d, delta ${q.buy.delta}, OI ${q.buy.oi})`);
       if (!a.log.some(e => e.kind === "buy" && e.t === q.buy.t && e.text.includes(q.ticker))) bad.push(`${q.label}: no log line for the buy`);
     }
     for (const q of a.closed) {
