@@ -1,0 +1,2113 @@
+#!/usr/bin/env python3
+"""
+Crypto copy of the swing screener (../screener.py): the same rules, lists and plans, run on about 100 of the
+largest coins instead of S&P 500 and Nasdaq-100 stocks. It has its own page (/crypto/ on the same site), its own
+history (crypto/history) and its own paper accounts (crypto/paper.py). The stock screener is not touched.
+
+What differs from the stock version, because crypto is different:
+  - no options (coins have none a normal brokerage account can buy), so no option columns or call picks;
+  - no earnings, splits or market hours: coins trade every day, and a daily bar closes at midnight UTC;
+  - "sectors" are coin categories (Layer 1, DeFi, Memes...), and their charts are equal-weight indexes of
+    their coins, since there are no sector ETFs; the market benchmark is Bitcoin (BTC) where stocks use SPY;
+  - liquidity is dollars traded ($10M+ a day), not shares, and there is no minimum price;
+  - year-based windows (52-week high, 12-month relative strength) count 365 days, since coins trade every day.
+
+    python crypto/screener.py --out crypto-out     (GitHub Actions runs this every day at 00:30 UTC)
+    python crypto/screener.py --demo               -> fake data, just to preview the layout
+"""
+import argparse, datetime as dt, json, math, sys
+from collections import Counter
+from pathlib import Path
+import numpy as np
+import pandas as pd
+
+# ----------------------------------------------------------------- settings
+CFG = dict(
+    MIN_PRICE=0.0,           # coins can trade for fractions of a cent, so no minimum price
+    MIN_AVG_VOL=10_000_000,  # 20-day average dollars traded a day (Yahoo reports crypto volume in dollars)
+    LONG_MA_TYPE="SMA",      # "SMA" or "EMA" for the 150 / 200
+    CROSS_DAYS=10,           # "50 recently crossed above 150" window
+    # options helper
+    OPT_TOP_N=25,            # only look up options for the best N picks
+    TARGET_DTE=40,           # days to expiry you like to buy
+    DTE_MIN=25, DTE_MAX=60,
+    TARGET_DELTA=0.65,       # calls
+    MIN_OI=100,
+    MAX_SPREAD_PCT=12.0,     # bid/ask spread as % of mid
+    RISK_FREE=0.045,
+    # options on the Top picks lists (your rules): calls 15-30 days out, delta 0.50-0.80, open interest over 500;
+    # each stock shows the one nearest the middle of the delta range
+    PK_DTE=(15, 30),
+    PK_DELTA=(0.50, 0.80),
+    PK_OI_OVER=500,
+    # order blocks on the charts; research/ob_backtest.py tested all of these on 1,000 stocks over 10 years
+    OB_TYPE="strong",        # classic, strong (best in the test), bos, fvg, volume or lux
+    OB_ENTRY="top",          # box runs from the candle's far side to: "top" (whole candle, best), "body" or "mid" (50%)
+    # top picks lists: research/picks_backtest.py chose these on 2014-2021 S&P 500 data and checked them on 2022-2026
+    NEW_UP="all",            # every stock that turned into an uptrend (no ordering did better), strongest RS first
+    NEW_UP_N=50,
+    BREAKOUT="tight",        # uptrend within 5% of a 50-day high, tightest first ("squeeze" tied on return, broke out less often)
+    BREAKOUT_N=10,
+    AI_SCORE="rs",           # AI picks: IBD-style relative strength (see ai_scores for the other versions tested)
+    AI_N=10, AI_KEEP=20, AI_CAP=3,   # hold 10, at most 3 per sector; a pick stays while it ranks in the top 20
+    AI_TREND_EXIT=False,     # True = also drop a pick on a close below its EMA50 (tested worse)
+    AI_MARKET_FILTER=False,  # True = no new picks while SPY is below its 200-day average (tested no better)
+    # overbought / oversold, the user's rule (2026-10-07): nothing overbought gets a setup, a buy signal or a buy,
+    # anywhere (the setups, the Top picks lists, the OVTLYR plan and all four paper accounts)
+    OB_RSI=70, OS_RSI=30,    # 14-day RSI
+    CCI_N=20,                # 20-day CCI; it swings around 0 (most days between -100 and +100), so its levels are +-100
+    OB_CCI=100, OS_CCI=-100,
+    OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of coins with the 10 EMA over the 20), market or category
+)
+YEAR, HALF, Q3, QTR, MONTH = 365, 182, 273, 91, 30   # coins trade every day: a year is 365 daily bars, not 252
+
+# ----------------------------------------------------------------- prices
+def rp(x, sig=6):
+    """A price rounded to `sig` significant digits (at least 2 decimals), so a $0.00001 coin keeps its digits."""
+    x = float(x)
+    if x != x or x == 0 or math.isinf(x):
+        return x
+    return round(x, max(2, sig - 1 - int(math.floor(math.log10(abs(x))))))
+
+
+def fp(x):
+    """A price for the page: 2 decimals from $1 up, more below that (0.1234, 0.001234, 0.00001234)."""
+    if x is None or x != x:
+        return ""
+    x = float(x)
+    if abs(x) >= 1 or x == 0:
+        return f"{x:,.2f}"
+    return f"{x:.{max(2, 3 - int(math.floor(math.log10(abs(x)))))}f}"
+
+
+def fusd(v):
+    """Dollars traded, short: $1.2B, $35.4M, $820K."""
+    if v is None or v != v:
+        return ""
+    n, u = (v / 1e9, "B") if v >= 1e9 else (v / 1e6, "M") if v >= 1e6 else (v / 1e3, "K")
+    return f"${n:.1f}".replace(".0", "") + u if u != "K" else f"${n:.0f}K"
+
+
+# ----------------------------------------------------------------- universe
+# About 100 of the largest coins by market value (October 2026), stablecoins and wrapped coins left out, each in one
+# category. Yahoo names most coins SYMBOL-USD, but where another coin took that name it adds CoinMarketCap's id
+# (UNI7083-USD is Uniswap), so each coin lists its CoinMarketCap id and the run keeps whichever name trades more.
+CATS = {
+    "Payments": "BTC:1 XRP:52 XLM:512 LTC:2 BCH:1831 XMR:328 ZEC:1437 DASH:131 ETC:1321",
+    "Layer 1": ("ETH:1027 SOL:5426 ADA:2010 TRX:1958 AVAX:5805 TON:11419 SUI:20947 DOT:6636 NEAR:6535 APT:21794 "
+                "ICP:8916 ATOM:3794 ALGO:4030 SEI:23149 HBAR:4642 EGLD:6892 XTZ:2011 KAS:20396 EOS:1765 NEO:1376 "
+                "FLOW:4558 MINA:8646 INJ:7226 TIA:22861 KAVA:4846"),
+    "Layer 2": "POL:28321 ARB:11841 OP:11840 IMX:10603 STX:4847 MNT:27075 STRK:22691",
+    "DeFi": ("UNI:7083 AAVE:7278 MKR:1518 CRV:6538 LDO:8000 PENDLE:9481 JUP:29210 ENA:30171 RUNE:4157 CAKE:7186 "
+             "COMP:5692 SNX:2586 1INCH:8104 ONDO:21159 ETHFI:29814 JTO:28541 RAY:8526 SUSHI:6758"),
+    "Memes": "DOGE:74 SHIB:5994 PEPE:24478 WIF:28752 BONK:23095 FLOKI:10804 TRUMP:35336 PENGU:34466",
+    "AI & data": "TAO:22974 FET:3773 RENDER:5690 GRT:6719 AR:5632 AKT:7431 WLD:13502 VIRTUAL:29420 THETA:2416 FIL:2280",
+    "Infrastructure": "LINK:1975 QNT:3155 VET:3077 PYTH:28177 HNT:5665 JASMY:8425 ENS:13855 ZRO:26997",
+    "Exchange tokens": "BNB:1839 OKB:3897 CRO:3635 LEO:3957 KCS:2087 GT:4269 BGB:11092 HYPE:32196",
+    "Gaming": "SAND:6210 MANA:1966 AXS:6783 GALA:7080 APE:18876 ENJ:2130 BEAM:28298 CHZ:4066",
+}
+COINS = {s.split(":")[0]: (int(s.split(":")[1]), cat) for cat, txt in CATS.items() for s in txt.split()}
+YF = {}                 # coin -> the Yahoo name that worked (filled in by download())
+MARKET = "Crypto market"   # the whole scan, where the stock version says S&P 500
+BENCH = "BTC"              # the market benchmark, where the stock version uses SPY
+
+
+def yahoo_names(t):
+    """The Yahoo names to try for a coin, the plain one first."""
+    return [YF[t]] if t in YF else [f"{t}-USD", f"{t}{COINS[t][0]}-USD"] if t in COINS else [f"{t}-USD"]
+
+
+def get_universe():
+    sectors = {t: cat for t, (_, cat) in COINS.items()}
+    return sorted(COINS), sectors, dict(sectors), set(COINS)
+
+
+def complete(d):
+    """Drop today's bar (UTC): a coin's daily bar is still forming until midnight UTC."""
+    today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+    idx = d.index.tz_convert("UTC").tz_localize(None) if d.index.tz is not None else d.index
+    d = d.copy()
+    d.index = idx.normalize()
+    return d[d.index < today]
+
+
+def yf_raw(names, size=50, **kw):
+    """{Yahoo name: OHLCV bars} for a list of Yahoo names."""
+    import yfinance as yf
+    frames = {}
+    for i in range(0, len(names), size):
+        chunk = names[i:i + size]
+        try:
+            df = yf.download(chunk, auto_adjust=True, group_by="ticker", threads=True, progress=False, **kw)
+        except Exception as e:
+            print("  batch failed:", e)
+            continue
+        if df is None or df.empty:
+            continue
+        top = set(df.columns.get_level_values(0))
+        for n in chunk:
+            if n in top:
+                d = df[n].dropna(subset=["Close"])
+                if len(d):
+                    frames[n] = d[["Open", "High", "Low", "Close", "Volume"]]
+    return frames
+
+
+def download(tickers, size=50, period="2y"):
+    """Daily bars per coin (complete days only). Tries each coin's Yahoo names and keeps the one with the most dollars
+    traded over the last 30 days (a coin that only shares the symbol trades far less), and remembers it in YF."""
+    import time
+    names = {n: t for t in tickers for n in yahoo_names(t)}
+    print(f"  downloading {len(tickers)} coins ({len(names)} Yahoo names)", flush=True)
+    raw = yf_raw(list(names), size=size, period=period, interval="1d")
+    time.sleep(1)
+    best = {}
+    for n, d in raw.items():
+        t = names[n]
+        d = complete(d)
+        if len(d) < 210 or (pd.Timestamp.now() - d.index[-1]).days > 4:      # too short, or no longer trading
+            continue
+        dv = float(d.Volume.iloc[-30:].median())
+        if t not in best or dv > best[t][0]:
+            best[t] = (dv, n, d)
+    for t, (_, n, d) in best.items():
+        YF[t] = n
+    return {t: d for t, (_, n, d) in best.items()}
+
+
+def download_with_retry(tickers):
+    import time
+    frames = download(tickers)
+    missing = [t for t in tickers if t not in frames]
+    if len(missing) > 10:                 # likely rate-limited; wait and retry in smaller batches
+        print(f"  retrying {len(missing)} missing coins in 60s...")
+        time.sleep(60)
+        frames.update(download(missing, size=10))
+    return frames
+
+
+def demo_frames(n=80, days=600):
+    rng = np.random.default_rng(7)
+    idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=days)
+    frames = {}
+    for i in range(n):
+        drift = rng.normal(0.0004, 0.0004)
+        r = rng.normal(drift, 0.017, days)
+        c = 50 * np.exp(np.cumsum(r)) * rng.uniform(0.6, 4)
+        o = np.concatenate([[c[0]], c[:-1]]) * (1 + rng.normal(0, 0.004, days))
+        hi = np.maximum(o, c) * (1 + rng.uniform(0, 0.012, days)); lo = np.minimum(o, c) * (1 - rng.uniform(0, 0.012, days))
+        v = rng.uniform(1.5e6, 9e6, days) * (1 + 0.5 * (rng.random(days) > 0.93))
+        frames[f"DEMO{i:02d}"] = pd.DataFrame({"Open": o, "High": hi, "Low": lo, "Close": c, "Volume": v}, index=idx)
+    return frames
+
+# ------------------------------------------------------------ category charts
+# There are no sector ETFs for coins, so each category's chart is an equal-weight index of its coins (100 at the start
+# of the 2 years of prices), and the market's chart is Bitcoin, the benchmark.
+IDX = {"Payments": "PAY", "Layer 1": "L1", "Layer 2": "L2", "DeFi": "DEFI", "Memes": "MEME", "AI & data": "AI",
+       "Infrastructure": "INFRA", "Exchange tokens": "EXCH", "Gaming": "GAME"}
+SECTOR_ETF = {MARKET: BENCH, **{c: f"{k}-IDX" for c, k in IDX.items()}}
+CHART_BARS = {"D": 182, "W": 104, "M": 120}   # ~6 months daily, 2 years weekly, 10 years monthly (BTC; the indexes have 2 years)
+
+
+def cat_index(frames, members):
+    """An equal-weight index of these coins: each day moves by the average of their moves from the day before's close
+    (the open, high and low the same way), so a coin that joins later just starts counting. Volume = dollars traded."""
+    C = pd.DataFrame({t: frames[t]["Close"] for t in members}).sort_index()
+    pc = C.shift()
+    rel = {k: pd.DataFrame({t: frames[t][k] for t in members}).reindex(C.index) / pc for k in ("Open", "High", "Low", "Close")}
+    ok = rel["Close"].notna().sum(axis=1) > 0
+    m = {k: v.mean(axis=1)[ok] for k, v in rel.items()}
+    lvl = 100 * m["Close"].cumprod()
+    prev = lvl.shift().fillna(100.0)
+    vol = pd.DataFrame({t: frames[t]["Volume"] for t in members}).reindex(C.index).sum(axis=1)[ok]
+    return pd.DataFrame({"Open": prev * m["Open"], "High": prev * m["High"], "Low": prev * m["Low"], "Close": lvl, "Volume": vol})
+
+
+def download_etfs(frames=None, sectors=None):
+    """The chart frames: Bitcoin's (10 years) and each category's index (from the scan's 2 years of prices)."""
+    out = {}
+    btc = download([BENCH], period="10y")
+    if BENCH in btc:
+        out[BENCH] = btc[BENCH]
+    for cat, sym in SECTOR_ETF.items():
+        if cat == MARKET or not frames:
+            continue
+        members = [t for t in frames if (sectors or {}).get(t) == cat]
+        if len(members) >= 3:
+            out[sym] = cat_index(frames, members)
+    return out
+
+
+def chart_data(etf_frames):
+    """Daily / weekly / monthly OHLC + EMA10/20/50 per sector ETF, as compact lists for the page."""
+    out = {}
+    for name, etf in SECTOR_ETF.items():
+        d = etf_frames.get(etf)
+        if d is None or len(d) < 60:
+            continue
+        tfs = {}
+        for tf in ("D", "W", "M"):
+            if tf == "D":
+                b = d
+            else:
+                g = d.groupby(d.index.to_period(tf))
+                b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                                  "Close": g.Close.last(), "Volume": g.Volume.sum()})
+                b.index = [g_.index[0] for _, g_ in g]          # first day of the week / month
+            e = {n: ema(b.Close, n) for n in (10, 20, 50)}
+            b = b.iloc[-CHART_BARS[tf]:]
+            day = [i.strftime("%Y-%m-%d") for i in b.index]
+            r2 = lambda s: [rp(x) for x in s]
+            tfs[tf] = dict(t=day, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(b.Close),
+                           v=[int(x) for x in b.Volume], **{f"e{n}": r2(e[n].iloc[-len(b):]) for n in e})
+        out[name] = dict(etf=etf, **tfs)
+    return out
+
+
+
+# ------------------------------------------------------- per-coin trend charts
+STOCK_BARS = {"4H": 300, "D": 5 * YEAR, "W": 156, "M": 180}  # ~7 weeks, 5 years (opens on the last year), 3 years, 15 years
+
+
+def yf_batch(tickers, size=50, **kw):
+    """{coin: bars} through the coin's Yahoo name (see yahoo_names; the first name that answers wins)."""
+    frames = {}
+    left = list(tickers)
+    for k in range(2):
+        names = {}
+        for t in left:
+            ns = yahoo_names(t)
+            if k < len(ns):
+                names[ns[k]] = t
+        if not names:
+            break
+        for n, d in yf_raw(list(names), size=size, **kw).items():
+            frames.setdefault(names[n], d)
+        left = [t for t in left if t not in frames]
+    return frames
+
+
+def to_4h(h):
+    """Hourly bars -> 4-hour bars from midnight UTC (coins trade around the clock)."""
+    if h.index.tz is not None:
+        h = h.tz_convert("UTC").tz_localize(None)
+    key = h.index.floor("4h")
+    g = h.groupby(key)
+    b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                      "Close": g.Close.last(), "Volume": g.Volume.sum()})
+    b.index = [grp.index[0] for _, grp in g]
+    return b
+
+
+def to_period(d, rule):
+    g = d.groupby(d.index.to_period(rule))
+    b = pd.DataFrame({"Open": g.Open.first(), "High": g.High.max(), "Low": g.Low.min(),
+                      "Close": g.Close.last(), "Volume": g.Volume.sum()})
+    b.index = [grp.index[0] for _, grp in g]
+    return b
+
+
+def trend_series(b, n_show, intraday=False, blocks=False):
+    """OHLC + EMA10/20/50 + 150 MA + trend state (1 up, -1 down, 0 neither) for the last n_show bars.
+    Uptrend = EMA10 > EMA20, close > EMA50 and close > 150 MA; downtrend is the mirror image."""
+    c = b.Close
+    e10, e20, e50 = ema(c, 10), ema(c, 20), ema(c, 50)
+    m150 = ema(c, 150) if CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean()
+    up = (e10 > e20) & (c > e50) & (c > m150)
+    dn = (e10 < e20) & (c < e50) & (c < m150)
+    tr = up.astype(int) - dn.astype(int)
+    k = slice(-n_show, None)
+    r2 = lambda s: [None if x != x else rp(x) for x in s.iloc[k]]
+    t = ([int(i.timestamp()) for i in b.index[k]] if intraday else [i.strftime("%Y-%m-%d") for i in b.index[k]])
+    return dict(t=t, o=r2(b.Open), h=r2(b.High), l=r2(b.Low), c=r2(c), v=[int(x) for x in b.Volume.iloc[k]],
+                e10=r2(e10), e20=r2(e20), e50=r2(e50), m150=r2(m150), tr=[int(x) for x in tr.iloc[k]],
+                **({"ob": order_blocks(b, n_show, t)} if blocks else {}))
+
+
+# ------------------------------------------------------------ order blocks
+def _ahead(a, k):
+    """a[i + k] lined up with bar i (NaN past the end)."""
+    out = np.full(len(a), np.nan)
+    if k < len(a):
+        out[:len(a) - k] = a[k:]
+    return out
+
+
+def _lux_pivots(h, l, v, p=5):
+    """LuxAlgo-style candidates: highest volume of 2p+1 bars, at a swing low (bullish) or high (bearish)."""
+    n = len(v)
+    pad = np.concatenate([np.full(p, -np.inf), v, np.full(p, -np.inf)])
+    piv = (v >= np.lib.stride_tricks.sliding_window_view(pad, 2 * p + 1).max(axis=1)) & (v > 0)
+    piv[max(0, n - p):] = False
+    hn = np.fmax.reduce(np.vstack([_ahead(h, k) for k in range(1, p + 1)]), axis=0)
+    ln = np.fmin.reduce(np.vstack([_ahead(l, k) for k in range(1, p + 1)]), axis=0)
+    state, st = np.zeros(n, int), 0
+    for i in range(n):
+        st = 0 if h[i] > hn[i] else 1 if l[i] < ln[i] else st
+        state[i] = st
+    return piv & (state == 1), piv & (state == 0)
+
+
+def _bull_blocks(o, h, l, c, v, a, avgv, kind, lux):
+    """Bullish order blocks as (candle, bar where it is confirmed): the last down candle before a
+    move that closes 1 ATR (2 for "strong") above its high within 3 bars, plus the extra test of
+    each type. Bearish blocks come from the same code run on mirrored prices."""
+    if kind == "lux":
+        i = np.flatnonzero(lux)
+        return i, i + 5
+    n = len(c)
+    best = np.fmax.accumulate(np.vstack([_ahead(c, k) for k in (1, 2, 3)]), axis=0)   # best close 1, 2, 3 bars on
+    cond = best >= h + (2.0 if kind == "strong" else 1.0) * a
+    if kind in ("bos", "fvg"):                      # also closes above the last confirmed swing high
+        p = 3
+        pad = np.concatenate([np.full(p, -np.inf), h, np.full(p, -np.inf)])
+        piv = np.flatnonzero(h >= np.lib.stride_tricks.sliding_window_view(pad, 2 * p + 1).max(axis=1))
+        piv = piv[piv + p < n]
+        sh = np.full(n, np.nan)
+        sh[piv + p] = h[piv]
+        cond &= best > pd.Series(sh).ffill().to_numpy()
+    if kind == "fvg":                               # and leaves a gap between candles 1 and 3 of the move
+        g1 = _ahead(l, 2) > h
+        cond &= np.vstack([np.zeros(n, bool), g1, g1 | (_ahead(l, 3) > _ahead(h, 1))])
+    if kind == "volume":                            # on 1.5x the 20-day average volume
+        cond &= np.fmax.accumulate(np.vstack([_ahead(v, k) for k in (1, 2, 3)]), axis=0) >= 1.5 * avgv
+    cond &= (c < o) & (_ahead(c, 1) > _ahead(o, 1))
+    first = np.where(cond.any(axis=0), cond.argmax(axis=0), -1)
+    i = np.flatnonzero(first >= 0)
+    return i, i + first[i] + 1
+
+
+def order_blocks(b, n_show, times):
+    """Zones that start inside the shown window: [start, end, top, bottom, side, fresh].
+    side 1 = bullish (support), -1 = bearish (resistance). A zone ends where price first comes
+    back into it; fresh = 1 if price hasn't come back yet (drawn to the right edge)."""
+    kind, entry = CFG["OB_TYPE"], CFG["OB_ENTRY"]
+    O, H, L, C, V = (b[k].to_numpy(float) for k in ("Open", "High", "Low", "Close", "Volume"))
+    n = len(C)
+    pc = np.concatenate([[np.nan], C[:-1]])
+    A = pd.Series(np.fmax(H - L, np.fmax(np.abs(H - pc), np.abs(L - pc)))).ewm(alpha=1 / 14, adjust=False).mean().to_numpy()
+    avgv = pd.Series(V).rolling(20).mean().to_numpy()
+    lux = _lux_pivots(H, L, V) if kind == "lux" else (None, None)
+    first = max(0, n - n_show)
+    zones = []
+    for sgn, lx in ((1, lux[0]), (-1, lux[1])):
+        o, h, l, c = (O, H, L, C) if sgn > 0 else (-O, -L, -H, -C)
+        for i, a in zip(*_bull_blocks(o, h, l, c, V, A, avgv, kind, lx)):
+            if i < first or a >= n:
+                continue
+            p = h[i] if entry == "top" else max(o[i], c[i]) if entry == "body" else (h[i] + l[i]) / 2
+            if not c[a] > p:
+                continue
+            hit = np.flatnonzero(l[a + 1:] <= p)
+            end = a + 1 + hit[0] if hit.size else n - 1
+            top, bot = (p, l[i]) if sgn > 0 else (-l[i], -p)
+            zones.append([times[i - first], times[end - first], rp(top), rp(bot),
+                          sgn, int(not hit.size)])
+    return zones
+
+
+def write_stock_charts(tickers, out, demo=False, known=None, extra=None):
+    """One JSON per coin (4H / D / W / M), loaded by the chart pop-up on click. extra: {name: daily bars} drawn from
+    bars already in hand (the category indexes), with no 4-hour chart."""
+    extra = extra or {}
+    tickers = [t for t in tickers if t not in extra]
+    if demo:
+        fr = demo_frames(n=len(tickers), days=2600)
+        daily = {t: (known or {}).get(t, d) for t, d in zip(tickers, fr.values())}   # same prices as the demo table
+        monthly = {t: to_period(d, "M") for t, d in daily.items()}
+        hourly = {}
+        for t, d in daily.items():
+            last = d.iloc[-200:]
+            idx = [ts + pd.Timedelta(hours=9.5 + i) for ts in last.index for i in range(7)]
+            px = np.repeat(last.Close.values, 7) * (1 + np.random.default_rng(1).normal(0, .003, len(idx)))
+            op = np.concatenate([[px[0]], px[:-1]])
+            hourly[t] = pd.DataFrame({"Open": op, "High": np.maximum(op, px) * 1.002, "Low": np.minimum(op, px) * .998,
+                                      "Close": px, "Volume": np.repeat(last.Volume.values / 7, 7)}, index=idx)
+    else:
+        def fetch(**kw):                    # one retry in small batches for anything Yahoo dropped
+            f = yf_batch(tickers, **kw)
+            miss = [t for t in tickers if t not in f]
+            if miss:
+                f.update(yf_batch(miss, size=10, **kw))
+            return f
+        daily = {t: complete(d) for t, d in fetch(period="10y", interval="1d").items()}
+        monthly = fetch(period="max", interval="1mo")
+        # explicit dates: with period= yfinance starts at the listing date for some new coins and Yahoo rejects it
+        hourly = fetch(start=(dt.date.today() - dt.timedelta(days=700)).isoformat(), interval="60m")
+    for t, d in extra.items():
+        daily[t], monthly[t] = d, to_period(d, "M")
+        tickers.append(t)
+    dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for t in tickers:
+        d = daily.get(t)
+        if d is None or len(d) < 60:
+            continue
+        rec = {"D": trend_series(d, STOCK_BARS["D"], blocks=True), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
+        if t in monthly and len(monthly[t]) > 20:
+            rec["M"] = trend_series(monthly[t], STOCK_BARS["M"])
+        if t in hourly and len(hourly[t]) > 60:
+            rec["4H"] = trend_series(to_4h(hourly[t]), STOCK_BARS["4H"], intraday=True)
+        (dd / f"{t}.json").write_text(json.dumps(rec, separators=(",", ":")), encoding="utf-8")
+        n += 1
+    return n
+
+# --------------------------------------------------------------- indicators
+def ema(s, n): return s.ewm(span=n, adjust=False).mean()
+
+def rsi(c, n=14):
+    d = c.diff()
+    up = d.clip(lower=0).ewm(alpha=1 / n, adjust=False).mean()
+    dn = (-d.clip(upper=0)).ewm(alpha=1 / n, adjust=False).mean()
+    return 100 - 100 / (1 + up / dn.replace(0, np.nan))
+
+def atr(d, n=14):
+    pc = d["Close"].shift()
+    tr = pd.concat([d["High"] - d["Low"], (d["High"] - pc).abs(), (d["Low"] - pc).abs()], axis=1).max(axis=1)
+    return tr.ewm(alpha=1 / n, adjust=False).mean()
+
+def cci(d, n=None):
+    """Commodity Channel Index: how far the typical price ((high + low + close) / 3) is from its n-day average, in
+    units of 0.015 x its mean deviation, so most days land between -100 and +100."""
+    n = n or CFG["CCI_N"]
+    tp = (d["High"] + d["Low"] + d["Close"]) / 3
+    dev = tp.rolling(n).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+    return (tp - tp.rolling(n).mean()) / (0.015 * dev)
+
+def lvl(v, lim):
+    """A reading next to its line: whole, or with one decimal when it would round to the line (70.4 -> "70.4")."""
+    return f"{v:.1f}" if round(v) == lim else f"{v:.0f}"
+
+def hot(r, c):
+    """Why a coin is overbought by the user's rule (RSI over 70, CCI over 100), as short phrases; empty when it isn't."""
+    out = []
+    if r is not None and r == r and r > CFG["OB_RSI"]:
+        out.append(f"RSI {lvl(r, CFG['OB_RSI'])} is over {CFG['OB_RSI']}")
+    if c is not None and c == c and c > CFG["OB_CCI"]:
+        out.append(f"CCI {lvl(c, CFG['OB_CCI'])} is over {CFG['OB_CCI']}")
+    return out
+
+def breadth_hot(sector, br):
+    """Overbought breadth, over the 75 line: the market's (sector=None) or one sector's. br: {group: Rising %}, the
+    breadth view's numbers. Returns the reason, or "" when it isn't."""
+    v, lim = br.get(sector or MARKET), CFG["OB_BREADTH"]
+    if v is None or v != v or v <= lim:
+        return ""
+    name = "market" if not sector else SHORT_SECTOR.get(sector, sector)
+    return f"{name} breadth {lvl(v, lim)}% is over {lim}"
+
+def overbought(frames, sectors, br):
+    """Tonight's overbought coins by the user's rule: {ticker: (own, sec)}, where own lists the reasons from its RSI /
+    CCI and sec is its category's breadth over the 75 line ("" when it isn't). Coins with neither are left out."""
+    out = {}
+    for t, d in frames.items():
+        if len(d) <= 3 * CFG["CCI_N"]:
+            continue
+        own = hot(float(rsi(d["Close"]).iloc[-1]), float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]))
+        sec = breadth_hot(sectors.get(t), br) if sectors.get(t) else ""
+        if own or sec:
+            out[t] = (own, sec)
+    return out
+
+
+def analyze(t, d):
+    c = d["Close"]
+    e10, e20, e50 = ema(c, 10), ema(c, 20), ema(c, 50)
+    lm = (lambda s, n: ema(s, n)) if CFG["LONG_MA_TYPE"] == "EMA" else (lambda s, n: s.rolling(n).mean())
+    m150, m200 = lm(c, 150), lm(c, 200)
+    r, a = rsi(c), atr(d)
+    px = c.iloc[-1]
+    avgv = d["Volume"].rolling(20).mean().iloc[-1]
+    if px < CFG["MIN_PRICE"] or avgv < CFG["MIN_AVG_VOL"] or np.isnan(m200.iloc[-1]):
+        return None
+    relv = d["Volume"].iloc[-1] / avgv
+    hi252 = c.rolling(YEAR, min_periods=200).max().iloc[-1]          # the 52-week high (365 days for a coin)
+    prior20hi = c.shift().rolling(20).max().iloc[-1]
+    above = (e50 > m150)
+    n = CFG["CROSS_DAYS"]
+    crossed = bool(above.iloc[-1] and (~above.iloc[-n - 1:]).any())
+    days_since_cross = None
+    if above.iloc[-1]:
+        flips = (~above)[::-1].values
+        days_since_cross = int(np.argmax(flips)) if flips.any() else 999
+    atr_pct = a.iloc[-1] / px * 100
+    ext = (px - e20.iloc[-1]) / a.iloc[-1]           # extension above 20 EMA in ATRs
+
+    p_e50 = px > e50.iloc[-1]; x1020 = e10.iloc[-1] > e20.iloc[-1]; x2050 = e20.iloc[-1] > e50.iloc[-1]
+    p150 = px > m150.iloc[-1]; p200 = px > m200.iloc[-1]; x50150 = e50.iloc[-1] > m150.iloc[-1]
+    core = bool(p_e50 and x1020 and p150)             # your uptrend rule (same as the chart shading)
+
+    trend = (20 * p_e50 + 20 * x1020 + 10 * x2050 + 10 * p150 + 10 * p200 + 5 * x50150 + 5 * crossed)
+
+    # ---- momentum breakout
+    setup, pts = None, 0
+    if core and 55 <= r.iloc[-1] <= 80 and ext <= 3.0:
+        near_hi = px >= 0.97 * hi252
+        brk = px > prior20hi
+        if brk or near_hi:
+            setup = "Momentum"
+            pts = 12 * brk + 6 * near_hi + (8 if relv >= 1.5 else 4 if relv >= 1.2 else 0) \
+                + (5 if r.iloc[-1] <= 75 else 0) + (5 if ext <= 2 else 0)
+    # ---- oversold pullback inside an uptrend (10>20 may dip, so not required)
+    if setup is None and p_e50 and x2050 and (p150 or x50150):
+        dist20 = (px - e20.iloc[-1]) / e20.iloc[-1]
+        dist50 = (px - e50.iloc[-1]) / e50.iloc[-1]
+        recent_hi = c.iloc[-15:].max()
+        depth = (recent_hi - px) / recent_hi * 100      # % off the 15-day high
+        if r.iloc[-1] <= 50 and dist20 <= 0.02 and depth >= 3:
+            setup = "Pullback"
+            pts = (10 if r.iloc[-1] <= 40 else 6 if r.iloc[-1] <= 45 else 3) \
+                + (10 if dist50 <= 0.02 else 6 if dist20 <= 0.005 else 3) \
+                + (5 if relv < 0.9 else 0) + (5 if depth <= 10 else 0)
+    score = trend * 0.7 + min(pts, 30) if setup else trend * 0.7
+
+    return dict(
+        ticker=t, setup=setup, score=round(score, 1), close=px,
+        open=d["Open"].iloc[-1], chg1d=(px / c.iloc[-2] - 1) * 100,
+        chg5d=(px / c.iloc[-6] - 1) * 100, chg1m=(px / c.iloc[-MONTH - 1] - 1) * 100, rsi=r.iloc[-1],
+        dvol=float(avgv),
+        cci=float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), atr_pct=atr_pct, relvol=relv,
+        from_hi=(px / hi252 - 1) * 100,
+        vs10=(px / e10.iloc[-1] - 1) * 100, vs20=(px / e20.iloc[-1] - 1) * 100, vs50=(px / e50.iloc[-1] - 1) * 100,
+        p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core,
+        cross=crossed, days_since_cross=days_since_cross, brk20=bool(px > prior20hi),
+        stack=bool(e10.iloc[-1] > e20.iloc[-1] > e50.iloc[-1] > m150.iloc[-1] > m200.iloc[-1]),
+    )
+
+# ------------------------------------------------------------------ breadth
+def build_breadth(frames):
+    close = pd.DataFrame({t: d["Close"] for t, d in frames.items()}).sort_index()
+    vol = pd.DataFrame({t: d["Volume"] for t, d in frames.items()}).reindex(close.index)
+    out = {}
+    for n in (20, 50, 200):
+        sma = close.rolling(n).mean()
+        out[f"pct{n}"] = (close > sma).where(sma.notna()).mean(axis=1) * 100
+    chg = close.diff()
+    adv, dec = (chg > 0).sum(axis=1), (chg < 0).sum(axis=1)
+    out["adv"], out["dec"], out["ad_line"] = adv, dec, (adv - dec).cumsum()
+    hi, lo = close.rolling(YEAR, min_periods=200).max(), close.rolling(YEAR, min_periods=200).min()
+    out["nh"] = ((close >= hi) & hi.notna()).sum(axis=1)
+    out["nl"] = ((close <= lo) & lo.notna()).sum(axis=1)
+    out["udvol"] = vol.where(chg > 0).sum(axis=1) / vol.where(chg < 0).sum(axis=1).replace(0, np.nan)
+    b = pd.DataFrame(out).iloc[-60:].copy()
+    b["ad_line"] -= b["ad_line"].iloc[0]
+    return b
+
+
+def sector_breadth(frames, df, sectors):
+    close = pd.DataFrame({t: d["Close"] for t, d in frames.items()}).sort_index()
+    chg = close.diff().iloc[-1]
+    above = {n: (close > close.rolling(n).mean()) for n in (20, 50, 200)}
+    hi = close.rolling(YEAR, min_periods=200).max().iloc[-1]
+    lo = close.rolling(YEAR, min_periods=200).min().iloc[-1]
+    last = close.iloc[-1]
+    sec = pd.Series({t: sectors.get(t) or "Other" for t in close.columns})
+    rows = []
+    for name, tks in sec.groupby(sec).groups.items():
+        tks = list(tks)
+        liq = df[df.sector == name]
+        r = dict(sector=name, stocks=len(tks), liquid=len(liq),
+                 uptrend=int(liq.core.sum()),
+                 momentum=int((liq.setup == "Momentum").sum()), pullback=int((liq.setup == "Pullback").sum()),
+                 adv=int((chg[tks] > 0).sum()), dec=int((chg[tks] < 0).sum()),
+                 nh=int((last[tks] >= hi[tks]).sum()), nl=int((last[tks] <= lo[tks]).sum()))
+        for n, a in above.items():
+            r[f"pct{n}"] = a[tks].iloc[-1].mean() * 100
+            r[f"pct{n}_5d"] = a[tks].iloc[-6].mean() * 100
+        r["up_pct"] = r["uptrend"] / r["liquid"] * 100 if r["liquid"] else 0
+        rows.append(r)
+    return pd.DataFrame(rows).sort_values("up_pct", ascending=False).reset_index(drop=True)
+
+
+def regime(b):
+    x = b.iloc[-1]
+    votes = [x.pct20 > 50, x.pct50 > 50, x.pct200 > 50, x.nh > x.nl, x.udvol > 1, x.adv > x.dec]
+    s = sum(bool(v) for v in votes)
+    return ("Strong / risk-on", "good") if s >= 5 else ("Mixed", "mid") if s >= 3 else ("Weak / risk-off", "bad")
+
+
+# Breadth over time for the whole crypto market and each category.
+# Rising = the share of coins with the 10 EMA above the 20 (the fast half of the uptrend rule); uptrend = the share
+# passing the full rule; an upswing = Rising above its own 10-day EMA (the same test as the OVTLYR section's breadth).
+def breadth_history(frames, sectors, members):
+    tks = [t for t in frames if t in members]
+    per = lambda f: pd.DataFrame({t: f(frames[t]["Close"]) for t in tks}).sort_index()   # each on its own dates
+    C = per(lambda c: c)
+    e10, e20, e50 = (per(lambda c, n=n: ema(c, n)) for n in (10, 20, 50))
+    m150 = per(lambda c: ema(c, 150) if CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean())
+    rise = (e10 > e20).astype(float).where(C.notna())
+    up = ((e10 > e20) & (C > e50) & (C > m150)).astype(float).where(C.notna() & m150.notna())
+    groups = {MARKET: tks}
+    for t in tks:
+        groups.setdefault(sectors.get(t) or "Other", []).append(t)
+    out = {}
+    for name, cols in groups.items():
+        if name not in SECTOR_ETF or len(cols) < 5:
+            continue
+        r = rise[cols].mean(axis=1) * 100
+        b = pd.DataFrame(dict(rise=r, avg=r.ewm(span=10, adjust=False).mean(), a5=r.ewm(span=5, adjust=False).mean(),
+                              up=up[cols].mean(axis=1) * 100))
+        r1 = b.rise.round(1)                         # the numbers the page shows; a tie keeps the day before's state
+        above = lambda a1: pd.Series(np.where(r1 > a1, 1.0, np.where(r1 < a1, 0.0, np.nan)), index=b.index).ffill().fillna(0.0)
+        b["on"], b["on5"] = above(b.avg.round(1)), above(b.a5.round(1))     # Rising above its 10-day / 5-day average
+        b.index = pd.DatetimeIndex([pd.Timestamp(i.strftime("%Y-%m-%d")) for i in b.index])
+        out[name] = b.iloc[30:]                      # skip the EMA warm-up at the start of the 2 years
+    return out
+
+
+def bzone(v):
+    """The user's breadth lines: 2 = overbought (over 75), -1 = oversold (under 30), 0 = in between. Over 75 there is no
+    upswing, only overbought (the user's rule)."""
+    return 2 if v > CFG["OB_BREADTH"] else -1 if v < CFG["OS_BREADTH"] else 0
+
+
+def swing_state(b):
+    """Tonight's state for one group: Rising, its 10-day average, Uptrend, whether it's an upswing (Rising above the
+    average), the day that state began and how many trading days it has lasted; z = its zone (bzone) and zsince the day
+    it entered it."""
+    on = b.on > 0
+    k = int(np.flatnonzero(on.ne(on.shift()).to_numpy())[-1])
+    z = b.rise.round(1).map(bzone)
+    kz = int(np.flatnonzero(z.ne(z.shift()).to_numpy())[-1])
+    x = b.iloc[-1]
+    return dict(rise=round(float(x.rise), 1), avg=round(float(x.avg), 1), up=None if x.up != x.up else round(float(x.up), 1),
+                on=bool(on.iloc[-1]), since=b.index[k].date().isoformat(), days=len(b) - k, z=int(z.iloc[-1]),
+                zsince=b.index[kz].date().isoformat())
+
+
+def chart_breadth(charts, bh):
+    """Adds the breadth strip to each sector chart, lined up on the chart's own bars: daily as is, weekly from each
+    week's last day. The monthly charts go back 10 years, past the 2 years of stock prices, so they have none."""
+    for name, c in charts.items():
+        b = bh.get(name)
+        if b is None:
+            continue
+        wk = b.groupby(b.index.to_period("W")).last()
+        for tf in ("D", "W"):
+            s = c.get(tf)
+            if not s:
+                continue
+            days = pd.DatetimeIndex(pd.to_datetime(s["t"]))
+            src = b.reindex(days) if tf == "D" else wk.reindex(days.to_period("W"))
+            for key, col in (("br", "rise"), ("ba", "avg"), ("bu", "up")):
+                s[key] = [None if v != v else round(float(v), 1) for v in src[col]]
+            s["bs"] = [None if v != v else int(v) for v in src["on"]]          # 1 = upswing, 0 = fading
+        c["sw"] = swing_state(b)
+
+# --------------------------------------------------------------- pick lists
+# Signals for the three lists at the top of the page (New uptrends, Breakout watch, AI picks).
+# The stock version's research/picks_backtest.py chose the rules on 12 years of S&P 500 data; they were not tested on coins.
+def wide(frames, key, idx=None):
+    w = pd.DataFrame({t: d[key] for t, d in frames.items()})
+    return (w.reindex(idx) if idx is not None else w.sort_index()).astype(float)
+
+
+def days_since(mask):
+    """Trading days since the mask was last True (NaN if never)."""
+    i = np.arange(len(mask), dtype=float)[:, None]
+    last = pd.DataFrame(np.where(mask.to_numpy(bool), i, np.nan)).ffill().to_numpy()
+    return pd.DataFrame(i - last, index=mask.index, columns=mask.columns)
+
+
+def group_mean(X, ok, labels, min_n=3):
+    """Average of X over the liquid stocks in each group (sector, industry), given back per stock."""
+    lab = pd.Series(labels, dtype=object).reindex(X.columns).to_numpy()
+    g = X.where(ok).T.groupby(lab)
+    m = g.mean().T.where(g.count().T >= min_n)
+    out = m.reindex(columns=lab)
+    out.columns = X.columns
+    return out
+
+
+def zs(X, ok):
+    """Cross-sectional z-score among the liquid stocks each day, capped at +-3; missing = 0 (neutral)."""
+    x = X.where(ok)
+    return x.sub(x.mean(axis=1), axis=0).div(x.std(axis=1), axis=0).clip(-3, 3).fillna(0).where(ok)
+
+
+def pick_features(P, sector=None, sub=None):
+    """Everything the lists use, as dates x tickers tables. P: wide Open/High/Low/Close/Volume tables;
+    sector / sub: ticker -> GICS sector / sub-industry (for industry strength)."""
+    O, H, L, C, V = (P[k] for k in ("Open", "High", "Low", "Close", "Volume"))
+    pc = C.shift()
+    ret = C / pc - 1
+    e10, e20, e50 = (C.ewm(span=n, adjust=False).mean() for n in (10, 20, 50))
+    m50, m150, m200 = (C.rolling(n).mean() for n in (50, 150, 200))
+    tr = np.fmax(H - L, np.fmax((H - pc).abs(), (L - pc).abs()))
+    atr_ = tr.ewm(alpha=1 / 14, adjust=False).mean()
+    av20 = V.rolling(20).mean()
+    up = (e10 > e20) & (C > e50) & (C > m150)                      # your uptrend rule
+    F = dict(close=C, up=up, e50=e50, atr=atr_,
+             liquid=(C >= CFG["MIN_PRICE"]) & (av20 >= CFG["MIN_AVG_VOL"]) & m200.notna())
+    F["new_up"] = up & ~up.shift(fill_value=False)                  # turned into an uptrend today
+    F["days_out"] = days_since(up).shift()                          # days it was out of an uptrend before that
+    r = lambda n: C / C.shift(n) - 1
+    lr = np.log(C).diff()
+    # coins trade every day, so 3 / 6 / 9 / 12 months are 91 / 182 / 273 / 365 bars (252 trading days for a stock)
+    F["mom"] = C.shift(MONTH) / C.shift(YEAR) - 1                   # 12-month return, skipping the last month
+    F["mom_va"] = F["mom"] / (lr.rolling(YEAR, min_periods=200).std() * np.sqrt(YEAR))
+    F["mom6"] = C.shift(MONTH) / C.shift(HALF) - 1
+    F["rs"] = 0.4 * r(QTR) + 0.2 * r(HALF) + 0.2 * r(Q3) + 0.2 * r(YEAR)   # IBD-style relative strength
+    F["r5"], F["r21"], F["r63"], F["r126"], F["r252"] = r(5), r(MONTH), r(QTR), r(HALF), r(YEAR)
+    F["vol"] = lr.rolling(QTR).std() * np.sqrt(YEAR)
+    F["hi52"] = C / C.rolling(YEAR, min_periods=200).max()
+    F["lo52"] = C / C.rolling(YEAR, min_periods=200).min()
+    share = lambda b: b.astype(float).where(ret.notna()).shift(MONTH).rolling(YEAR - MONTH, min_periods=200).mean()
+    F["smooth"] = np.sign(F["mom"]) * (share(ret > 0) - share(ret < 0))    # steady climbs beat jumpy ones
+    if sector is not None:
+        sec = group_mean(F["r126"], F["liquid"], sector)
+        F["ind"] = (group_mean(F["r126"], F["liquid"], sub) if sub is not None else sec).fillna(sec)
+        F["sec_up"] = group_mean(up.astype(float), F["liquid"], sector)
+    pg = (O / pc - 1 >= 0.04) & (V >= 2.5 * av20.shift()) & (C >= O)   # gap up 4%+ on 2.5x volume that held
+    F["pgap"] = (C > L.where(pg).ffill(limit=39)).astype(float)         # ...in the last 40 days, still above that day's low
+    upv, dnv = V.where(ret > 0, 0).rolling(50).sum(), V.where(ret < 0, 0).rolling(50).sum()
+    F["accum"] = np.log((upv + 1) / (dnv + 1))                          # up-day vs down-day volume, 50 days
+    piv = H.rolling(50).max()                                           # breakout level: the 50-day high
+    F["piv"] = piv
+    F["base_days"] = days_since(H >= piv)                              # days since that high was set
+    F["dist"] = (piv - C) / C                                           # how far below it
+    F["depth"] = (piv - L.rolling(50).min()) / piv
+    F["tight"] = (H.rolling(10).max() - L.rolling(10).min()) / C        # 10-day range
+    F["vcp"] = tr.rolling(10).mean() / tr.rolling(50).mean()           # daily ranges shrinking
+    F["dry"] = V.rolling(10).mean() / V.rolling(50).mean()             # volume drying up
+    F["hl"] = L.rolling(10).min() / L.shift(10).rolling(20).min() - 1   # higher lows
+    F["clv"] = ((C - L) / (H - L).where(H > L)).fillna(0.5).rolling(5).mean()   # closing near the highs
+    bbw = C.rolling(20).std() / C.rolling(20).mean()
+    F["squeeze"] = bbw / bbw.rolling(HALF).min()                        # 1 = tightest Bollinger width in 6 months
+    F["template"] = ((C > m50) & (m50 > m150) & (m150 > m200) & (m200 > m200.shift(MONTH))
+                     & (F["lo52"] >= 1.3) & (F["hi52"] >= 0.75))        # Minervini's trend template
+    F["ext"] = (C - e20) / atr_
+    F["relvol"] = V / av20
+    return F
+
+
+def ai_scores(F, ok):
+    """AI score versions (higher = better), each as (description, dates x tickers score). CFG AI_SCORE picks one.
+    Single signals rank by their percentile among liquid stocks: a capped z-score would tie the strongest stocks."""
+    z = lambda k: zs(F[k], ok)
+    pct = lambda k: F[k].where(ok).rank(axis=1, pct=True)
+    core = z("mom_va") + z("hi52") + z("ind")
+    return {
+        "mom": ("12-month momentum (skip the last month)", pct("mom")),
+        "mom_va": ("Momentum per unit of volatility", pct("mom_va")),
+        "hi52": ("Closeness to the 52-week high", pct("hi52")),
+        "rs": ("IBD-style relative strength", pct("rs")),
+        "core": ("Momentum/vol + 52w high + industry strength", core),
+        "core_smooth": ("Core + steady climb", core + z("smooth")),
+        "core_smooth_gap": ("Core + steady climb + recent power gap", core + z("smooth") + z("pgap")),
+    }
+
+
+def new_up_lists(F, ok, ai):
+    """New uptrend list versions: (description, candidates, ranking or None for all). CFG NEW_UP picks one."""
+    cand = F["new_up"] & ok
+    return {
+        "all": ("Every new uptrend", cand, None),
+        "rs": ("Strongest relative strength first", cand, F["rs"]),
+        "hi52": ("Closest to the 52-week high first", cand, F["hi52"]),
+        "relvol": ("Highest volume on the day it turned", cand, F["relvol"]),
+        "ai": ("Best AI score first", cand, ai),
+        "fresh": ("Out of an uptrend for 20+ days, then relative strength", cand & (F["days_out"] >= 20), F["rs"]),
+        "sector": ("Strongest sector first", cand, F["sec_up"] + 0.001 * zs(F["rs"], ok)),
+    }
+
+
+def breakout_lists(F, ok):
+    """Breakout watch versions: (description, candidates, ranking). CFG BREAKOUT picks one."""
+    z = lambda k: zs(F[k], ok)
+    near = ok & (F["dist"] <= 0.05) & (F["base_days"] >= 5)          # within 5% of a 50-day high set 5+ days ago
+    tight = -z("tight") - z("vcp") - z("dry") - z("dist")
+    return {
+        "all": ("Every stock within 5% of its 50-day high", near, None),
+        "near": ("Closest to the breakout level", near, -F["dist"]),
+        "tight": ("Uptrend + tightest range, shrinking ranges, drying volume, closest", near & F["up"], tight),
+        "tight_rs": ("Same + relative strength", near & F["up"], tight + z("rs")),
+        "template": ("Minervini trend template, strongest RS first", near & F["template"], F["rs"]),
+        "squeeze": ("Uptrend + Bollinger squeeze, strongest RS first", near & F["up"] & (F["squeeze"] <= 1.15), F["rs"]),
+    }
+
+
+def ai_step(held, score, sector, n=10, keep=30, cap=3, allow_new=True, sell=(), skip=()):
+    """One night of the AI picks list. held: the current picks; score: today's AI score for every liquid
+    stock (Series). A pick stays while it ranks in the top `keep` and isn't in `sell`; open slots go to
+    the best-ranked stocks not in `skip` (overbought tonight), at most `cap` per sector. Returns (kept, added, dropped)."""
+    order = score.dropna().sort_values(ascending=False, kind="stable").index[:keep]
+    top = set(order)
+    kept = [t for t in held if t in top and t not in sell]
+    dropped = [t for t in held if t not in kept]
+    grp = lambda t: sector.get(t) if isinstance(sector.get(t), str) and sector.get(t) else t
+    added = []
+    if allow_new:
+        cnt = Counter(grp(t) for t in kept)
+        for t in order:
+            if len(kept) + len(added) >= n:
+                break
+            if t not in kept and t not in dropped and t not in sell and t not in skip and cnt[grp(t)] < cap:
+                added.append(t)
+                cnt[grp(t)] += 1
+    return kept, added, dropped
+
+
+def ai_update(prev, score, sector, close, spy_now, asof, present, sell=(), allow_new=True, skip=()):
+    """Step the saved AI picks list once per trading day. State: {as_of, picks, closed}; each pick keeps
+    the day it was added and that day's close (and SPY's) so the page can show how it has done."""
+    st = prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[])
+    if st.get("as_of") == asof:                       # already stepped for this day (a re-run)
+        return st
+    old = {p["ticker"]: p for p in st["picks"]}
+    gone = [t for t in old if t not in present]       # no prices tonight: hold, don't guess
+    kept, added, dropped = ai_step([t for t in old if t in present], score, sector, n=CFG["AI_N"] - len(gone),
+                                   keep=CFG["AI_KEEP"], cap=CFG["AI_CAP"], allow_new=allow_new, sell=sell, skip=skip)
+    px = lambda t: rp(close[t])
+    spy = rp(spy_now) if spy_now == spy_now and spy_now is not None else None
+    closed = list(st.get("closed", []))
+    for t in dropped:
+        why = (f"closed below its 50-day EMA" if t in sell else f"fell out of the top {CFG['AI_KEEP']}"
+               if t in score.index else "no longer passes the liquidity filter")
+        closed.append(dict(old[t], dropped=asof, out=px(t), spy_out=spy, why=why))
+    picks = [old[t] for t in kept + gone] + [dict(ticker=t, added=asof, price=px(t), spy=spy) for t in added]
+    return dict(as_of=asof, picks=picks, closed=closed)
+
+
+def pick_lists(frames, sectors, subs, spy, prev, demo=False, step=True, ob=None, mkt_hot=""):
+    """The three lists for tonight. Returns (lists for the page, new AI picks state).
+    step=False (a run before the close) shows the saved AI picks without changing them.
+    The user's overbought rule: ob = {ticker: why} for stocks overbought tonight, left off New uptrends and Breakout
+    watch and never added to the AI picks; mkt_hot = why the whole market is overbought (then all three add nothing)."""
+    ob = ob or {}
+    idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
+    P = {k: wide(frames, k, idx) for k in ("Open", "High", "Low", "Close", "Volume")}
+    F = pick_features(P, sectors, subs)
+    ok = F["liquid"]
+    asof = idx[-1].date().isoformat()
+    last = {k: v.iloc[-1] for k, v in F.items()}
+    pr = lambda k: F[k].where(ok).rank(axis=1, pct=True).iloc[-1]       # percentile among liquid stocks today
+    rs, c, c1 = pr("rs"), last["close"], F["close"].iloc[-2]
+
+    v1, v5 = P["Volume"].iloc[-1], P["Volume"].iloc[-5:].sum(min_count=5)    # dollars traded: last day, last 5 days
+
+    def row(t, **kw):
+        return dict(ticker=t, sector=sectors.get(t) or "", close=float(c[t]), chg1d=float(c[t] / c1[t] - 1) * 100,
+                    rs=int(round(float(rs[t]) * 99)) if rs[t] == rs[t] else None,
+                    from_hi=float(last["hi52"][t] - 1) * 100 if last["hi52"][t] == last["hi52"][t] else None,
+                    vol1=float(v1[t]), vol5=float(v5[t]), **kw)
+
+    ranked = lambda score, cand: score.iloc[-1].where(cand.iloc[-1]).dropna().sort_values(ascending=False, kind="stable")
+    A = ai_scores(F, ok)
+    ai = A[CFG["AI_SCORE"]][1]
+
+    desc, cand, rank = new_up_lists(F, ok, ai)[CFG["NEW_UP"]]
+    tks = list(ranked(rank if rank is not None else F["rs"], cand).index)       # the whole list is shown strongest RS first
+    cool = lambda ts: [] if mkt_hot else [t for t in ts if t not in ob]
+    hot_out = lambda ts: [] if mkt_hot else [dict(ticker=t, why=ob[t]) for t in ts if t in ob]
+    nu = dict(desc=desc, total=int((F["new_up"].iloc[-1] & ok.iloc[-1]).sum()), hot=hot_out(tks), rows=[
+        row(t, days_out=None if last["days_out"][t] != last["days_out"][t] else int(last["days_out"][t]),
+            relvol=float(last["relvol"][t])) for t in cool(tks)[:CFG["NEW_UP_N"]]])
+
+    desc, cand, rank = breakout_lists(F, ok)[CFG["BREAKOUT"]]
+    s = ranked(rank, cand)
+    bo = dict(desc=desc, total=int(cand.iloc[-1].sum()), hot=hot_out(s.index[:CFG["BREAKOUT_N"]]), rows=[
+        row(t, piv=float(last["piv"][t]), dist=float(last["dist"][t]) * 100, base_days=int(last["base_days"][t]),
+            tight=float(last["tight"][t]) * 100, dry=float(last["dry"][t])) for t in cool(s.index)[:CFG["BREAKOUT_N"]]])
+
+    score = ai.iloc[-1].dropna()
+    present = set(c.dropna().index)
+    sell = set(c.index[(c < last["e50"]).to_numpy(bool)]) if CFG["AI_TREND_EXIT"] else set()
+    spy_now = float(spy.iloc[-1]) if spy is not None and len(spy) else float("nan")
+    market_ok = True
+    if CFG["AI_MARKET_FILTER"] and spy is not None and len(spy) > 200:
+        market_ok = bool(spy.iloc[-1] > spy.rolling(200).mean().iloc[-1])
+    st = (ai_update(prev, score, sectors, c, spy_now, asof, present, sell, market_ok and not mkt_hot, set(ob)) if step else
+          prev if prev and prev.get("picks") is not None else dict(as_of=None, picks=[], closed=[]))
+    rank_now = score.rank(ascending=False, method="first")
+    ind = pr("ind") if "ind" in F else None
+    ai_rows = []
+    for p in st["picks"]:
+        t = p["ticker"]
+        why = []
+        if t in rank_now.index:
+            ok3, ok12 = last["r63"][t] == last["r63"][t], last["r252"][t] == last["r252"][t]
+            if ok3 or ok12:
+                why.append(" and ".join(([f"{last['r63'][t] * 100:+.0f}% in 3 months"] if ok3 else [])
+                                        + ([f"{last['r252'][t] * 100:+.0f}% in 12"] if ok12 else [])))
+            h = last["hi52"][t]
+            if h == h:
+                why.append("at its 52-week high" if h >= 0.995 else f"{(1 - h) * 100:.0f}% below its 52-week high")
+            if ind is not None and ind[t] == ind[t] and ind[t] >= 0.8:
+                why.append(f"strong industry ({subs.get(t) or sectors.get(t) or 'its group'})")
+        now = float(c[t]) if t in c.index and c[t] == c[t] else None
+        old_pick = p["added"] < asof                         # picked today: nothing to measure yet
+        ai_rows.append(row(t, added=p["added"], price=p["price"], now=now, ob=ob.get(t, ""),
+                           ret=(now / p["price"] - 1) * 100 if now and old_pick else None,
+                           spy_ret=(spy_now / p["spy"] - 1) * 100 if p.get("spy") and spy_now == spy_now and old_pick else None,
+                           rank=int(rank_now[t]) if t in rank_now.index else None, why=why) if t in c.index else
+                       dict(ticker=t, sector=sectors.get(t) or "", added=p["added"], price=p["price"], why=["no prices tonight"]))
+    ai_rows.sort(key=lambda r: r.get("rank") or 999)
+    track = []
+    for p in st["closed"]:
+        track.append(((p["out"] / p["price"] - 1) * 100, (p["spy_out"] / p["spy"] - 1) * 100 if p.get("spy") and p.get("spy_out") else None))
+    for r in ai_rows:
+        if r.get("ret") is not None:
+            track.append((r["ret"], r.get("spy_ret")))
+    ai_list = dict(desc=A[CFG["AI_SCORE"]][0], rows=ai_rows, market_ok=market_ok, as_of=st["as_of"], step=step,
+                   dropped=[p for p in st["closed"] if p["dropped"] == asof], since=min(
+                       [p["added"] for p in st["picks"]] + [p["added"] for p in st["closed"]], default=asof), track=track)
+    return dict(asof=asof, nu=nu, bo=bo, ai=ai_list, mkt_hot=mkt_hot), st
+
+# -------------------------------------------------------------- OVTLYR plan
+# OVTLYR's Plan M, Plan ETF and Plan #SICADFU, from the trading-plan deck the user shared on 2026-10-07, on coins.
+# Plan M picks coins the way it picks stocks; Plan ETF has no 3x crypto funds to buy, so it buys Bitcoin or Ether
+# itself on their own signals; Plan #SICADFU's SGOV is a Treasury fund, not a coin, so spare cash stays cash.
+# Rebuilt from data this screener already has. OVTLYR's fear & greed heatmap and its buy / sell signals
+# are private, so these stand in for them: heatmap = 14-day RSI (0-100, high = greedy); buy signal = the 10 EMA
+# crossing above the 20 EMA, good for 5 trading days as in the deck; sell signal = the 10 EMA under the 20 EMA;
+# breadth ("bull list %") = the share of coins with the 10 EMA above the 20 EMA, against its own 10-day EMA.
+# Left out: OVTLYR channels, the deck's per-stock backtest check, option rolls, the price range and earnings (no options
+# or earnings in crypto), and Health Care (no such category). crypto/paper.py's account D trades it.
+OV = dict(
+    SIGNAL_DAYS=5,             # a coin's buy signal counts for this many days
+    HEAT_MAX=70,               # Bitcoin's and the category's heatmaps must be under this, and rising
+    OB_GAP=0.02,               # stay more than 2% away from any untouched order block
+    PRICE=(0.0, float("inf")), # the deck's $10-$350 range is for options; coins have none, so no range
+    EXCLUDE=(),                # the deck excludes Health Care; there is no such category
+    EARN_DAYS=4,               # coins have no earnings, so this never applies
+    ETF={"BTC": "BTC", "ETH": "ETH"},   # Plan ETF: no 3x crypto funds, so it buys the coin itself on its own signals
+    ZONE_ATR=2.0,              # Plan ETF value zone: from the 20 EMA to 2 ATR above it
+    ETF_OB_AGE=30,             # Plan ETF only minds order blocks at least 30 calendar days old
+    HOT_ATR=3.0,               # Plan ETF exit: a close more than 3 ATR above the 20 EMA
+)
+
+
+def ov_blocks(d):
+    """Order blocks in one daily frame (the chart's definition): bot, top, side (1 bullish, -1 bearish),
+    start / end dates and fresh (price hasn't come back to it yet)."""
+    days = [i.date() for i in d.index]
+    return [dict(bot=z[3], top=z[2], side=z[4], start=z[0], end=z[1], fresh=bool(z[5]))
+            for z in order_blocks(d, len(d), days)]
+
+
+def ob_near(blocks, px, asof, gap=None, min_age=0):
+    """The nearest untouched block (at least min_age days old) within `gap` of the price, or containing it:
+    (distance, block), or None when every block is farther away."""
+    gap = OV["OB_GAP"] if gap is None else gap
+    best = None
+    for b in blocks:
+        if not b["fresh"] or (asof - b["start"]).days < min_age:
+            continue
+        dist = 0.0 if b["bot"] <= px <= b["top"] else b["bot"] / px - 1 if px < b["bot"] else 1 - b["top"] / px
+        if dist <= gap and (best is None or dist < best[0]):
+            best = (dist, b)
+    return best
+
+
+def ob_above(blocks, px):
+    """The bottom of the nearest untouched block above the price, where a rise runs into old sellers."""
+    lv = [b["bot"] for b in blocks if b["fresh"] and b["bot"] > px]
+    return min(lv) if lv else None
+
+
+def ob_hit(blocks, last, min_age=0):
+    """A bearish block that price came back to for the first time on the last bar (`last`, a date)."""
+    for b in blocks:
+        if b["side"] < 0 and not b["fresh"] and b["end"] == last and (last - b["start"]).days >= min_age:
+            return b
+    return None
+
+
+def idx_state(d):
+    """Bitcoin or Ether tonight: close, high, 10 / 20 / 50-day EMAs, RSI today and the day before, CCI, ATR."""
+    c = d["Close"]
+    e = {n: ema(c, n).iloc[-1] for n in (10, 20, 50)}
+    r = rsi(c)
+    return dict(date=d.index[-1].date().isoformat(), close=rp(c.iloc[-1]), high=rp(d["High"].iloc[-1]),
+                e10=rp(e[10]), e20=rp(e[20]), e50=rp(e[50]),
+                rsi=round(float(r.iloc[-1]), 1), rsi_prev=round(float(r.iloc[-2]), 1), atr=rp(atr(d).iloc[-1]),
+                cci=round(float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), 1))
+
+
+def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_own=None):
+    """Tonight's OVTLYR plan: the market and category checks, Plan ETF's checks and sell signals, and the Plan M setups
+    (coins passing every coin and category rule, freshest signal first). frames: the universe's daily bars; spy: the
+    benchmark's (Bitcoin's) daily bars; qqq: {coin: daily bars} for Plan ETF's coins; earn: always None (no earnings);
+    prev: the last saved plan, so the Plan M list shows which coins are new and why any of the last list's coins left.
+    The user's overbought rule on top of the plan: br = tonight's breadth view numbers ({group: Rising %}); the market or
+    a category over the 75 line fails its check; hot_own = {ticker: why} for coins with RSI over 70 or CCI over 100."""
+    br, hot_own = br or {}, hot_own or {}
+    mkt_hot = breadth_hot(None, br)
+    idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
+    C, H, L, V = (wide(frames, k, idx) for k in ("Close", "High", "Low", "Volume"))
+    e10, e20, e50 = (ema(C, n) for n in (10, 20, 50))
+    R = rsi(C)
+    pc = C.shift()
+    A = np.fmax(H - L, np.fmax((H - pc).abs(), (L - pc).abs())).ewm(alpha=1 / 14, adjust=False).mean()
+    bull = (e10 > e20).where(C.notna() & e20.notna())               # the "bull list": 10 EMA above the 20 EMA
+    asof = idx[-1].date()
+
+    def f0(v, *vs):
+        """A value for the page: whole, or with one decimal when it would read the same as one it's compared with."""
+        return f"{v:.1f}" if any(round(v) == round(x) for x in vs) else f"{v:.0f}"
+
+    def breadth(cols):
+        """Tonight's share of these coins on the bull list, and its 10-day EMA."""
+        p_ = bull[cols].mean(axis=1) * 100
+        return float(p_.iloc[-1]), float(p_.ewm(span=10, adjust=False).mean().iloc[-1])
+
+    # market: all four must hold for new Plan M trades
+    s = idx_state(spy)
+    bp, be = breadth(list(C.columns))
+    heat_ok = s["rsi"] < OV["HEAT_MAX"] and s["rsi"] > s["rsi_prev"]
+    checks = [
+        dict(k="heat", ok=heat_ok, text=f"{BENCH} heatmap (RSI) {f0(s['rsi'], s['rsi_prev'], OV['HEAT_MAX'])}, "
+                                        f"{'up' if s['rsi'] > s['rsi_prev'] else 'down'} from {f0(s['rsi_prev'], s['rsi'])} "
+                                        f"(needs under {OV['HEAT_MAX']} and rising)"),
+        dict(k="signal", ok=s["e10"] > s["e20"], text=f"{BENCH} buy signal: 10 EMA {fp(s['e10'])} {'above' if s['e10'] > s['e20'] else 'below'} "
+                                                     f"the 20 EMA {fp(s['e20'])}"),
+        dict(k="trend", ok=s["e10"] > s["e20"] and s["close"] > s["e50"],
+             text=f"{BENCH} 10/20/50 uptrend: close {fp(s['close'])} {'above' if s['close'] > s['e50'] else 'below'} the 50 EMA {fp(s['e50'])}"
+                  + ("" if s["e10"] > s["e20"] else ", 10 EMA under the 20")),
+        dict(k="breadth", ok=bp > be, text=f"Market breadth: {f0(bp, be)}% of coins have the 10 EMA above the 20, "
+                                           f"{'above' if bp > be else 'below'} its 10-day average of {f0(be, bp)}%"),
+    ]
+    hot_check = None
+    if MARKET in br:
+        v, lim = br[MARKET], CFG["OB_BREADTH"]
+        hot_check = dict(k="hot", ok=not mkt_hot, text=f"Your overbought rule: {lvl(v, lim)}% of coins rising, "
+                                                       + (f"over the {lim} line" if mkt_hot else f"not over the {lim} line"))
+        checks.append(hot_check)
+    market = dict(ok=all(c["ok"] for c in checks), checks=checks, spy=s, breadth=dict(pct=round(bp, 1), ema=round(be, 1)))
+
+    # categories: breadth above its 10-day average, average RSI above Bitcoin's, under 70 and rising
+    groups = {}
+    for t in C.columns:
+        groups.setdefault(sectors.get(t) or "Other", []).append(t)
+    secs = {}
+    for name, cols in sorted(groups.items()):
+        if len(cols) < 5:
+            continue
+        p_, e_ = breadth(cols)
+        r_, rv = float(R[cols].iloc[-1].mean()), float(R[cols].iloc[-2].mean())
+        miss = []
+        if name in OV["EXCLUDE"]:
+            miss.append("excluded in the plan")
+        if breadth_hot(name, br):
+            miss.append(f"overbought by your rule: {lvl(br[name], CFG['OB_BREADTH'])}% of its coins rising, over "
+                        f"the {CFG['OB_BREADTH']} line")
+        if p_ <= e_:
+            miss.append(f"breadth {f0(p_, e_)}% not above its 10-day average {f0(e_, p_)}%")
+        if r_ <= s["rsi"]:
+            miss.append(f"RSI {f0(r_, s['rsi'])} not above {BENCH}'s {f0(s['rsi'], r_)}")
+        if r_ >= OV["HEAT_MAX"]:
+            miss.append(f"RSI {f0(r_, OV['HEAT_MAX'])} not under {OV['HEAT_MAX']}")
+        if r_ <= rv:
+            miss.append(f"RSI {f0(r_, rv)} not rising (was {f0(rv, r_)})")
+        secs[name] = dict(ok=not miss, n=len(cols), bull=round(p_, 1), bull_ema=round(e_, 1), rsi=round(r_, 1),
+                          rsi_prev=round(rv, 1), miss=miss)
+
+    # Plan M coins: buy signal in the last 5 days, 10/20/50 uptrend, price over the 10 EMA, RSI rising,
+    # $10M+ traded a day, in a passing category, more than 2% from any order block
+    cross = (e10 > e20) & ~(e10.shift() > e20.shift())
+    age = days_since(cross).iloc[-1]
+    c_ = C.iloc[-1]
+    av = V.rolling(20).mean().iloc[-1]
+    lo, hi = OV["PRICE"]
+    liquid = c_.notna() & (av >= CFG["MIN_AVG_VOL"]) & (c_ >= CFG["MIN_PRICE"])
+    sig = liquid & c_.between(lo, hi) & (age <= OV["SIGNAL_DAYS"] - 1)
+    rules = (sig & (e10.iloc[-1] > e20.iloc[-1]) & (c_ > e50.iloc[-1]) & (c_ > e10.iloc[-1]) & (R.iloc[-1] > R.iloc[-2]))
+    in_sec = [t for t in rules.index[rules.to_numpy(bool)] if secs.get(sectors.get(t) or "Other", {}).get("ok")]
+    cool = [t for t in in_sec if t not in hot_own]                   # the user's overbought rule
+    n_back = lambda n: C.iloc[-1] / C.iloc[-1 - n] - 1 if len(C) > n else np.nan
+    rs = (0.4 * n_back(QTR) + 0.2 * n_back(HALF) + 0.2 * n_back(Q3) + 0.2 * n_back(YEAR)).where(liquid).rank(pct=True)
+    clear, near_n = [], 0
+    for t in cool:
+        blocks = ov_blocks(frames[t])
+        if ob_near(blocks, float(c_[t]), asof):
+            near_n += 1
+            continue
+        clear.append((t, ob_above(blocks, float(c_[t]))))
+    dates = earn([t for t, _ in clear]) if earn and clear else {}
+    entry = asof + dt.timedelta(days=1)                            # the account buys the next day
+    setups, earn_n = [], 0
+    for t, up in clear:
+        e = dates.get(t)
+        if e and (dt.date.fromisoformat(e) - entry).days < OV["EARN_DAYS"]:
+            earn_n += 1
+            continue
+        k = int(age[t])
+        setups.append(dict(ticker=t, sector=sectors.get(t) or "", close=rp(c_[t]),
+                           e10=rp(e10[t].iloc[-1]), e20=rp(e20[t].iloc[-1]), e50=rp(e50[t].iloc[-1]),
+                           rsi=round(float(R[t].iloc[-1]), 1), rsi_prev=round(float(R[t].iloc[-2]), 1),
+                           atr=rp(A[t].iloc[-1]), age=k, cross=idx[-1 - k].date().isoformat(),
+                           ob_up=rp(up) if up else None, earn=e, rs=int(round(rs[t] * 99)) if rs[t] == rs[t] else None,
+                           vol=int(av[t])))
+    setups.sort(key=lambda x: (x["age"], -(x["rs"] or 0)))
+
+    def why_out(t):
+        """The first Plan M rule that a coin from the last list fails tonight, in the funnel's order."""
+        if t not in C.columns or c_[t] != c_[t]:
+            return "no price tonight (Yahoo had no data for it)"
+        px = float(c_[t])
+        if not av[t] >= CFG["MIN_AVG_VOL"]:
+            return f"trading fell under {fusd(CFG['MIN_AVG_VOL'])} a day (20-day average)"
+        if not lo <= px <= hi:
+            return f"price {fp(px)} is outside ${lo:.0f}-${hi:.0f}"
+        x10, x20, x50 = (float(x[t].iloc[-1]) for x in (e10, e20, e50))
+        if x10 <= x20:
+            return "sell signal: the 10 EMA fell under the 20"
+        if age[t] != age[t]:
+            return "no recent buy signal"
+        if age[t] > OV["SIGNAL_DAYS"] - 1:
+            return f"its buy signal from {md(idx[-1 - int(age[t])].date())} has used up its {OV['SIGNAL_DAYS']} trading days"
+        if px <= x50:
+            return f"closed {fp(px)}, under the 50 EMA ({fp(x50)})"
+        if px <= x10:
+            return f"closed {fp(px)}, under the 10 EMA ({fp(x10)})"
+        r0, r1 = float(R[t].iloc[-1]), float(R[t].iloc[-2])
+        if not r0 > r1:
+            return f"RSI stopped rising ({f0(r0, r1)}, from {f0(r1, r0)})"
+        sec = sectors.get(t) or "Other"
+        v = secs.get(sec)
+        if not v or not v["ok"]:
+            return f"its category, {sec}, stopped passing" + (f": {v['miss'][0]}" if v and v["miss"] else "")
+        if t in hot_own:
+            return f"overbought by your rule: {hot_own[t]}"
+        near = ob_near(ov_blocks(frames[t]), px, asof)
+        if near:
+            return f"within {OV['OB_GAP']:.0%} of an order block ({fp(near[1]['bot'])}-{fp(near[1]['top'])})"
+        e = dates.get(t)
+        if e and (dt.date.fromisoformat(e) - entry).days < OV["EARN_DAYS"]:
+            return f"earnings on {md(e)}, too close to buy"
+        return "no longer passes every rule"
+
+    # the Plan M list from one night to the next: when each coin joined, and why any of the last list's coins left
+    before = {x["ticker"]: x for x in (prev or {}).get("setups", [])}
+    for x in setups:
+        p_ = before.get(x["ticker"])
+        x["since"] = (p_.get("since") or prev["asof"]) if p_ else asof.isoformat()
+        x["new"] = p_ is None
+    now = {x["ticker"] for x in setups}
+    dropped = [dict(ticker=t, sector=p_.get("sector") or sectors.get(t) or "", since=p_.get("since") or prev["asof"],
+                    why=why_out(t)) for t, p_ in before.items() if t not in now]
+
+    # Plan ETF: Bitcoin / Ether on their own signals, in the value zone, clear of order blocks 30+ days old
+    etf = {}
+    for fund, und in OV["ETF"].items():
+        d = (qqq or {}).get(und)
+        if d is None or len(d) < 60:
+            etf[fund] = dict(under=und, ok=False, checks=[dict(k="data", ok=False, text=f"no {und} prices tonight")], sell=[])
+            continue
+        x = idx_state(d)
+        blocks, day = ov_blocks(d.iloc[-2 * YEAR:]), d.index[-1].date()     # 2 years, like the coins' blocks
+        near = ob_near(blocks, x["close"], day, min_age=OV["ETF_OB_AGE"])
+        zone = rp(x["e20"] + OV["ZONE_ATR"] * x["atr"])
+        ch = [dict(k="heat", ok=x["rsi"] < OV["HEAT_MAX"], text=f"{und} heatmap (RSI) {f0(x['rsi'], OV['HEAT_MAX'])} (needs under {OV['HEAT_MAX']})"),
+              dict(k="signal", ok=x["e10"] > x["e20"], text=f"{und} buy signal: 10 EMA {'above' if x['e10'] > x['e20'] else 'below'} the 20 EMA"),
+              dict(k="trend", ok=x["e10"] > x["e20"] and x["close"] > x["e50"],
+                   text=f"{und} uptrend: close {fp(x['close'])} {'above' if x['close'] > x['e50'] else 'below'} the 50 EMA {fp(x['e50'])}"),
+              dict(k="zone", ok=x["e20"] <= x["close"] <= zone, text=f"{und} value zone: close {fp(x['close'])}, zone {fp(x['e20'])}-{fp(zone)} "
+                                                                    "(20 EMA to 2 ATR above it)"),
+              dict(k="ob", ok=near is None, text=f"{und} order blocks 30+ days old: " + (
+                  "none within 2%" if near is None else f"{fp(near[1]['bot'])}-{fp(near[1]['top'])} is {near[0] * 100:.1f}% away")),
+              dict(k="cci", ok=not x["cci"] > CFG["OB_CCI"], text=f"Your overbought rule: {und} CCI {lvl(x['cci'], CFG['OB_CCI'])} "
+                                                                  + ("is over" if x["cci"] > CFG["OB_CCI"] else "is not over")
+                                                                  + f" {CFG['OB_CCI']}")]
+        if hot_check:
+            ch.append(hot_check)
+        sell = (([f"{und}'s 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"] if x["e10"] < x["e20"] else [])
+                + ([f"{und} closed more than {OV['HOT_ATR']:g} ATR above its 20 EMA"] if x["close"] > x["e20"] + OV["HOT_ATR"] * x["atr"] else []))
+        hit = ob_hit(blocks, day, OV["ETF_OB_AGE"])
+        if hit:
+            sell.append(f"{und} reached an order block from {hit['start']:%b} {hit['start'].day} ({fp(hit['bot'])}-{fp(hit['top'])})")
+        etf[fund] = dict(under=und, ok=all(c["ok"] for c in ch), checks=ch, sell=sell, **x)
+
+    funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), hot=len(in_sec) - len(cool), near_ob=near_n,
+                  earnings=earn_n, setups=len(setups), earn_checked=bool(earn))
+    return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel, dropped=dropped,
+                prev_asof=(prev or {}).get("asof"))
+
+# ------------------------------------------------------------------ options
+# None: coins have no options a normal brokerage account can buy, so the option columns and call picks are left out.
+
+# --------------------------------------------------------------------- html
+def spark(vals, w=150, h=34, color="currentColor"):
+    v = [x for x in vals if x == x]
+    if len(v) < 2: return ""
+    lo, hi = min(v), max(v); rng = (hi - lo) or 1
+    pts = " ".join(f"{i * w / (len(v) - 1):.1f},{h - 3 - (x - lo) / rng * (h - 6):.1f}" for i, x in enumerate(v))
+    return f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}"><polyline fill="none" stroke="{color}" stroke-width="1.6" points="{pts}"/></svg>'
+
+
+def card(label, value, sub, series, good=None):
+    cls = "" if good is None else ("up" if good else "dn")
+    return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
+
+
+PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
+PAPER_HINT = ("Four paper accounts with $1,000 each, trading coins until Apr 6, 2027, the same rules as the stock page's "
+              "accounts (no options, so coins where those buy calls). <b>Your system</b> trades your screener setups at about "
+              "10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but only buys after 2:00 PM Central; "
+              "<b>Claude's picks</b> trades my AI picks list; <b>OVTLYR plan</b> trades the OVTLYR plan section below. They "
+              "trade every day, weekends too, checking every 30 minutes from 9:40 AM to 5:45 PM New York time. Click one for "
+              "every trade and the reason behind it.")
+
+PICK_TEXT = {    # how each list is ordered, in plain words, for the versions in use (others fall back to their description)
+    "nu": {"all": "Strongest relative strength (RS, 1-99) first."},
+    "bo": {"tight": "{n} coins in an uptrend are within 5% of a 50-day high set at least 5 days ago (a base). Tightest first: "
+                    "a narrow 10-day range, daily ranges and volume shrinking, and the price close to the level.",
+           "squeeze": "{n} coins in an uptrend are within 5% of a 50-day high set at least 5 days ago (a base), with Bollinger "
+                      "Bands near their tightest in 6 months (a squeeze). Strongest RS first."},
+    "ai": {"rs": "every liquid coin in the scan ranked by relative strength (the IBD formula: 40% weight on the last 3 months, "
+                 "20% each on 6, 9 and 12 months)"},
+}
+PICK_NOTES = {   # the stock lists' backtests were on S&P 500 stocks; nothing here was tested on coins
+    "nu": "The stock version of this list did no better than the average stock in its 2014-2026 S&amp;P 500 backtest, and "
+          "these rules have not been tested on coins. Treat it as a watch list, not a buy signal.",
+    "bo": "On S&amp;P 500 stocks (2014-2026) these broke out more often than average but did not gain more over 20 days. "
+          "Not tested on coins.",
+    "ai": "On S&amp;P 500 stocks (2014-2026) this beat the average stock by an unproven 6.2% a year. Not tested on coins, which "
+          "swing much harder than stocks.",
+}
+
+
+def next_earnings(tickers):
+    """Coins have no earnings."""
+    return {}
+
+
+def picks_html(L, earn=None, calls=None):
+    """Top picks section: New uptrends / Breakout watch / AI picks tabs (no option or earnings columns for coins)."""
+    if not L:
+        return ""
+    def pc(v, d=1):
+        return ("", "") if v is None or v != v else (f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.{d}f}%</span>', round(v, 3))
+    def tk(r):
+        return (f'<b class="tk" data-tk="{r["ticker"]}">{r["ticker"]}</b><div class="sec">{r["sector"]}</div>', r["ticker"])
+    def num(v, f="{:.2f}"):
+        return ("", "") if v is None or v != v else (f.format(v), round(v, 4))
+    def px(v):
+        return ("", "") if v is None or v != v else (fp(v), v)
+    def vol(v):
+        return ("", "") if v is None or v != v else (fusd(v), round(v))
+    VO = ["Volume", "5-day volume"]
+    vo = lambda r: [vol(r.get("vol1")), vol(r.get("vol5"))]
+    def table(tid, head, rows, empty):
+        if not rows:
+            return f'<div class="hint pke">{empty}</div>'
+        wi = head.index("Why") if "Why" in head else -1
+        th = "".join(f'<th{" class=why" if i == wi else ""}>{h}</th>' for i, h in enumerate(head))
+        body = "".join("<tr>" + "".join(f'<td data-v="{v}"{" class=why" if i == wi else ""}>{c}</td>'
+                                         for i, (c, v) in enumerate(r)) + "</tr>" for r in rows)
+        return f'<div class="wrap"><table id="{tid}" class="pkt"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
+    note = lambda k: f'<div class="note">{PICK_NOTES[k]}</div>' if PICK_NOTES.get(k) else ""
+    mh = L.get("mkt_hot") or ""
+    def left_out(hot):
+        """The coins a list left out tonight under the user's overbought rule, with why."""
+        if not hot:
+            return ""
+        return ('<div class="hint obo">Left out as overbought (your rule: RSI over ' f'{CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} '
+                f'or the category\'s breadth over {CFG["OB_BREADTH"]}): '
+                + "; ".join(f'<span class="tk" data-tk="{h["ticker"]}">{h["ticker"]}</span> ({html_esc(h["why"])})' for h in hot)
+                + '</div>')
+    hot_empty = (f'None tonight: the market is overbought ({html_esc(mh)}), and your rule gives nothing a buy signal then.'
+                 if mh else "")
+
+    nu, bo, ai = L["nu"], L["bo"], L["ai"]
+    nu_rows = [[tk(r), px(r["close"]), pc(r["chg1d"]), num(r["days_out"], "{:.0f}"), num(r["rs"], "{:.0f}"),
+                pc(r["from_hi"]), num(r["relvol"], "{:.1f}x")] + vo(r) for r in nu["rows"]]
+    nu_html = (f'<div class="hint">{nu["total"]} coin{"s" if nu["total"] != 1 else ""} turned into an uptrend on {L["asof"]} '
+               f'(EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA, after missing it the day before). '
+               f'{PICK_TEXT["nu"].get(CFG["NEW_UP"], nu["desc"])} "Out" = days it had been out of an uptrend. '
+               f'Vol vs avg = that day\'s volume vs the 20-day average.</div>'
+               + table("pk-nu", ["Coin", "Close", "1D %", "Out (days)", "RS", "From 52w hi", "Vol vs avg"] + VO, nu_rows,
+                       hot_empty or (f"Every coin that turned into an uptrend on {L['asof']} is overbought, so none is listed."
+                                     if nu.get("hot") else f"No coin turned into an uptrend on {L['asof']}."))
+               + left_out(nu.get("hot")) + note("nu"))
+    bo_rows = [[tk(r), px(r["close"]), px(r["piv"]), pc((r["close"] / r["piv"] - 1) * 100), num(r["base_days"], "{:.0f}"), num(r["tight"], "{:.1f}%"),
+                num(r["dry"], "{:.2f}x"), num(r["rs"], "{:.0f}")] + vo(r) for r in bo["rows"]]
+    bo_txt = PICK_TEXT["bo"].get(CFG["BREAKOUT"], "{n} coins fit: " + bo["desc"] + ".")
+    bo_html = (f'<div class="hint">{bo_txt.format(n=bo["total"])} Level = the 50-day high; a breakout is a close above it. '
+               f'Range = high to low of the last 10 days; '
+               f'Vol 10d/50d = average volume of the last 10 days vs the last 50.</div>'
+               + table("pk-bo", ["Coin", "Close", "Breakout level", "Below it", "Base (days)", "10-day range", "Vol 10d/50d", "RS"] + VO,
+                       bo_rows, hot_empty or ("Every coin that fits the breakout rules today is overbought, so none is listed."
+                                              if bo.get("hot") else "No coin fits the breakout rules today."))
+               + left_out(bo.get("hot")) + note("bo"))
+    new = lambda r, cell: ('<span class="mut">new today</span>', 0) if r["added"] == L["asof"] else cell
+    why = lambda r: ", ".join(r["why"]) + (f'{", " if r["why"] else ""}<span class="warn">overbought tonight: {html_esc(r["ob"])}</span>'
+                                           if r.get("ob") else "")
+    ai_rows = [[tk(r), num(r.get("rank"), "{:.0f}"), (r["added"], r["added"]), px(r["price"]), px(r.get("now")),
+                new(r, pc(r.get("ret"))), new(r, pc(r.get("spy_ret")))] + vo(r) + [(why(r), "")]
+               for r in ai["rows"]]
+    tr = ai["track"]
+    track = f'<div class="hint">Track record starts {ai["since"]}: each pick is measured from its close on the day it was picked.</div>'
+    if tr:
+        beat = [a_ - b_ for a_, b_ in tr if b_ is not None]
+        track = (f'<div class="hint">Track record since {ai["since"]}: {len(tr)} pick{"s" if len(tr) != 1 else ""}, average '
+                 f'{sum(a_ for a_, _ in tr) / len(tr):+.1f}% vs {BENCH} {sum(b_ for _, b_ in tr if b_ is not None) / max(1, len(beat)):+.1f}% '
+                 f'over the same days; {sum(x > 0 for x in beat)} of {len(beat)} beat {BENCH}. Prices are closes on the day picked.</div>')
+    dropped = "".join(f'<span class="tk" data-tk="{p["ticker"]}">{p["ticker"]}</span> ({(p["out"] / p["price"] - 1) * 100:+.1f}%, {p["why"]}) '
+                      for p in ai["dropped"])
+    mkt = "" if ai["market_ok"] else f'<div class="hint warn">Market filter is on: {BENCH} is below its 200-day average, so no new picks until it recovers.</div>'
+    if mh and ai.get("step", True):
+        mkt += (f'<div class="hint warn">No new picks tonight: the market is overbought ({html_esc(mh)}), and your rule adds '
+                'nothing then. The picks already on the list stay.</div>')
+    ai_html = (f'<div class="hint">My own list, rebuilt every night by the same rules as the stock page\'s: {PICK_TEXT["ai"].get(CFG["AI_SCORE"], ai["desc"])}. '
+               f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per category. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
+               f'open spots go to the best-ranked coins in the top {CFG["AI_KEEP"]} that fit the category limit, and a spot stays empty '
+               f'(cash) when none fits. Your overbought rule: a coin that is overbought on the night a spot opens '
+               f'(RSI over {CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} or its category\'s breadth over {CFG["OB_BREADTH"]}) is passed '
+               f'over for the next one, and nothing is added while the market\'s breadth is over {CFG["OB_BREADTH"]}. '
+               f'Rank = today\'s rank of all liquid coins.</div>'
+               + mkt + table("pk-ai", ["Coin", "Rank", "Picked", "Price then", "Now", "Since picked", f"{BENCH} since"] + VO + ["Why"],
+                             ai_rows, "No picks yet.")
+               + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
+    tab = lambda k, label, n, on: f'<button{" class=on" if on else ""} data-pk="{k}">{label} <span class="n">{n}</span></button>'
+    n_nu = 0 if mh else max(0, nu["total"] - len(nu.get("hot") or []))
+    return ('<h2>Top picks</h2>'
+            + (f'<div class="hint warn obn">The market is overbought tonight ({html_esc(mh)}), so by your rule nothing gets a '
+               'buy signal: New uptrends and Breakout watch are empty, and AI picks adds no new coins.</div>' if mh else "")
+            + '<div class="bar pk">' + tab("nu", "New uptrends", n_nu, True)
+            + tab("bo", "Breakout watch", len(bo["rows"]), False) + tab("ai", "AI picks", len(ai["rows"]), False) + '</div>'
+            + f'<div class="pkl" data-pk="nu">{nu_html}</div><div class="pkl" data-pk="bo" hidden>{bo_html}</div>'
+            + f'<div class="pkl" data-pk="ai" hidden>{ai_html}</div>'
+            + f'<div class="hint">Volume = dollars traded on {L["asof"]} (a UTC day); 5-day volume = dollars traded over the last '
+            f'5 days (the total). No option columns: coins have no options a normal brokerage account can buy.</div>')
+
+
+def ov_html(ov):
+    """OVTLYR plan section: the market, category and Plan ETF checks, then the Plan M setups."""
+    if not ov:
+        return ""
+    ok = lambda b: '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
+    li = lambda c: f'<li>{ok(c["ok"])} {html_esc(c["text"])}</li>'
+    m, f = ov["market"], ov["funnel"]
+    mk = (f'<div class="ovb"><div class="ovh">Market <a href="#ovm" class="ovl {"up" if m["ok"] else "dn"}">Plan M is {"on" if m["ok"] else "off"} ›</a></div>'
+          f'<ul>{"".join(li(c) for c in m["checks"])}</ul><div class="mut">All {len(m["checks"])} must pass for new Plan M trades.</div></div>')
+    secs = sorted(ov["sectors"].items(), key=lambda kv: (not kv[1]["ok"], kv[0]))
+    n_ok = sum(v["ok"] for _, v in secs)
+    sc = (f'<div class="ovb"><div class="ovh">Categories <span class="mut">{n_ok} of {len(secs)} pass</span></div><ul>'
+          + "".join(f'<li>{ok(v["ok"])} {html_esc(k)} <span class="mut">breadth {v["bull"]:.0f}% vs {v["bull_ema"]:.0f}% avg, RSI {v["rsi"]:.0f}'
+                    + (f' · {html_esc(v["miss"][0])}' if v["miss"] else "") + '</span></li>' for k, v in secs)
+          + f'</ul><div class="mut">Categories stand in for sectors: breadth above its 10-day average, average RSI above {BENCH}\'s, '
+            'under 70 and rising. (The deck\'s Health Care exclusion has no crypto match.) Your overbought rule: no category whose '
+            f'breadth on the breadth view (its coins with the 10 EMA over the 20) is over the {CFG["OB_BREADTH"]} line.</div></div>')
+    et = ('<div class="ovb"><div class="ovh">Plan ETF <span class="mut">spare cash</span></div>'
+          + "".join(f'<div><b>{k}</b> {ok(e["ok"])} <span class="mut">on its own signals</span></div><ul>'
+                    + "".join(li(c) for c in e["checks"]) + "</ul>"
+                    + ("".join(f'<div class="warn">Sell signal: {html_esc(x)}</div>' for x in e["sell"]))
+                    for k, e in ov["etf"].items())
+          + '<div class="mut">There are no 3x crypto funds like TQQQ or SPXL, so Plan ETF buys Bitcoin or Ether itself. When '
+            'neither Plan M nor Plan ETF is set up, cash waits as cash (Plan #SICADFU\'s SGOV is a Treasury fund, not a coin).</div></div>')
+
+    def pc(v):
+        return f'<span class="{"up" if v > 0 else "dn" if v < 0 else ""}">{v:+.1f}%</span>'
+    rows, day = [], dt.date.fromisoformat(ov["asof"])
+    for s in ov["setups"]:
+        cd = dt.date.fromisoformat(s["cross"])
+        if s.get("new") or not s.get("since"):
+            on_list, n_on = '<span class="new">New</span>', 0
+        else:
+            on_list, n_on = f'since {md(s["since"])}', (day - dt.date.fromisoformat(s["since"])).days
+        sig = f'{cd:%b} {cd.day} <span class="mut">{"today" if s["age"] == 0 else str(s["age"]) + "d ago"}</span>'
+        up = (f'{fp(s["ob_up"])} <span class="mut">{(s["ob_up"] / s["close"] - 1) * 100:+.1f}%</span>' if s["ob_up"] else
+              '<span class="mut">none</span>')
+        cells = [(f'<b class="tk" data-tk="{s["ticker"]}">{s["ticker"]}</b><div class="sec">{s["sector"]}</div>', s["ticker"]),
+                 (on_list, n_on), (sig, s["age"]), (fp(s["close"]), s["close"]),
+                 (f'{s["rsi"]:.0f} <span class="mut">from {s["rsi_prev"]:.0f}</span>', s["rsi"]),
+                 (pc((s["close"] / s["e10"] - 1) * 100), round((s["close"] / s["e10"] - 1) * 100, 2)),
+                 (fp(s["atr"]), s["atr"]), (up, s["ob_up"] or ""),
+                 ("" if s["rs"] is None else str(s["rs"]), "" if s["rs"] is None else s["rs"])]
+        rows.append("<tr>" + "".join(f'<td data-v="{v}">{c}</td>' for c, v in cells) + "</tr>")
+    head = ["Coin", "On the list", "Buy signal", "Close", "RSI", "vs 10 EMA", "ATR", "Order block above", "RS"]
+    if rows:
+        table = (f'<div class="wrap"><table id="ov-m"><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead>'
+                 f'<tbody>{"".join(rows)}</tbody></table></div>')
+    else:
+        table = '<div class="hint pke">No coin passes every Plan M coin and category rule tonight.</div>'
+    drop, n_new = ov.get("dropped") or [], sum(1 for s in ov["setups"] if s.get("new"))
+    gone = (f'<div class="ovd"><b>Dropped</b> <span class="mut">(on the {md(ov["prev_asof"])} list, not this one)</span><ul>'
+            + "".join(f'<li><b class="tk" data-tk="{d["ticker"]}">{d["ticker"]}</b> <span class="mut">{html_esc(d["sector"])}, on the '
+                      f'list since {md(d["since"])}</span>: {html_esc(d["why"])}</li>' for d in drop) + '</ul></div>') if drop else ""
+    n = len(ov["setups"])
+    summ = (f'<summary><b>Plan M coins:</b> <span class="ovc">{n if n else "none tonight"}</span>'
+            + (f' <span class="up">{n_new} new</span>' if n_new else "") + (f' <span class="dn">{len(drop)} dropped</span>' if drop else "")
+            + (' <span class="mut">Plan M is off, so none are buys</span>' if not m["ok"] and n else "") + '</summary>')
+    funnel = (f'<div class="hint">Plan M setups tonight: {f["signal"]} liquid coins ({fusd(CFG["MIN_AVG_VOL"])}+ traded a day) had a buy '
+              f'signal in the last {OV["SIGNAL_DAYS"]} days; {f["rules"]} also had the 10/20/50 uptrend, price over the 10 EMA '
+              f'and a rising RSI; {f["sector"]} of those were in passing categories; '
+              + (f'{f["hot"]} were overbought by your rule (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); ' if "hot" in f else "")
+              + f'{f["near_ob"]} were within {OV["OB_GAP"]:.0%} of an '
+              f'order block, which leaves {f["setups"]}. Freshest signal first, then relative strength (RS, 1-99). No price range '
+              f'or earnings check: the deck\'s $10-$350 range is for options, and coins have neither.'
+              + ("" if m["ok"] else " The market rules fail tonight, so the paper account won't buy these.") + "</div>")
+    live = (f'<div class="hint warn">Built at {ov["live_at"]} New York time, before the close, from prices that are not closes yet. '
+            'The paper account only trades on the plan from a run after the close.</div>' if ov.get("live_at") else "")
+    return ('<h2>OVTLYR plan</h2><div class="hint">OVTLYR\'s Plan M, Plan ETF and Plan #SICADFU from the trading-plan deck, '
+            'rebuilt from this page\'s data; the <b>OVTLYR plan</b> paper account trades it. OVTLYR\'s fear &amp; greed heatmap and '
+            'buy/sell signals are private, so this uses stand-ins: heatmap = 14-day RSI; buy signal = the 10 EMA crossing above the '
+            f'20 EMA (it counts for {OV["SIGNAL_DAYS"]} days); sell signal = the 10 EMA under the 20; breadth = the share of '
+            f'coins with the 10 EMA above the 20, against its 10-day average; the market = {BENCH} where the deck uses SPY. Left out: '
+            'OVTLYR channels and the per-stock backtest check.</div>'
+            f'{live}<div class="ovg">{mk}{sc}{et}</div><details id="ovm" class="ovm">{summ}{table}{gone}{funnel}</details>'
+            '<div class="hint">Click <b>Plan M coins</b> for every coin that passes the plan tonight. The list is rebuilt each '
+            'night: coins that newly pass are marked New, and coins that stop passing drop off, with the reason.</div>')
+
+
+def html_esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+SHORT_SECTOR = {"Information Technology": "Technology", "Consumer Discretionary": "Discretionary",
+                "Communication Services": "Communication", "Consumer Staples": "Staples"}
+
+
+def md(day):
+    """Oct 1, from a date or an ISO date string."""
+    d = dt.date.fromisoformat(day) if isinstance(day, str) else day
+    return f"{d:%b} {d.day}"
+
+
+def heat_html(bh, days=QTR):
+    """Breadth heatmap: a row for the whole market, then one per category (most coins rising tonight first), a column per
+    day for the last 3 months, colored by the share of coins with the 10 EMA above the 20.
+    Returns the HTML and the numbers behind it (for the tap / hover tooltip)."""
+    if not bh or MARKET not in bh:
+        return "", None
+    names = [MARKET] + sorted((n for n in bh if n != MARKET), key=lambda n: -bh[n].rise.iloc[-1])
+    idx = bh[MARKET].index[-days:]
+    r1 = lambda v: [None if x != x else round(float(x), 1) for x in v]
+    data, rows = dict(t=[d.strftime("%Y-%m-%d") for d in idx], rows=[]), []
+    for i, n in enumerate(names):
+        b, st = bh[n].reindex(idx), swing_state(bh[n])
+        zc = {2: " o", -1: " u", 0: ""}
+        cells = "".join(f'<i class="h{min(9, int(v // 10))}{zc[bzone(round(float(v), 1))]}"></i>' if v == v else "<i></i>"
+                        for v in b.rise)
+        rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
+                    f'<span class="hmc" data-i="{i}">{cells}</span><span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
+        data["rows"].append(dict(n=n, r=r1(b.rise), a=r1(b.avg), u=r1(b.up), s=[None if v != v else int(v) for v in b.on]))
+    ticks = [(k, d) for k, d in enumerate(idx) if k == 0 or d.month != idx[k - 1].month]
+    if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
+        ticks = ticks[1:]
+    axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
+    key = "".join(f'<i class="h{k}"></i>' for k in range(10))
+    zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
+            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>')
+    return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
+            f'<div class="hmk"><span>0%</span>{key}<span>100% of coins rising</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+
+
+def swing_tag(w, since=True):
+    """A group's state for the page: OB (overbought, over 75: no upswing then, the user's rule), else ▲ upswing / ▼ fading,
+    with OS when it's oversold (under 30); since = add the day the state began."""
+    if w["z"] == 2:
+        return '<span class="obt">OB</span>' + (f' <span class="mut">since {md(w["zsince"])}</span>' if since else "")
+    arrow = f'<span class="{"up" if w["on"] else "dn"}">{"▲" if w["on"] else "▼"}' + (f' since {md(w["since"])}' if since else "") + '</span>'
+    return arrow + (' <span class="ost">OS</span>' if w["z"] == -1 else "")
+
+
+def line_data(bh):
+    """The breadth line chart's numbers: for the whole market and each category, Rising and its 5-day and 10-day averages by
+    day (rounded the same way the above / below states were decided, so the chart can't disagree with them), and those
+    states as strings of 1 (above) and 0 (below)."""
+    if not bh or MARKET not in bh:
+        return None
+    names = [MARKET] + sorted((n for n in bh if n != MARKET), key=lambda n: SHORT_SECTOR.get(n, n))
+    idx = bh[MARKET].index
+    r1 = lambda v: [None if x != x else float(x) for x in v.round(1)]
+    ud = lambda v: "".join("1" if x == 1 else "0" for x in v)
+    g = []
+    for n in names:
+        b = bh[n].reindex(idx)
+        g.append(dict(n=n, s=SHORT_SECTOR.get(n, n), r=r1(b.rise), a5=r1(b.a5), a10=r1(b.avg), u5=ud(b.on5), u10=ud(b.on)))
+    return dict(t=[d.strftime("%Y-%m-%d") for d in idx], g=g)
+
+
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None):
+    x, p = breadth.iloc[-1], breadth.iloc[-6]
+    reg, rcls = regime(breadth)
+    arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
+    cards = "".join([
+        card("% above 20-day", f"{x.pct20:.0f}%", f"{arrow(x.pct20, p.pct20)} vs 5d ago {p.pct20:.0f}%", breadth.pct20, x.pct20 > 50),
+        card("% above 50-day", f"{x.pct50:.0f}%", f"{arrow(x.pct50, p.pct50)} vs 5d ago {p.pct50:.0f}%", breadth.pct50, x.pct50 > 50),
+        card("% above 200-day", f"{x.pct200:.0f}%", f"{arrow(x.pct200, p.pct200)} vs 5d ago {p.pct200:.0f}%", breadth.pct200, x.pct200 > 50),
+        card("Advance / Decline", f"{int(x.adv)} / {int(x.dec)}", "A/D line, last 60 days", breadth.ad_line, x.adv > x.dec),
+        card("New 52w highs / lows", f"{int(x.nh)} / {int(x.nl)}", "highs (net) over time", breadth.nh - breadth.nl, x.nh > x.nl),
+        card("Up / down volume", f"{x.udvol:.2f}", ">1 = volume favors buyers", breadth.udvol, x.udvol > 1),
+    ])
+    up_n, liq_n = int(df.core.sum()), len(df)
+    up_pct = up_n / liq_n * 100 if liq_n else 0
+    sws = {n: swing_state(b) for n, b in (bh or {}).items()}
+    w = sws.get(MARKET)
+    rise_card = card("Coins rising (EMA10 &gt; 20)", f"{w['rise']:.0f}%",
+                     (f"overbought (over {CFG['OB_BREADTH']}) since {md(w['zsince'])}" if w["z"] == 2 else
+                      f"{'▲ upswing' if w['on'] else '▼ fading'} since {md(w['since'])}"
+                      + (f", oversold (under {CFG['OS_BREADTH']})" if w["z"] == -1 else ""))
+                     + f", 10-day avg {w['avg']:.0f}%", bh[MARKET].rise.iloc[-60:], None if w["z"] == 2 else w["on"]) if w else ""
+    cards = (f'<div class="card"><div class="lbl">In uptrend (EMA10 &gt; 20, price &gt; EMA50 &amp; 150)</div>'
+             f'<div class="val {"up" if up_pct > 50 else "dn"}">{up_n} / {liq_n}</div>'
+             f'<div class="sub">{up_pct:.0f}% of coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day</div></div>') + rise_card + cards
+
+    def bar(v, good=50):
+        c = "var(--up)" if v >= good else "var(--dn)"
+        return f'<div class="bar2"><i style="width:{max(v, 0):.0f}%;background:{c}"></i></div>'
+    def delta(now, then):
+        d = now - then
+        return f'<span class="{"up" if d > 0 else "dn" if d < 0 else ""}">{d:+.0f}</span>'
+    def rising(n):
+        w = sws.get(n)
+        if MARKET not in sws:           # no breadth view tonight: no column
+            return ""
+        if not w:
+            return '<td data-v=""></td>'
+        return f'<td data-v="{w["rise"] - w["avg"]:.1f}">{w["rise"]:.0f}% {swing_tag(w)}</td>'
+    srows = []
+    for _, s_ in secb.iterrows():
+        srows.append(
+            f'<tr data-sector="{s_.sector}"><td><b>{s_.sector}</b></td>'
+            f'<td data-v="{s_.up_pct}"><b>{s_.uptrend}</b> / {s_.liquid} <span class="mut">({s_.up_pct:.0f}%)</span>{bar(s_.up_pct)}</td>'
+            + rising(s_.sector) +
+            f'<td data-v="{s_.momentum}">{s_.momentum}</td><td data-v="{s_.pullback}">{s_.pullback}</td>'
+            f'<td data-v="{s_.pct20}">{s_.pct20:.0f}% {delta(s_.pct20, s_.pct20_5d)}</td>'
+            f'<td data-v="{s_.pct50}">{s_.pct50:.0f}% {delta(s_.pct50, s_.pct50_5d)}</td>'
+            f'<td data-v="{s_.pct200}">{s_.pct200:.0f}% {delta(s_.pct200, s_.pct200_5d)}</td>'
+            f'<td data-v="{s_.adv - s_.dec}">{s_.adv} / {s_.dec}</td>'
+            f'<td data-v="{s_.nh - s_.nl}">{s_.nh} / {s_.nl}</td></tr>')
+    heat, hm_data = heat_html(bh)
+    try:
+        bl_data = line_data(bh)
+    except Exception as e:                 # an extra; never block the page
+        print("  breadth line failed:", e)
+        bl_data = None
+    line_html = ('<div class="hint">The breadth line: Rising for the whole market or the category you pick (or tap its row in the '
+                 'heatmap), day by day, with its 5-day and 10-day averages (both exponential moving averages). Rising crossing '
+                 'above its 10-day average is what the heatmap calls an upswing. The dashed lines at '
+                 f'{CFG["OB_BREADTH"]} and {CFG["OS_BREADTH"]} are your overbought and oversold lines: over '
+                 f'{CFG["OB_BREADTH"]} there is no upswing and no buy signal (your rule).</div>'
+                 '<div class="bln" id="bln"><div class="blh"><b>Breadth line</b><select id="blg" aria-label="Market or category">'
+                 + "".join(f'<option value="{i}">{html_esc(g["s"])}</option>' for i, g in enumerate(bl_data["g"]))
+                 + '</select><div class="bar blr">'
+                 + "".join(f'<button data-r="{k}"' + (' class="on"' if k == QTR else '') + f'>{lbl}</button>'
+                           for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
+                 + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
+    sector_html = ('<h2>Category breadth</h2>'
+                   + ('<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
+                      '(the fast half of your uptrend rule), by day for the last 3 months; greener = more coins rising. ▲ = an upswing (Rising '
+                      'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
+                      f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
+                      f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html if heat else "")
+                   + '<div class="hint">Click a category to filter the coin list. ± is the change vs 5 days ago.'
+                   + '</div><div class="wrap"><table id="s"><thead><tr>'
+                   '<th>Category</th><th>In uptrend</th>' + ('<th>Rising (10 &gt; 20)</th>' if MARKET in sws else '') + '<th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
+                   '<th>% &gt; 50d</th><th>% &gt; 200d</th><th>Adv / Dec</th><th>52w Hi / Lo</th></tr></thead>'
+                   f'<tbody>{"".join(srows)}</tbody></table></div>')
+
+    order = [MARKET] + [n for n in secb.sector if n != MARKET]
+    order += [n for n in SECTOR_ETF if n not in order]
+    charts = {n: charts[n] for n in order if charts and n in charts}
+    if charts:
+        strip = any(c.get("sw") for c in charts.values())
+        chart_html = ('<h2>Category charts</h2><div class="hint">The market is Bitcoin; each category is an equal-weight index '
+                      'of its coins (100 two years ago; there are no sector ETFs for crypto), with EMA 10 (orange), 20 (blue) and '
+                      '50 (purple). Daily shows ~6 months, weekly ~2 years, monthly ~10 years for Bitcoin and 2 years for the indexes.'
+                      + (' The strip under each chart is its breadth: the solid line is Rising (the share of the coins in it '
+                         'with the 10 EMA above the 20), the dotted line the share in your full uptrend. Green '
+                         'shading = an upswing (Rising above its 10-day average), red = fading, amber = overbought (Rising over '
+                         f'your {CFG["OB_BREADTH"]} line, where there is no upswing). Daily and weekly only: the '
+                         'coin prices go back 2 years.' if strip else '') + '</div>'
+                      '<div class="bar tf"><button class="on" data-tf="D">Daily</button><button data-tf="W">Weekly</button>'
+                      '<button data-tf="M">Monthly</button></div><div class="charts">'
+                      + "".join(f'<div class="ch" data-sector="{n}"><div class="chh"><b>{n}</b> <span class="tk mut" data-tk="{c["etf"]}">{c["etf"]}</span>'
+                                f'<span class="chg"></span></div><div class="cv"></div>'
+                                + ('<div class="bl"></div><div class="bv"></div>' if c.get("sw") else '') + '</div>' for n, c in charts.items())
+                      + '</div><div id="chfail" class="hint" hidden>Charts could not load (chart library blocked).</div>')
+    else:
+        chart_html = ""
+    chart_json = json.dumps(charts, separators=(",", ":"))
+
+    def num(v, f="{:.1f}"): return "" if v is None or v != v else f.format(v)
+    def flag(b): return '<span class="up">✓</span>' if b else '<span class="dn">✗</span>'
+    def zone(v, hi, lo):
+        """RSI or CCI with the user's lines: OB over the overbought line, OS under the oversold one."""
+        if v is None or v != v:
+            return ""
+        tag = ('<span class="obt" title="Overbought (over ' f'{hi})">OB</span>' if v > hi else
+               '<span class="ost" title="Oversold (under ' f'{lo})">OS</span>' if v < lo else "")
+        txt = f"{v:.1f}" if round(v) in (hi, lo) else f"{v:.0f}"         # 70.4 reads "70.4", not "70", next to its tag
+        return f"{txt}{' ' + tag if tag else ''}"
+    mkt_hot = breadth_hot(None, {g: round(float(b.rise.iloc[-1]), 1) for g, b in (bh or {}).items()})
+    head = ["Coin", "Setup", "Score", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "CCI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
+            ">150", ">200", "50x150", "Traded / day"]
+    rows = []
+    for _, r in picks.iterrows():
+        oc = [fusd(r.get("dvol"))]
+        dsc = r.days_since_cross
+        cross = f'new ({int(dsc)}d ago)' if r.cross else ("above" if dsc == dsc and dsc is not None else "")
+        pct = lambda v: f'<span class="{"up" if v > 0 else "dn"}">{v:+.1f}</span>'
+        why_ob = r.get("ob") or (mkt_hot if r.get("blocked") else "")
+        st = (f'<span class="obl">Overbought</span><div class="sec">{html_esc(why_ob)}</div>' if r.setup == "Overbought" else r.setup)
+        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', st, f"{r.score:.0f}", fp(r.close),
+                 fp(r.open), pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), zone(r.rsi, CFG["OB_RSI"], CFG["OS_RSI"]),
+                 zone(r.get("cci"), CFG["OB_CCI"], CFG["OS_CCI"]), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
+                 num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
+                 flag(r.p150), flag(r.p200), cross] + oc
+        raw = [r.ticker, r.setup, r.score, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
+               r.vs20, r.vs50] + [""] * 3 + [r.get("dvol")]
+        tds = "".join(f'<td data-v="{raw[i]}">{c}</td>' for i, c in enumerate(cells))
+        rows.append(f'<tr data-setup="{r.setup}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
+    th = "".join(f"<th>{h}</th>" for h in head)
+    banner = '<div class="demo">DEMO DATA, not real coins</div>' if demo else ""
+    n_m = int((picks.setup == "Momentum").sum()); n_p = int((picks.setup == "Pullback").sum())
+    n_ob = int(picks.blocked.sum()) if "blocked" in picks else 0
+    ob_html = ('<div class="hint warn obn">' + (f'The market is overbought tonight ({html_esc(mkt_hot)}), so by your rule no coin '
+               'gets a setup: the ones that would have are marked Overbought.' if mkt_hot else
+               f'Your overbought rule left out {n_ob} setup{"s" if n_ob != 1 else ""} tonight: they are marked Overbought, with why.')
+               + '</div>') if n_ob or mkt_hot else ""
+    paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
+    paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crypto Screener {asof}</title><style>
+:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7;--b5:#c96a12;--b10:#2a5bd7;--warn:#fab219}}
+@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff;--b5:#c98232;--b10:#5d8cf2;--warn:#fab219}}}}
+body{{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px -apple-system,system-ui,sans-serif}}
+h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
+.reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
+.reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--card);color:var(--mut)}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px}}
+.card{{background:var(--card);border-radius:10px;padding:10px 12px;color:var(--mut)}}.lbl{{font-size:12px}}.val{{font-size:24px;font-weight:700;color:var(--fg)}}.sub{{font-size:11px;margin-bottom:4px}}
+.up{{color:var(--up)}}.dn{{color:var(--dn)}}
+.bar button{{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-right:6px;font-size:13px}}.bar button.on{{border-color:var(--acc);color:var(--acc)}}
+.wrap{{overflow-x:auto;margin-top:10px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
+th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--bg);cursor:pointer;color:var(--mut);font-weight:600}}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(19),td:nth-child(20){{text-align:left}}
+.obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--warn) 45%,transparent)}}
+.ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
+#t td:nth-child(2) .sec{{white-space:normal;min-width:150px;max-width:220px}}
+td:first-child,th:first-child{{position:sticky;left:0;background:var(--bg);z-index:1}}th:first-child{{z-index:2}}
+.sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
+.demo{{background:var(--dn);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}}
+h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12px}}
+.bar2{{height:4px;background:var(--line);border-radius:2px;margin-top:3px;min-width:90px}}.bar2 i{{display:block;height:100%;border-radius:2px}}
+#s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:var(--card)}}#s td:nth-child(2){{text-align:left}}
+.chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
+.note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
+.pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
+.ovg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:8px 0}}
+.ovb{{background:var(--card);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}}.ovb ul{{margin:2px 0 6px;padding:0;list-style:none}}
+.ovh{{display:flex;justify-content:space-between;gap:8px;font-weight:600;font-size:13px;margin-bottom:2px}}a.ovl{{text-decoration:none}}
+.ovm{{margin-top:10px}}.ovm summary{{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}}
+.ovm summary::-webkit-details-marker{{display:none}}.ovm summary::before{{content:'▸';display:inline-block;width:16px;color:var(--mut)}}.ovm[open] summary::before{{content:'▾'}}
+.ovm summary .ovc{{font-weight:700;margin-left:6px}}.ovm summary span:not(.ovc){{font-size:12px;font-weight:600;margin-left:10px}}
+.new{{display:inline-block;font-size:11px;font-weight:700;color:var(--up);background:color-mix(in srgb,var(--up) 18%,transparent);padding:1px 7px;border-radius:99px}}
+.ovd{{font-size:12px;margin-top:10px;line-height:1.5}}.ovd ul{{margin:2px 0;padding-left:18px}}.ovm .hint,.ovm+.hint{{margin-top:8px}}
+.pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
+.obn{{color:var(--fg);font-weight:400;background:color-mix(in srgb,var(--warn) 18%,transparent);border-radius:8px;padding:6px 10px;margin:8px 0}}
+.charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
+.ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
+.bv{{height:64px}}.bl{{font-size:11px;color:var(--mut);margin-top:2px;min-height:15px}}.bl b{{color:var(--fg)}}.bv[hidden],.bl[hidden]{{display:none}}
+.hm{{position:relative;background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px;font-size:12px}}
+.hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
+.hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
+.hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
+.hmc i{{display:block;background:var(--line)}}.hmc i.o{{box-shadow:inset 0 4px var(--warn)}}.hmc i.u{{box-shadow:inset 0 -4px var(--acc)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{box-shadow:inset 0 3px var(--warn)}}.hmz i.u{{box-shadow:inset 0 -3px var(--acc)}}
+.hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
+.hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
+.hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
+.hm i.h0{{background:color-mix(in srgb,var(--dn) 95%,var(--line))}}.hm i.h1{{background:color-mix(in srgb,var(--dn) 78%,var(--line))}}.hm i.h2{{background:color-mix(in srgb,var(--dn) 60%,var(--line))}}.hm i.h3{{background:color-mix(in srgb,var(--dn) 42%,var(--line))}}.hm i.h4{{background:color-mix(in srgb,var(--dn) 22%,var(--line))}}.hm i.h5{{background:color-mix(in srgb,var(--up) 22%,var(--line))}}.hm i.h6{{background:color-mix(in srgb,var(--up) 42%,var(--line))}}.hm i.h7{{background:color-mix(in srgb,var(--up) 60%,var(--line))}}.hm i.h8{{background:color-mix(in srgb,var(--up) 78%,var(--line))}}.hm i.h9{{background:color-mix(in srgb,var(--up) 95%,var(--line))}}
+.hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
+.bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
+.blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
+.blh select{{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:13px}}
+.bar.blr{{margin-left:auto}}.bar.blr button{{padding:4px 10px;margin:0 0 0 4px}}
+.blk{{font-size:12px;color:var(--mut);margin:8px 0 4px;line-height:1.6;min-height:38px}}.blk b{{color:var(--fg);font-variant-numeric:tabular-nums}}
+.blk .li{{display:inline-block;white-space:nowrap;margin-right:14px}}.blk .lk{{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}}
+.blc{{height:240px}}.blc[hidden]{{display:none}}
+.tk{{cursor:pointer;color:var(--acc);text-decoration:underline dotted;text-underline-offset:3px}}
+#cm{{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center}}#cm[hidden]{{display:none}}
+#cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
+#cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
+#cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
+#cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
+@media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
+{banner}<h1>Crypto Screener<span class="reg {rcls}">{reg}</span></h1>
+<div class="meta">Data as of {asof} (daily bars close at midnight UTC) · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out · <a href="../">Stock screener</a></div>
+<div class="cards">{cards}</div>
+{paper_html}
+{picks_html(lists, earn, calls)}
+{ov_html(ov)}
+{sector_html}
+{chart_html}
+<h2>Coins <span id="secf" class="chip" hidden></span></h2>
+{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
+<div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
+<div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
+Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
+Your overbought rule: a coin with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose category's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). The same rules as the stock screener, on coins; 52-week and 12-month windows count 365 days, since coins trade every day. No option columns: coins have no options a normal brokerage account can buy. Traded / day = the 20-day average in dollars.
+Click any coin for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
+Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks (not coins), but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
+<div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
+<div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
+<div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
+<div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
+<div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
+<span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
+<div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
+const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};
+// coin prices run from $100,000 to $0.00001: decimals by size, for labels and the chart's price axis
+const PREC=v=>{{const a=Math.abs(v);return a>=1||!a?2:Math.min(10,Math.max(2,3-Math.floor(Math.log10(a))))}};
+const FP=v=>v==null?'–':Math.abs(v)>=1?v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}):v.toFixed(PREC(v));
+const PF=v=>{{const p=PREC(v);return {{type:'price',precision:p,minMove:Math.pow(10,-p)}}}};      // your breadth lines: over 75 overbought (no upswing), under 30 oversold
+const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric'}});
+(function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
+if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();
+const UP=V('--up'),DN=V('--dn'),WARN=V('--warn'),PW=60;let tf='D';
+// shading behind the strip: one box per run of upswing (green), fading (red) or overbought (amber, over your 75 line) days
+function bandPrim(){{let ch,runs=[],rs=[];
+const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,H=sc.bitmapSize.height;
+rs.forEach(r=>{{x.fillStyle=r.col;x.fillRect(Math.round(r.x1*hr),0,Math.max(1,Math.round(r.x2*hr)-Math.round(r.x1*hr)),H)}})}})}};
+const view={{zOrder:()=>'bottom',renderer:()=>rend}};
+return {{attached:p=>{{ch=p.chart}},paneViews:()=>[view],set:v=>{{runs=v}},updateAllViews:()=>{{if(!ch)return;const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
+runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?WARN+'59':(z?UP:DN)+'3d'}})}})}}}}}}
+// breadth line under a chart: the bar's (or tonight's) Rising, its 10-day average, Uptrend and the upswing state
+function leg(m,i){{if(!m.bl)return;const s=m.d[tf];if(!s||!s.br){{m.bl.textContent='';return}}
+const L=s.br.length,last=i==null||i<0||i>=L-1||s.br[i]==null;if(last)i=L-1;
+const r=s.br[i],a=s.ba[i],u=s.bu[i],w=m.d.sw;if(r==null||a==null){{m.bl.textContent='';return}}
+const on=last&&w?w.on:s.bs[i]===1,z=last&&w?w.z:r>OBL?2:r<OSL?-1:0;
+m.bl.innerHTML=(last?'':MD(s.t[i])+' · ')+'Breadth <b>'+r.toFixed(0)+'%</b> rising, avg '+a.toFixed(0)+'%'+(u==null?'':' · '+u.toFixed(0)+'% in uptrend')
++' · '+(z===2?'<span class="obt">OB</span> overbought'+(last&&w?' since '+MD(w.zsince):''):
+'<span class="'+(on?'up':'dn')+'">'+(on?'▲ upswing':'▼ fading')+(last&&w?' since '+MD(w.since):'')+'</span>'+(z===-1?' · <span class="ost">OS</span> oversold':''))}}
+const made=boxes.map(b=>{{const d=CH[b.dataset.sector];
+const c=LightweightCharts.createChart(b.querySelector('.cv'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11}},
+grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false,minimumWidth:PW}},timeScale:{{borderVisible:false}},handleScroll:false,handleScale:false}});
+const k=c.addCandlestickSeries({{upColor:UP,downColor:DN,wickUpColor:UP,wickDownColor:DN,borderVisible:false}});
+const vol=c.addHistogramSeries({{priceScaleId:'v',priceFormat:{{type:'volume'}},lastValueVisible:false,priceLineVisible:false}});
+c.priceScale('v').applyOptions({{scaleMargins:{{top:0.82,bottom:0}}}});
+const ln=[['e10','#e8a33d'],['e20',V('--acc')],['e50','#a259d9']].map(([key,col])=>[key,c.addLineSeries({{color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}})]);
+// the breadth strip, on the same bars: green / red shading = upswing / fading, solid = Rising, dotted = Uptrend, dashed = 50%
+const bv=b.querySelector('.bv'),bl=b.querySelector('.bl');let st=null;
+if(bv){{const bc=LightweightCharts.createChart(bv,{{autoSize:true,localization:{{locale:'en-US',priceFormatter:v=>Math.round(v)+'%'}},
+layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:10,attributionLogo:false}},grid:{{vertLines:{{visible:false}},horzLines:{{visible:false}}}},
+rightPriceScale:{{borderVisible:false,minimumWidth:PW,scaleMargins:{{top:0.08,bottom:0.08}}}},timeScale:{{visible:false,borderVisible:false}},
+crosshair:{{horzLine:{{visible:false,labelVisible:false}},vertLine:{{labelVisible:false}}}},handleScroll:false,handleScale:false}});
+const fix=()=>({{priceRange:{{minValue:0,maxValue:100}}}});
+const bu=bc.addLineSeries({{color:V('--mut'),lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
+const br=bc.addLineSeries({{color:V('--fg'),lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
+br.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:true}});
+br.createPriceLine({{price:OBL,color:WARN,lineWidth:1,lineStyle:1,axisLabelVisible:false}});
+br.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:1,axisLabelVisible:false}});
+const band=bandPrim();br.attachPrimitive(band);st={{bc,band,bu,br}}}}
+const m={{b,d,c,k,vol,ln,st,bv,bl}};
+const at=p=>p.point&&p.logical!=null?Math.round(p.logical):null;
+c.subscribeCrosshairMove(p=>{{const i=at(p);leg(m,i);if(!st)return;const s=m.d[tf];
+if(i==null||!s||!s.br||s.br[i]==null)st.bc.clearCrosshairPosition();else st.bc.setCrosshairPosition(s.br[i],s.t[i],st.br)}});
+if(st)st.bc.subscribeCrosshairMove(p=>leg(m,at(p)));
+return m}});
+function draw(){{made.forEach(m=>{{const s=m.d[tf];if(!s)return;
+m.k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[i]}})));
+m.vol.setData(s.t.map((t,i)=>({{time:t,value:s.v[i],color:(s.c[i]>=s.o[i]?UP:DN)+'55'}})));
+m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}))));
+m.c.timeScale().fitContent();
+if(m.st){{const has=!!s.br;m.bv.hidden=m.bl.hidden=!has;
+if(has){{const f=a=>s.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
+const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL?2:s.bs[i]===1?1:0,r=runs[runs.length-1];
+if(r&&r[2]===z&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,z,i])}});m.st.band.set(runs);
+m.st.bu.setData(f(s.bu));m.st.br.setData(f(s.br));m.st.bc.timeScale().fitContent();
+requestAnimationFrame(()=>requestAnimationFrame(()=>m.st.bc.timeScale().fitContent()))}}}}
+leg(m,null);
+const n=s.c.length,p=(s.c[n-1]/s.c[n-2]-1)*100,e=m.b.querySelector('.chg');
+m.k.applyOptions({{priceFormat:PF(s.c[n-1])}});e.textContent=FP(s.c[n-1])+'  '+(p>=0?'+':'')+p.toFixed(1)+'% '+({{D:'1d',W:'1w',M:'1m'}})[tf];e.className='chg '+(p>=0?'up':'dn')}})}}
+document.querySelectorAll('.bar.tf button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.tf button').forEach(x=>x.classList.remove('on'));b.classList.add('on');tf=b.dataset.tf;draw()}});
+draw()}})();
+// breadth heatmap: tap or hover a row for that day's numbers
+(function(){{const hm=document.getElementById('hm');if(!hm||!HM)return;const tip=document.getElementById('hmtip'),n=HM.t.length;
+const off=()=>{{tip.hidden=true;hm.querySelectorAll('i.cur').forEach(x=>x.classList.remove('cur'))}};
+function show(e){{const c=e.currentTarget,R=HM.rows[+c.dataset.i],r=c.getBoundingClientRect();
+const i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left)/r.width*n))),v=R.r[i];off();if(v==null)return;
+const a=R.a[i],u=R.u[i],d=new Date(HM.t[i]+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
+tip.innerHTML='<b>'+R.n+'</b> · '+d+'<br>'+v.toFixed(0)+'% rising (10 EMA over the 20), avg '+a.toFixed(0)+'%'
++(u==null?'':'<br>'+u.toFixed(0)+'% in your uptrend')+'<br>'+(v>OBL?'<span class="obt">OB</span> overbought (over '+OBL+')':
+'<span class="'+(R.s[i]?'up':'dn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>'+(v<OSL?' · <span class="ost">OS</span> oversold (under '+OSL+')':''));
+c.children[i].classList.add('cur');tip.hidden=false;const h=hm.getBoundingClientRect();
+tip.style.left=Math.max(0,Math.min(e.clientX-h.left+12,h.width-tip.offsetWidth))+'px';tip.style.top=(r.bottom-h.top+6)+'px'}}
+hm.querySelectorAll('.hmc').forEach(c=>{{c.addEventListener('pointermove',show);c.addEventListener('pointerdown',show);
+c.addEventListener('pointerleave',e=>{{if(e.pointerType==='mouse')off()}})}});
+document.addEventListener('pointerdown',e=>{{if(!e.target.closest('.hmc'))off()}})}})();
+// breadth line: Rising for the whole market or one category by day, with its 5-day and 10-day averages
+(function(){{const el=document.getElementById('bln');if(!el||!BL)return;
+const box=el.querySelector('.blc'),lg=document.getElementById('blk'),sel=document.getElementById('blg'),N=BL.t.length;
+if(!window.LightweightCharts){{box.hidden=true;lg.textContent='The chart could not load (chart library blocked).';return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();let g=0,span={QTR};
+const c=LightweightCharts.createChart(box,{{autoSize:true,localization:{{locale:'en-US',priceFormatter:v=>+v.toFixed(1)+'%'}},
+layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11,attributionLogo:false}},grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},
+rightPriceScale:{{borderVisible:false,scaleMargins:{{top:0.1,bottom:0.1}}}},timeScale:{{borderVisible:false,lockVisibleTimeRangeOnResize:true}},
+crosshair:{{horzLine:{{visible:false,labelVisible:false}}}},handleScroll:false,handleScale:false}});
+const line=col=>c.addLineSeries({{color:col,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerRadius:4}});
+const s10=line(V('--b10')),s5=line(V('--b5')),sr=line(V('--fg'));          // Rising drawn last, on top
+sr.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:false}});
+sr.createPriceLine({{price:OBL,color:V('--warn'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'overbought'}});
+sr.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'oversold'}});
+// keep both lines in view, with a little room past them
+sr.applyOptions({{autoscaleInfoProvider:o=>{{const r=o();if(!r||!r.priceRange)return r;
+r.priceRange.minValue=Math.min(r.priceRange.minValue,OSL-5);r.priceRange.maxValue=Math.max(r.priceRange.maxValue,OBL+5);return r}}}});
+const f1=v=>v==null?'–':v.toFixed(1)+'%',item=(v,lbl,x)=>'<span class="li"><i class="lk" style="background:var('+v+')"></i>'+lbl+' <b>'+f1(x)+'</b></span>';
+const DAY=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
+const hrows=HM?[...document.querySelectorAll('#hm .hmc')].map(x=>[x.closest('.hmr'),HM.rows[+x.dataset.i].n]):[];
+// the numbers and above / below states for one day (or tonight, with the day each state began)
+function leg(i){{const G=BL.g[g],last=i==null||i<0||i>=N-1;if(last)i=N-1;if(G.r[i]==null){{lg.textContent='';return}}
+const zn=d=>G.r[d]==null?0:G.r[d]>OBL?2:G.r[d]<OSL?-1:0,z=zn(i);
+const st=(u,lbl)=>{{const on=u[i]==='1';let k=i;while(last&&k>0&&u[k-1]===u[i])k--;
+return '<span class="li '+(z===2?'':on?'up':'dn')+'">'+(on?'▲ above':'▼ below')+' its '+lbl+(last?' since '+MD(BL.t[k]):'')+'</span>'}};
+let kz=i;while(last&&kz>0&&zn(kz-1)===z)kz--;
+const zl=z===2?'<span class="li"><span class="obt">OB</span> overbought, over '+OBL+(last?' since '+MD(BL.t[kz]):'')+'</span>':
+z===-1?'<span class="li"><span class="ost">OS</span> oversold, under '+OSL+(last?' since '+MD(BL.t[kz]):'')+'</span>':'';
+lg.innerHTML='<div>'+(last?'':'<span class="li"><b>'+DAY(BL.t[i])+'</b></span>')+item('--fg','Rising',G.r[i])+item('--b5','5-day avg',G.a5[i])
++item('--b10','10-day avg',G.a10[i])+'</div><div>'+zl+st(G.u5,'5-day average')+st(G.u10,'10-day average')+'</div>'}}
+function fit(){{const ts=c.timeScale();if(!span||span>=N)ts.fitContent();else ts.setVisibleLogicalRange({{from:N-span-0.5,to:N-0.5}})}}
+function show(){{const G=BL.g[g],f=a=>BL.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
+sr.setData(f(G.r));s5.setData(f(G.a5));s10.setData(f(G.a10));fit();requestAnimationFrame(()=>requestAnimationFrame(fit));leg(null);
+hrows.forEach(([row,n])=>row.classList.toggle('sel',n===G.n))}}
+const save=()=>{{try{{localStorage.setItem('bl',JSON.stringify({{n:BL.g[g].n,span}}))}}catch(e){{}}}};
+const btns=[...el.querySelectorAll('.blr button')],setSpan=k=>{{span=k;btns.forEach(b=>b.classList.toggle('on',+b.dataset.r===k))}};
+function pick(n){{const j=BL.g.findIndex(x=>x.n===n);if(j<0)return;g=j;sel.value=String(j);save();show()}}
+sel.onchange=()=>{{g=+sel.value;save();show()}};
+btns.forEach(b=>b.onclick=()=>{{setSpan(+b.dataset.r);save();fit()}});
+hrows.forEach(([row,n])=>row.addEventListener('click',()=>pick(n)));
+c.subscribeCrosshairMove(p=>leg(p.point&&p.logical!=null?Math.round(p.logical):null));
+// on a phone, tap the chart for that day's numbers; a tap anywhere else goes back to tonight's
+box.addEventListener('pointerdown',e=>{{if(e.pointerType==='mouse')return;const l=c.timeScale().coordinateToLogical(e.clientX-box.getBoundingClientRect().left);
+if(l==null)return;const i=Math.max(0,Math.min(N-1,Math.round(l))),v=BL.g[g].r[i];if(v==null)return;c.setCrosshairPosition(v,BL.t[i],sr);leg(i)}});
+document.addEventListener('pointerdown',e=>{{if(e.pointerType!=='mouse'&&!box.contains(e.target)){{c.clearCrosshairPosition();leg(null)}}}});
+try{{const s=JSON.parse(localStorage.getItem('bl')||'null'),j=s?BL.g.findIndex(x=>x.n===s.n):-1;
+if(j>=0){{g=j;sel.value=String(j)}}if(s&&btns.some(b=>+b.dataset.r===s.span))setSpan(s.span)}}catch(e){{}}
+show()}})();
+const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
+const chip=document.getElementById('secf');
+function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st==='Momentum'||st==='Pullback':st===fSet);
+r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
+document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
+document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
+document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
+chip.onclick=()=>{{fSec=null;apply()}};
+function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;
+[...tb.rows].sort((a,b)=>{{const x=a.cells[i].dataset.v??a.cells[i].textContent,y=b.cells[i].dataset.v??b.cells[i].textContent,nx=parseFloat(x),ny=parseFloat(y);return (isNaN(nx)||isNaN(ny)?String(x).localeCompare(String(y)):nx-ny)*d}}).forEach(r=>tb.appendChild(r))}})}}
+sortable('t');sortable('s');apply();
+document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.bar.pk',b.dataset.pk,'pk');
+document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
+try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
+['pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
+(function(){{const d=document.getElementById('ovm');if(!d)return;
+try{{if(localStorage.getItem('ovm')==='1')d.open=true}}catch(e){{}}
+d.addEventListener('toggle',()=>{{try{{localStorage.setItem('ovm',d.open?'1':'0')}}catch(e){{}}}});
+document.querySelectorAll('a[href="#ovm"]').forEach(a=>a.onclick=e=>{{e.preventDefault();d.open=true;d.scrollIntoView({{behavior:'smooth',block:'start'}})}})}})();
+// ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
+const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
+const tvSym=t=>t+'USD';                     // TradingView finds BTCUSD, ETHUSD... on its own
+function tvLib(){{return tvLoading||(tvLoading=new Promise((ok,no)=>{{const s=document.createElement('script');s.src='https://s3.tradingview.com/tv.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)}}))}}
+function tvDraw(){{document.getElementById('cmw').innerHTML='<div id="cmc"></div>';
+const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbol:tvSym(cmSym),interval:cmIv,timezone:'America/Chicago',
+theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
+studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
+.catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
+function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
+const ix=/-IDX$/.test(t);if(ix){{cmSrc='trend';setOn('.bar.src','trend','src')}}      // a category index: our own chart only
+document.querySelector('.bar.src').hidden=ix;document.getElementById('cml').hidden=ix;
+document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
+cm.hidden=false;document.body.style.overflow='hidden';draw()}}
+function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
+document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
+let cmSrc='trend',cmOB=true,cmRng='1Y';const dataCache={{}};
+function draw(){{cmSrc==='trend'?trendDraw():tvDraw();const day=cmSrc==='trend'&&cmIv==='D';
+document.getElementById('cmlg').hidden=cmSrc!=='trend';document.querySelector('.obb').hidden=document.querySelector('.rng').hidden=!day}}
+// order block boxes: [start, end, top, bottom, side, fresh], drawn under the candles; fresh ones run to the right edge
+function obPrim(zs){{let ch,se,rs=[];
+const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,vr=sc.verticalPixelRatio,lw=Math.max(1,Math.round(hr));
+rs.forEach(r=>{{const X=Math.round(r.x1*hr),Y=Math.round(r.y1*vr),W=Math.max(lw,Math.round((r.x2-r.x1)*hr)),H=Math.max(lw,Math.round((r.y2-r.y1)*vr));
+x.fillStyle=r.col+(r.fresh?'40':'1c');x.fillRect(X,Y,W,H);x.lineWidth=lw;x.strokeStyle=r.col+(r.fresh?'e6':'73');x.strokeRect(X+lw/2,Y+lw/2,Math.max(0,W-lw),Math.max(0,H-lw))}})}})}};
+const view={{zOrder:()=>'bottom',renderer:()=>rend}};
+return {{attached:p=>{{ch=p.chart;se=p.series}},paneViews:()=>[view],updateAllViews:()=>{{const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
+zs.forEach(z=>{{const x1=ts.timeToCoordinate(z[0]),x2=z[5]?ts.width():ts.timeToCoordinate(z[1]),y1=se.priceToCoordinate(z[2]),y2=se.priceToCoordinate(z[3]);
+if(x1==null||x2==null||y1==null||y2==null)return;rs.push({{x1:x1-sp,x2:z[5]?x2:x2+sp,y1:Math.min(y1,y2),y2:Math.max(y1,y2),col:z[4]>0?'#2962ff':'#f57c00',fresh:z[5]}})}})}}}}}}
+function trendDraw(){{const w=document.getElementById('cmw');w.innerHTML='<div id="cmc"></div>';const lg=document.getElementById('cmlg');lg.textContent='Loading…';
+const tf=cmIv==='240'?'4H':cmIv,sym=cmSym;
+(dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))).then(D=>{{
+if(sym!==cmSym||cmSrc!=='trend')return;const s=D[tf];if(!s){{lg.textContent='No '+tf+' data for '+sym+'.';return}}
+if(!window.LightweightCharts){{lg.textContent='Chart library blocked.';return}}
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim(),UP=V('--up'),DN=V('--dn');
+const c=LightweightCharts.createChart(document.getElementById('cmc'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut')}},
+grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false}},timeScale:{{borderVisible:false,timeVisible:tf==='4H',minBarSpacing:0.05}}}});
+const runs=[];s.tr.forEach((v,i)=>{{if(!v)return;const r=runs[runs.length-1];if(r&&r.v===v&&r.b===i-1)r.b=i;else runs.push({{v,a:i,b:i}})}});
+const box=document.getElementById('cmc');box.style.position='relative';const lay=document.createElement('div');lay.className='trl';box.appendChild(lay);
+function shade(){{const ts=c.timeScale(),sp=ts.options().barSpacing,w=box.clientWidth-c.priceScale('right').width();
+lay.innerHTML=runs.map(r=>{{let x1=ts.timeToCoordinate(s.t[r.a]),x2=ts.timeToCoordinate(s.t[r.b]);if(x1==null||x2==null)return'';
+x1=Math.max(0,x1-sp/2);x2=Math.min(w,x2+sp/2);return x2>x1?`<i style="left:${{x1}}px;width:${{x2-x1}}px;background:${{r.v>0?UP:DN}}"></i>`:''}}).join('')}}
+c.timeScale().subscribeVisibleLogicalRangeChange(()=>requestAnimationFrame(shade));new ResizeObserver(()=>requestAnimationFrame(shade)).observe(box);
+const vol=c.addHistogramSeries({{priceScaleId:'v',priceFormat:{{type:'volume'}},lastValueVisible:false,priceLineVisible:false}});c.priceScale('v').applyOptions({{scaleMargins:{{top:0.85,bottom:0}}}});
+vol.setData(s.t.map((t,i)=>({{time:t,value:s.v[i],color:(s.c[i]>=s.o[i]?UP:DN)+'55'}})));
+const k=c.addCandlestickSeries({{upColor:UP,downColor:DN,wickUpColor:UP,wickDownColor:DN,borderVisible:false}});
+k.applyOptions({{priceFormat:PF(s.c[s.c.length-1])}});
+k.setData(s.t.map((t,i)=>({{time:t,open:s.o[i],high:s.h[i],low:s.l[i],close:s.c[i]}})));
+[['e10','#e8a33d',0],['e20',V('--acc'),0],['e50','#a259d9',0],['m150',V('--mut'),2]].forEach(([key,col,ls])=>{{
+const l=c.addLineSeries({{color:col,lineWidth:key==='m150'?2:1,lineStyle:ls,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}});
+l.setData(s.t.map((t,i)=>s[key][i]==null?{{time:t}}:{{time:t,value:s[key][i]}}))}});
+const mk=[];for(let i=1;i<s.t.length;i++)if(s.tr[i]!==s.tr[i-1]&&s.tr[i]!==0)mk.push(s.tr[i]>0?{{time:s.t[i],position:'belowBar',color:UP,shape:'arrowUp'}}:{{time:s.t[i],position:'aboveBar',color:DN,shape:'arrowDown'}});
+const five=tf==='D'&&cmRng==='5Y';k.setMarkers(five?[]:mk);if(cmOB&&tf==='D'&&s.ob)k.attachPrimitive(obPrim(s.ob));
+const n=s.t.length;if(tf==='D'&&cmRng==='1Y'&&n>{YEAR})c.timeScale().setVisibleLogicalRange({{from:n-{YEAR},to:n+1}});else c.timeScale().fitContent();
+let i=s.tr.length-1;const st=s.tr[i];while(i>0&&s.tr[i-1]===st)i--;
+const since=typeof s.t[i]==='number'?new Date(s.t[i]*1000).toISOString().slice(0,10):s.t[i];
+const last=s.c[s.c.length-1],fresh=(s.ob||[]).filter(z=>z[5]),pct=v=>{{const p=(v/last-1)*100;return(p>=0?'+':'')+p.toFixed(1)+'%'}};
+const sup=fresh.filter(z=>z[4]>0&&z[2]<=last).sort((a,b)=>b[2]-a[2])[0],res=fresh.filter(z=>z[4]<0&&z[3]>=last).sort((a,b)=>a[3]-b[3])[0];
+const obTxt=!cmOB||tf!=='D'?'':' · <span title="Order block: the last opposite candle before a strong move, where traders got caught on the wrong side. Blue = bullish (support), orange = bearish (resistance). A box ends where price first came back; solid boxes are still untouched.">order blocks</span>: '+
+(sup?'<span style="color:#2962ff">support '+FP(sup[3])+'–'+FP(sup[2])+' ('+pct(sup[2])+')</span>':'no untouched support')+', '+
+(res?'<span style="color:#f57c00">resistance '+FP(res[3])+'–'+FP(res[2])+' ('+pct(res[3])+')</span>':'no untouched resistance');
+lg.innerHTML=(st>0?'<span class="up">Uptrend</span>':st<0?'<span class="dn">Downtrend</span>':'<b>No trend</b>')+' since '+since+
+' · <span title="Uptrend: EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; 150 MA. Downtrend: the reverse.">green = uptrend, red = downtrend</span> · EMA 10 orange, 20 blue, 50 purple, 150 dashed'+obTxt}})
+.catch(()=>{{if(sym!==cmSym)return;lg.textContent='Trend data not available for '+sym+' here, showing the indicator chart.';cmSrc='tv';setOn('.bar.src','tv','src');tvDraw()}})}}
+function setOn(sel,val,key){{document.querySelectorAll(sel+' button').forEach(x=>x.classList.toggle('on',x.dataset[key]===val))}}
+document.querySelectorAll('.bar.tfb button').forEach(b=>b.onclick=()=>{{cmIv=b.dataset.iv;setOn('.bar.tfb',cmIv,'iv');draw()}});
+document.querySelectorAll('.bar.src button').forEach(b=>b.onclick=()=>{{cmSrc=b.dataset.src;setOn('.bar.src',cmSrc,'src');draw()}});
+document.getElementById('obt').onclick=e=>{{cmOB=!cmOB;e.currentTarget.classList.toggle('on',cmOB);draw()}};
+document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.dataset.rng;setOn('.bar.rng',cmRng,'rng');draw()}});
+cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
+document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
+</script>
+<script>{paper_js}</script></body></html>"""
+
+# --------------------------------------------------------------------- main
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--demo", action="store_true")
+    ap.add_argument("--out", default="output")
+    a = ap.parse_args()
+
+    print("Loading coins + prices...")
+    if a.demo:
+        frames = {list(COINS)[i]: d.assign(Volume=d.Volume * 20) for i, d in enumerate(demo_frames().values())}   # dollars
+        for t in list(frames)[2::7]:       # a few fractions-of-a-cent coins, like SHIB or PEPE
+            frames[t] = frames[t].assign(**{k: frames[t][k] * 1e-6 for k in ("Open", "High", "Low", "Close")})
+        sectors = {t: COINS[t][1] for t in frames}
+        subs = dict(sectors)
+        sp500 = set(frames)
+    else:
+        tickers, sectors, subs, sp500 = get_universe()
+        frames = download_with_retry(tickers)
+        if len(frames) < 0.8 * len(tickers):
+            sys.exit(f"Only got data for {len(frames)} of {len(tickers)} coins; not publishing a partial scan.")
+        print("  missing:", ", ".join(sorted(set(tickers) - set(frames))) or "none")
+        print("  Yahoo names:", ", ".join(f"{t}={n}" for t, n in sorted(YF.items()) if n != f"{t}-USD") or "all SYMBOL-USD")
+    print(f"{len(frames)} coins with enough history")
+
+    breadth = build_breadth(frames)
+    asof = breadth.index[-1].date().isoformat()
+    rows = [r for r in (analyze(t, d) for t, d in frames.items()) if r]
+    df = pd.DataFrame(rows)
+    df["sector"] = df.ticker.map(sectors).fillna("")
+    bh = {}
+    try:
+        bh = breadth_history(frames, sectors, sp500)
+    except Exception as e:                 # extras; never block the scan
+        print("  breadth history failed:", e)
+    # the user's overbought rule: nothing with RSI over 70, CCI over 100, or its category's or the market's breadth over the
+    # 75 line gets a setup ("Overbought" instead), a Top picks spot, a Plan M spot or a paper buy
+    br = {g: round(float(b.rise.iloc[-1]), 1) for g, b in bh.items()}       # tonight's breadth, as the page shows it
+    mkt_hot = breadth_hot(None, br)
+    obr = overbought(frames, sectors, br)
+    ob = {t: " and ".join(own + ([sec] if sec else [])) for t, (own, sec) in obr.items()}
+    df["ob"] = df.ticker.map(ob).fillna("")
+    would = df.setup.notna()
+    df["blocked"] = would & ((df.ob != "") | bool(mkt_hot))
+    df["has_setup"] = would & ~df.blocked
+    df["setup"] = np.where(df.has_setup, df.setup, np.where((df.ob != "") | df.blocked, "Overbought", "Uptrend"))
+    secb = sector_breadth(frames, df, sectors)
+    picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
+    print(f"{int(df.core.sum())} of {len(df)} liquid coins in uptrend; {int(picks.has_setup.sum())} setups ({(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
+    print(f"  overbought: {len(ob)} coins (RSI over {CFG['OB_RSI']}, CCI over {CFG['OB_CCI']} or category breadth over "
+          f"{CFG['OB_BREADTH']}); the market is {'overbought: ' + mkt_hot if mkt_hot else 'not overbought'}; "
+          f"{int(df.blocked.sum())} setups left out")
+
+    print("Loading the category charts...")
+    etf_frames = {}
+    try:
+        if a.demo:
+            ef = demo_frames(n=len(SECTOR_ETF), days=2600)
+            etf_frames = dict(zip(SECTOR_ETF.values(), ef.values()))
+        else:
+            etf_frames = download_etfs(frames, sectors)
+        charts = chart_data(etf_frames)
+    except Exception as e:                 # charts are extras; never block the scan on them
+        print("  category charts failed:", e)
+        charts = {}
+    try:
+        chart_breadth(charts, bh)
+    except Exception as e:
+        print("  breadth strips failed:", e)
+    print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} groups")
+
+    out = Path(a.out); out.mkdir(exist_ok=True)
+    hist = Path(__file__).resolve().parent / "history"
+    bench = etf_frames.get(BENCH)
+    if bench is None and BENCH in frames:
+        bench = frames[BENCH]
+    print("Building the top picks lists...")
+    lists = None
+    try:
+        state_file = hist / "ai_picks.json"   # yesterday's AI picks
+        prev = None if a.demo or not state_file.exists() else json.loads(state_file.read_text(encoding="utf-8"))
+        spy = bench["Close"] if bench is not None else None
+        lists, state = pick_lists(frames, sectors, subs, spy, prev, a.demo, step=True, ob=ob, mkt_hot=mkt_hot)
+        lists["live_at"] = None
+        (out / "ai_picks.json").write_text(json.dumps(state, indent=1), encoding="utf-8")
+        print(f"  new uptrends {lists['nu']['total']}, breakout watch {len(lists['bo']['rows'])}, AI picks {len(lists['ai']['rows'])}")
+        pd.DataFrame([dict(list=k, rank=i + 1, **{c: r.get(c) for c in ("ticker", "sector", "close", "rs", "added", "price", "vol1", "vol5")},
+                           ai_rank=r.get("rank"), why="; ".join(r.get("why") or []))
+                      for k in ("nu", "bo", "ai") for i, r in enumerate(lists[k]["rows"])]).to_csv(out / f"toppicks_{asof}.csv", index=False)
+    except Exception as e:                 # never block the scan on the lists
+        import traceback
+        traceback.print_exc()
+        print("  top picks failed:", e)
+    print("Building the OVTLYR plan...")
+    ov = None
+    try:
+        und = {u: (bench if u == BENCH else frames.get(u)) for u in OV["ETF"].values()}
+        saved = sorted(f for f in hist.glob("ovtlyr_*.json") if f.stem[7:] < asof)
+        prev_ov = None if a.demo or not saved else json.loads(saved[-1].read_text(encoding="utf-8"))   # the last list
+        ov = ovtlyr_plan(frames, sectors, bench, und, None, prev_ov, br,
+                         {t: " and ".join(own) for t, (own, _) in obr.items() if own})
+        ov["live_at"] = None
+        (out / f"ovtlyr_{asof}.json").write_text(json.dumps(ov, indent=1), encoding="utf-8")
+        f = ov["funnel"]
+        print(f"  market {'on' if ov['market']['ok'] else 'off'}, {sum(v['ok'] for v in ov['sectors'].values())} categories pass, "
+              f"{f['setups']} Plan M setups (of {f['signal']} buy signals; {sum(x['new'] for x in ov['setups'])} new, "
+              f"{len(ov['dropped'])} dropped since {ov['prev_asof']}), "
+              + ", ".join(f"{k} {'set up' if e['ok'] else 'not set up'}" for k, e in ov["etf"].items()))
+    except Exception as e:                 # never block the scan on it
+        import traceback
+        traceback.print_exc()
+        print("  OVTLYR plan failed:", e)
+    listed = [r["ticker"] for k in ("nu", "bo", "ai") for r in (lists or {}).get(k, {}).get("rows", [])]
+    listed += [h["ticker"] for k in ("nu", "bo") for h in (lists or {}).get(k, {}).get("hot", [])]
+    listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
+    extra = {sym: etf_frames[sym] for sym in SECTOR_ETF.values() if sym in etf_frames and sym.endswith("-IDX")}
+    chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + [BENCH] + list(OV["ETF"]) + list(extra)))
+    print(f"Building trend charts for {len(chart_tks)} coins and indexes...")
+    try:
+        print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames, extra)} chart files")
+    except Exception as e:                 # extras; never block the scan
+        print("  coin charts failed:", e)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh)
+    (out / "latest.html").write_text(html, encoding="utf-8")
+    picks.to_csv(out / f"screener_{asof}.csv", index=False)
+    secb.round(1).to_csv(out / f"sectors_{asof}.csv", index=False)
+    if bh:                                 # crypto/paper.py's overbought rule reads the market's and each category's breadth here
+        pd.DataFrame([dict(group=g, date=b.index[-1].date().isoformat(), rise=br[g], avg5=round(float(b.a5.iloc[-1]), 1),
+                           avg10=round(float(b.avg.iloc[-1]), 1), upswing=int(b.on.iloc[-1]), overbought=int(br[g] > CFG["OB_BREADTH"]),
+                           oversold=int(br[g] < CFG["OS_BREADTH"])) for g, b in bh.items()]).to_csv(out / f"breadth_{asof}.csv", index=False)
+    (out / "yahoo_names.json").write_text(json.dumps(YF, indent=1, sort_keys=True), encoding="utf-8")   # for crypto/paper.py
+    print(f"Done. Open {out / 'latest.html'}")
+
+
+if __name__ == "__main__":
+    main()

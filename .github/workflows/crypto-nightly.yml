@@ -1,0 +1,92 @@
+name: Crypto screener
+
+# The crypto page at .../Swing-Screener-/crypto/. GitHub Pages serves one site per repo, so this deploys the stock
+# page from the last nightly stock run (its saved site files) plus the crypto page in crypto/; the stock nightly does
+# the same the other way round. It never deploys without the stock page.
+
+on:
+  schedule:
+    # 00:30 UTC every day, half an hour after the day's crypto bar closes (7:30 PM Central in summer, 6:30 PM in winter)
+    - cron: "30 0 * * *"
+  workflow_dispatch: {}      # lets you run it any time from the Actions tab
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read              # to fetch the stock page's site files from the last stock run
+
+concurrency:
+  group: screener
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run the crypto screener
+        run: python crypto/screener.py --out crypto-out
+
+      - name: Save daily files to crypto/history
+        run: |
+          mkdir -p crypto/history
+          cp crypto-out/*.csv crypto/history/
+          cp crypto-out/ai_picks.json crypto-out/yahoo_names.json crypto/history/ 2>/dev/null || true
+          cp crypto-out/ovtlyr_*.json crypto/history/ 2>/dev/null || true    # traded by crypto/paper.py the next morning
+          git config user.name "screener-bot"
+          git config user.email "screener-bot@users.noreply.github.com"
+          git add crypto/history
+          git commit -m "Crypto screener results $(date -u +%F)" || echo "nothing to commit"
+          git pull --rebase origin main
+          git push
+
+      - name: Build the crypto site files
+        run: |
+          mkdir -p crypto-site
+          cp crypto-out/latest.html crypto-site/index.html
+          cp crypto-out/*.csv crypto-site/
+          cp -r crypto-out/data crypto-site/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crypto-site
+          path: crypto-site
+          retention-days: 7
+
+      - name: Get the stock page from the last stock run
+        id: stock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          mkdir -p stock site
+          if [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n github-pages -D stock && [ -f stock/artifact.tar ]; then
+            tar -xf stock/artifact.tar -C site
+            rm -rf site/crypto && cp -r crypto-site site/crypto
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::The stock page's site files weren't found, so this run doesn't deploy (that would take the stock page down). The next stock nightly run publishes the crypto page with it."
+          fi
+
+      - uses: actions/configure-pages@v5
+        if: steps.stock.outputs.ok
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.stock.outputs.ok
+        with:
+          path: site
+          retention-days: 7
+      - id: deploy
+        if: steps.stock.outputs.ok
+        uses: actions/deploy-pages@v4

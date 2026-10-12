@@ -10,6 +10,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: read              # to fetch the crypto page's files from the last crypto run
 
 concurrency:
   group: screener
@@ -41,6 +42,13 @@ jobs:
           cp output/*.csv site/
           cp -r output/data site/ 2>/dev/null || true
 
+      - name: Add the crypto page from the last crypto run (crypto/, best effort)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow crypto-nightly.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
+          [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n crypto-site -D site/crypto || echo "No crypto page files found; publishing the stock page alone."
+
       - name: Save daily CSVs to history
         run: |
           mkdir -p history
@@ -58,5 +66,6 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+          retention-days: 7    # the crypto workflow republishes this with the crypto page, weekends too
       - id: deploy
         uses: actions/deploy-pages@v4
