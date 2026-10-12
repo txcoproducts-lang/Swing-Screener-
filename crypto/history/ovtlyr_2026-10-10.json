@@ -1,0 +1,280 @@
+{
+ "asof": "2026-10-10",
+ "market": {
+  "ok": false,
+  "checks": [
+   {
+    "k": "heat",
+    "ok": true,
+    "text": "BTC heatmap (RSI) 52, up from 50 (needs under 70 and rising)"
+   },
+   {
+    "k": "signal",
+    "ok": true,
+    "text": "BTC buy signal: 10 EMA 83,608.13 above the 20 EMA 83,209.70"
+   },
+   {
+    "k": "trend",
+    "ok": true,
+    "text": "BTC 10/20/50 uptrend: close 82,912.23 above the 50 EMA 79,869.66"
+   },
+   {
+    "k": "breadth",
+    "ok": false,
+    "text": "Market breadth: 69% of coins have the 10 EMA above the 20, below its 10-day average of 86%"
+   },
+   {
+    "k": "hot",
+    "ok": true,
+    "text": "Your overbought rule: 69% of coins rising, not over the 75 line"
+   }
+  ],
+  "spy": {
+   "date": "2026-10-10",
+   "close": 82912.23,
+   "high": 83092.03,
+   "e10": 83608.13,
+   "e20": 83209.7,
+   "e50": 79869.66,
+   "rsi": 51.5,
+   "rsi_prev": 50.2,
+   "atr": 2093.9,
+   "cci": -115.6
+  },
+  "breadth": {
+   "pct": 69.0,
+   "ema": 86.3
+  }
+ },
+ "sectors": {
+  "AI & data": {
+   "ok": false,
+   "n": 10,
+   "bull": 100.0,
+   "bull_ema": 99.6,
+   "rsi": 54.8,
+   "rsi_prev": 53.1,
+   "miss": [
+    "overbought by your rule: 100% of its coins rising, over the 75 line"
+   ]
+  },
+  "DeFi": {
+   "ok": false,
+   "n": 18,
+   "bull": 77.8,
+   "bull_ema": 90.3,
+   "rsi": 52.3,
+   "rsi_prev": 50.7,
+   "miss": [
+    "overbought by your rule: 78% of its coins rising, over the 75 line",
+    "breadth 78% not above its 10-day average 90%"
+   ]
+  },
+  "Exchange tokens": {
+   "ok": false,
+   "n": 8,
+   "bull": 50.0,
+   "bull_ema": 75.3,
+   "rsi": 49.9,
+   "rsi_prev": 49.3,
+   "miss": [
+    "breadth 50% not above its 10-day average 75%",
+    "RSI 50 not above BTC's 52"
+   ]
+  },
+  "Gaming": {
+   "ok": false,
+   "n": 7,
+   "bull": 100.0,
+   "bull_ema": 99.4,
+   "rsi": 58.6,
+   "rsi_prev": 58.9,
+   "miss": [
+    "overbought by your rule: 100% of its coins rising, over the 75 line",
+    "RSI 58.6 not rising (was 58.9)"
+   ]
+  },
+  "Infrastructure": {
+   "ok": false,
+   "n": 8,
+   "bull": 75.0,
+   "bull_ema": 93.1,
+   "rsi": 54.1,
+   "rsi_prev": 54.3,
+   "miss": [
+    "breadth 75% not above its 10-day average 93%",
+    "RSI 54.1 not rising (was 54.3)"
+   ]
+  },
+  "Layer 1": {
+   "ok": false,
+   "n": 25,
+   "bull": 80.0,
+   "bull_ema": 87.3,
+   "rsi": 51.7,
+   "rsi_prev": 49.4,
+   "miss": [
+    "overbought by your rule: 80% of its coins rising, over the 75 line",
+    "breadth 80% not above its 10-day average 87%"
+   ]
+  },
+  "Layer 2": {
+   "ok": false,
+   "n": 7,
+   "bull": 57.1,
+   "bull_ema": 82.2,
+   "rsi": 59.6,
+   "rsi_prev": 56.6,
+   "miss": [
+    "breadth 57% not above its 10-day average 82%"
+   ]
+  },
+  "Memes": {
+   "ok": false,
+   "n": 8,
+   "bull": 25.0,
+   "bull_ema": 67.4,
+   "rsi": 43.4,
+   "rsi_prev": 43.8,
+   "miss": [
+    "breadth 25% not above its 10-day average 67%",
+    "RSI 43 not above BTC's 52",
+    "RSI 43 not rising (was 44)"
+   ]
+  },
+  "Payments": {
+   "ok": false,
+   "n": 9,
+   "bull": 22.2,
+   "bull_ema": 73.6,
+   "rsi": 45.8,
+   "rsi_prev": 44.9,
+   "miss": [
+    "breadth 22% not above its 10-day average 74%",
+    "RSI 46 not above BTC's 52"
+   ]
+  }
+ },
+ "etf": {
+  "BTC": {
+   "under": "BTC",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "BTC heatmap (RSI) 52 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": true,
+     "text": "BTC buy signal: 10 EMA above the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": true,
+     "text": "BTC uptrend: close 82,912.23 above the 50 EMA 79,869.66"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "BTC value zone: close 82,912.23, zone 83,209.70-87,397.50 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "BTC order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "cci",
+     "ok": true,
+     "text": "Your overbought rule: BTC CCI -116 is not over 100"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 69% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [],
+   "date": "2026-10-10",
+   "close": 82912.23,
+   "high": 83092.03,
+   "e10": 83608.13,
+   "e20": 83209.7,
+   "e50": 79869.66,
+   "rsi": 51.5,
+   "rsi_prev": 50.2,
+   "atr": 2093.9,
+   "cci": -115.6
+  },
+  "ETH": {
+   "under": "ETH",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "ETH heatmap (RSI) 41 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "ETH buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "ETH uptrend: close 2,504.03 above the 50 EMA 2,501.33"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "ETH value zone: close 2,504.03, zone 2,606.34-2,773.48 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "ETH order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "cci",
+     "ok": true,
+     "text": "Your overbought rule: ETH CCI -189 is not over 100"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 69% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "ETH's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-10",
+   "close": 2504.03,
+   "high": 2516.62,
+   "e10": 2588.58,
+   "e20": 2606.34,
+   "e50": 2501.33,
+   "rsi": 41.1,
+   "rsi_prev": 39.0,
+   "atr": 83.5712,
+   "cci": -189.1
+  }
+ },
+ "setups": [],
+ "funnel": {
+  "signal": 0,
+  "rules": 0,
+  "sector": 0,
+  "hot": 0,
+  "near_ob": 0,
+  "earnings": 0,
+  "setups": 0,
+  "earn_checked": false
+ },
+ "dropped": [],
+ "prev_asof": null,
+ "live_at": null
+}

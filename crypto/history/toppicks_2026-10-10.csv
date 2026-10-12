@@ -1,0 +1,8 @@
+list,rank,ticker,sector,close,rs,added,price,vol1,vol5,ai_rank,why
+ai,1,ZEC,Payments,1220.3377685546875,99,2026-10-10,1220.34,460469032.0,4683290445.0,1,+140% in 3 months and +434% in 12; 26% below its 52-week high
+ai,2,QNT,Infrastructure,239.70513916015625,98,2026-10-10,239.705,105446479.0,865877433.0,2,+264% in 3 months and +180% in 12; 16% below its 52-week high
+ai,3,HYPE,Exchange tokens,85.4019775390625,93,2026-10-10,85.402,556078998.0,4214416608.0,6,+28% in 3 months and +124% in 12; 12% below its 52-week high
+ai,4,ZRO,Infrastructure,1.9894989728927612,86,2026-10-10,1.9895,56711493.0,616345077.0,13,+117% in 3 months and +10% in 12; 14% below its 52-week high
+ai,5,XMR,Payments,519.51953125,84,2026-10-10,519.52,92061474.0,580476640.0,14,+61% in 3 months and +76% in 12; 27% below its 52-week high
+ai,6,ARB,Layer 2,0.1893630027770996,83,2026-10-10,0.189363,98859865.0,774397353.0,15,+100% in 3 months and -36% in 12; 47% below its 52-week high
+ai,7,PYTH,Infrastructure,0.07873699814081192,80,2026-10-10,0.078737,25246294.0,220038253.0,18,+68% in 3 months and -29% in 12; 40% below its 52-week high
