@@ -1729,9 +1729,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
-@media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}</style></head><body>
-{banner}<h1>Crypto Screener<span class="reg {rcls}">{reg}</span></h1>
-<div class="meta">Data as of {asof} (daily bars close at midnight UTC) · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out · <a href="../">Stock screener</a></div>
+@media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
+.mkt{{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;margin:2px 0 8px}}.mkt a{{padding:6px 18px;border-radius:999px;color:var(--fg);text-decoration:none;font-weight:600;font-size:14px}}.mkt a.on{{background:var(--acc);color:var(--bg)}}</style></head><body>
+{banner}<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a></nav>
+<h1>Crypto Screener<span class="reg {rcls}">{reg}</span></h1>
+<div class="meta">Data as of {asof} (daily bars close at midnight UTC) · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out</div>
 <div class="cards">{cards}</div>
 {paper_html}
 {picks_html(lists, earn, calls)}
