@@ -161,6 +161,8 @@ def download(tickers, size=50, period="2y"):
     print(f"  downloading {len(tickers)} coins ({len(names)} Yahoo names)", flush=True)
     raw = yf_raw(list(names), size=size, period=period, interval="1d")
     time.sleep(1)
+    if "BTC-USD" in raw:                 # which days Yahoo has, so a missing latest day shows in the log
+        print("  Yahoo's latest BTC-USD bars:", ", ".join(str(i) for i in raw["BTC-USD"].index[-3:]))
     best = {}
     for n, d in raw.items():
         t = names[n]
