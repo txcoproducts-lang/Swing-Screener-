@@ -1,5 +1,5 @@
 {
- "as_of": "2026-10-09",
+ "as_of": "2026-10-12",
  "picks": [
   {
    "ticker": "SNDK",
@@ -26,12 +26,6 @@
    "spy": 769.64
   },
   {
-   "ticker": "BE",
-   "added": "2026-10-02",
-   "price": 289.15,
-   "spy": 769.64
-  },
-  {
    "ticker": "MPC",
    "added": "2026-10-02",
    "price": 422.33,
@@ -50,5 +44,16 @@
    "spy": 769.64
   }
  ],
- "closed": []
+ "closed": [
+  {
+   "ticker": "BE",
+   "added": "2026-10-02",
+   "price": 289.15,
+   "spy": 769.64,
+   "dropped": "2026-10-12",
+   "out": 262.28,
+   "spy_out": 778.1,
+   "why": "fell out of the top 20"
+  }
+ ]
 }

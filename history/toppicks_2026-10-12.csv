@@ -1,0 +1,21 @@
+list,rank,ticker,sector,close,rs,added,price,vol1,vol5,call_exp,call_dte,call_strike,call_delta,call_oi,call_quote,call_fits,call_premium,call_misses,ai_rank,why
+nu,1,CNC,Health Care,67.0199966430664,92,,,3507459.0,19188959.0,2026-10-30,18.0,63.0,0.7042497791001254,7.0,live,0.0,6.0,oi,,
+nu,2,IFF,Materials,84.95999908447266,84,,,1289930.0,9073530.0,,,,,,,,,,,
+nu,3,RSG,Industrials,219.75,46,,,939868.0,5992768.0,,,,,,,,,,,
+bo,1,TECH,Health Care,72.55999755859375,71,,,2419383.0,16084283.0,,,,,,,,,,,
+bo,2,META,Communication Services,742.9600219726562,68,,,24749285.0,79190185.0,2026-10-30,18.0,720.0,0.6413981277529371,570.0,live,7.0,44.975,,,
+bo,3,AME,Industrials,249.88999938964844,74,,,630307.0,4823407.0,2026-11-20,39.0,250.0,0.5373089882549753,3684.0,live,0.0,9.6,dte,,
+bo,4,TRMB,Information Technology,59.4900016784668,24,,,1042175.0,9044575.0,,,,,,,,,,,
+bo,5,DELL,Information Technology,576.760009765625,99,,,5231750.0,25292550.0,2026-10-30,18.0,570.0,0.5694870930584671,216.0,live,0.0,32.575,oi,,
+bo,6,GILD,Health Care,150.42999267578125,80,,,5231071.0,24342671.0,,,,,,,,,,,
+bo,7,IFF,Materials,84.95999908447266,84,,,1289930.0,9073530.0,,,,,,,,,,,
+bo,8,PFE,Health Care,28.399999618530273,76,,,17930455.0,140845155.0,2026-10-30,18.0,28.0,0.6287576914113425,1346.0,live,5.0,0.8200000000000001,,,
+bo,9,RSG,Industrials,219.75,46,,,939868.0,5992768.0,,,,,,,,,,,
+bo,10,A,Health Care,171.3300018310547,87,,,1513841.0,10194141.0,2026-11-20,39.0,165.0,0.6565214922675067,84.0,live,0.0,11.35,dte+oi,,
+ai,1,MRNA,Health Care,213.74000549316406,99,2026-10-02,190.01,12832909.0,112535009.0,2026-10-30,18.0,200.0,0.6535315264974161,989.0,live,5.0,29.4,,1.0,+217% in 3 months and +676% in 12; 5% below its 52-week high; strong industry (Biotechnology)
+ai,2,SNDK,Information Technology,1487.3299560546875,99,2026-10-02,1719.99,8663985.0,39294785.0,2026-10-30,18.0,1500.0,0.5129290390053466,166.0,live,0.0,84.9,oi,2.0,"-15% in 3 months and +1047% in 12; 36% below its 52-week high; strong industry (Technology Hardware, Storage & Peripherals)"
+ai,3,DELL,Information Technology,576.760009765625,99,2026-10-02,562.52,5231750.0,25292550.0,2026-10-30,18.0,570.0,0.5694870930584671,216.0,live,0.0,32.575,oi,3.0,"+26% in 3 months and +275% in 12; 2% below its 52-week high; strong industry (Technology Hardware, Storage & Peripherals)"
+ai,4,MU,Information Technology,989.0399780273438,98,2026-10-02,1074.89,23566935.0,125971135.0,2026-10-30,18.0,950.0,0.6669752543453737,317.0,live,0.0,64.975,oi,5.0,+1% in 3 months and +415% in 12; 18% below its 52-week high; strong industry (Semiconductors)
+ai,5,MPC,Energy,458.80999755859375,97,2026-10-02,422.33,1518632.0,9730332.0,2026-11-20,39.0,450.0,0.5906793267575072,416.0,live,0.0,33.7,dte+oi,9.0,+52% in 3 months and +149% in 12; 1% below its 52-week high; strong industry (Oil & Gas Refining & Marketing)
+ai,6,ILMN,Health Care,276.6700134277344,97,2026-10-02,273.04,1642742.0,14037542.0,2026-11-20,39.0,280.0,0.5286374408108822,245.0,live,0.0,22.1,dte+oi,11.0,+45% in 3 months and +187% in 12; 6% below its 52-week high; strong industry (Life Sciences Tools & Services)
+ai,7,VLO,Energy,436.0,96,2026-10-02,406.3,1714255.0,11374355.0,2026-10-30,18.0,410.0,0.7277948815300637,54.0,live,0.0,35.75,oi,12.0,+45% in 3 months and +175% in 12; 2% below its 52-week high; strong industry (Oil & Gas Refining & Marketing)
