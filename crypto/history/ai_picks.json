@@ -1,5 +1,5 @@
 {
- "as_of": "2026-10-10",
+ "as_of": "2026-10-11",
  "picks": [
   {
    "ticker": "ZEC",
@@ -38,11 +38,28 @@
    "spy": 82912.23
   },
   {
+   "ticker": "STX",
+   "added": "2026-10-11",
+   "price": 0.398661,
+   "spy": 83679.47
+  },
+  {
+   "ticker": "DASH",
+   "added": "2026-10-11",
+   "price": 52.7394,
+   "spy": 83679.47
+  }
+ ],
+ "closed": [
+  {
    "ticker": "PYTH",
    "added": "2026-10-10",
    "price": 0.078737,
-   "spy": 82912.23
+   "spy": 82912.23,
+   "dropped": "2026-10-11",
+   "out": 0.078623,
+   "spy_out": 83679.47,
+   "why": "fell out of the top 20"
   }
- ],
- "closed": []
+ ]
 }
