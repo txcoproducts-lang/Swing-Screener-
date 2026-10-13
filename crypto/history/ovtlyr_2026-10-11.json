@@ -63,8 +63,8 @@
    "n": 18,
    "bull": 77.8,
    "bull_ema": 88.0,
-   "rsi": 54.8,
-   "rsi_prev": 52.3,
+   "rsi": 54.7,
+   "rsi_prev": 52.1,
    "miss": [
     "overbought by your rule: 78% of its coins rising, over the 75 line",
     "breadth 78% not above its 10-day average 88%"
