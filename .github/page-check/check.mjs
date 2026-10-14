@@ -74,6 +74,12 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
     log(`[${name}] Plan M list: ${await p.$eval("#ovm summary", e => e.innerText.replace(/\n/g, " "))}`);
     await p.screenshot({ path: `${out}/${name}-1-planm.png` });
   }
+  if (await p.$(".ovseg")) {                           // the OVTLYR screener behind the Plan | Screener switch
+    await p.click('.ovseg [data-ov="scr"]'); await at(".ovseg"); await p.evaluate(() => window.scrollBy(0, -80)); await p.waitForTimeout(300);
+    log(`[${name}] OVTLYR screener: ${await p.$eval(".ovf", e => e.innerText.replace(/\n/g, " | "))}, rows shown=${await p.$$eval("#ov-s tbody tr", r => r.length)}`);
+    await p.screenshot({ path: `${out}/${name}-1-ov-screener.png` });
+    await click0('.ovseg [data-ov="plan"]');
+  }
   if (await at("#hm")) {
     await p.waitForTimeout(200);
     log(`[${name}] heatmap: ${await p.$$eval("#hm .hmr", rs => rs.map(r => r.innerText.replace(/\n/g, " ").trim()).filter(Boolean).join(" | "))}`);
