@@ -1516,7 +1516,7 @@ def ss_html(df, sw, mkt_hot=""):
         top = ok[ok.sector == n].sort_values("rs_n").head(SS["PER_SECTOR"])
         best = ", ".join(tk(t) for t in top.ticker) or (
             '<span class="mut">none: ' + ("over the 75 line" if w["z"] == 2 else "fading") + "</span>" if not (w["on"] and w["z"] != 2)
-            else '<span class="mut">no coin in your uptrend</span>')
+            else '<span class="mut">' + (f'{hot} in your uptrend, all overbought' if (hot := int((df.core & (df.sector == n)).sum())) else 'no coin in your uptrend') + '</span>')
         srows.append(f'<tr><td data-v="{i + 1}">{i + 1}</td><td data-v="{html_esc(n)}">{html_esc(SHORT_SECTOR.get(n, n))}</td>'
                      f'<td data-v="{w["rise"]}">{w["rise"]:.0f}%</td><td data-v="{w["avg"]}">{w["avg"]:.0f}%</td>'
                      f'<td data-v="{int(w["on"] and w["z"] != 2)}">{swing_tag(w)}</td><td data-v="{len(top)}" class="why">{best}</td></tr>')
