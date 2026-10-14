@@ -5,7 +5,8 @@ until 2027-04-06, when the stock trial ends too.
   A  "Your system": last night's crypto screener setups (Momentum and Pullback). The stock version buys calls by
      your option rules; coins have no options, so it buys the coin, at most 30% of the account a trade (your cap).
   C  "Your system, after 2 PM": the same rules as A, but it only buys after 2:00 PM Central (3:00 PM New York).
-  B  "Claude's picks": my AI picks list for coins (relative strength momentum), about a tenth of the account each.
+  B  "Claude's picks": my AI picks list for coins (relative strength momentum), about a tenth of the account each;
+     sells on the user's 4-hour exit too (from 2026-10-14).
   D  "OVTLYR plan": OVTLYR's Plan M on coins, Plan ETF on Bitcoin / Ether themselves (there are no 3x crypto funds),
      and spare cash as cash (Plan #SICADFU's SGOV is a Treasury fund, not a coin), on the plan crypto/screener.py
      builds each night (crypto/history/ovtlyr_<date>.json).
@@ -97,7 +98,10 @@ def rules(aid):
         f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the coin's "
         f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20, last night).",
         "A pick it skipped for being overbought is bought later, once it isn't, while it's still on the list.",
-        f"A coin stays while it ranks in the top {SC.CFG['AI_KEEP']}. No stop-loss, as in the stock version.",
+        f"A coin stays while it ranks in the top {SC.CFG['AI_KEEP']}, unless your 4-hour exit sells it first (from Oct 14): "
+        "a 4-hour bar closing with the 10 EMA under the 20 and the price under the 50 EMA, both at once, on the Trend "
+        "view's 4H bars (4 hours each from midnight UTC), checked every 30 minutes. A coin sold that way isn't bought "
+        "back while it stays on the list. No other stop.",
         "The stock version of this list was tested on S&P 500 stocks (2014-2026); it has not been tested on coins, which "
         "swing much harder.",
     ]
@@ -465,13 +469,9 @@ def new_exits(a, day):
              f"The {P['A_STOP']:.0%} stop stays.")
 
 
-def a_exits(a, day):
-    """Your 4-hour exit and the stop, on every run."""
+def flag_4h(a, day):
+    """Mark the positions your 4-hour exit says to sell (p["exit"] holds the reason)."""
     now = day.now
-    if not a["positions"]:
-        return
-    new_exits(a, day)
-    px = day.price([p["ticker"] for p in a["positions"]])
     hourly = day.mkt.hourly([p["ticker"] for p in a["positions"]], day.today)
     utc = now.tz_convert("UTC").tz_localize(None)
     for p in a["positions"]:
@@ -486,6 +486,16 @@ def a_exits(a, day):
             end_ny = end.tz_localize("UTC").tz_convert(NY)
             p["exit"] = (f"Your exit: the 4-hour bar that closed {day_str(end_ny)} at {end_ny:%-I:%M %p} New York time closed "
                          f"at {usd(c)}, under its 50 EMA ({usd(e50)}), with the 10 EMA ({usd(e10)}) under the 20 ({usd(e20)}).")
+
+
+def a_exits(a, day):
+    """Your 4-hour exit and the stop, on every run."""
+    now = day.now
+    if not a["positions"]:
+        return
+    new_exits(a, day)
+    px = day.price([p["ticker"] for p in a["positions"]])
+    flag_4h(a, day)
     for p in list(a["positions"]):
         t = p["ticker"]
         if not day.fresh(t):
@@ -563,6 +573,32 @@ def a_buys(a, day):
 
 
 # ------------------------------------------------------------------ B: my AI picks
+def b_plan_text():
+    return (f"hold while it ranks in the top {SC.CFG['AI_KEEP']} (checked each night) and sell the morning after it "
+            "drops out, or sooner after a 4-hour bar closes with the 10 EMA under the 20 and the price under the 50 EMA "
+            "(your exit).")
+
+
+def b_exits(a, day):
+    """Your 4-hour exit on my AI picks (from Oct 14, mid-trial), on every run. A pick it sells this way isn't bought
+    back while it stays on the list; it can come back once it drops off and is picked again."""
+    if not a["positions"]:
+        return
+    old = [p for p in a["positions"] if not p["plan"].get("x4h")]
+    for p in old:
+        p["plan"]["text"], p["plan"]["x4h"] = b_plan_text(), True
+    if old:
+        note(a, day.now, "Exit rule changed (your rule, from Oct 14): besides leaving my AI picks list, a "
+                         "coin now sells once a 4-hour bar closes with the 10 EMA under the 20 and the price under the "
+                         "50 EMA. One sold that way isn't bought back while it stays on the list.")
+    flag_4h(a, day)
+    px = day.price([p["ticker"] for p in a["positions"] if p.get("exit")])
+    for p in list(a["positions"]):
+        if p.get("exit") and day.fresh(p["ticker"]):
+            a.setdefault("out_4h", {})[p["ticker"]] = day.today.isoformat()
+            sell_coin(a, p, day.now, px[p["ticker"]][0], p["exit"] + " It isn't bought back while it stays on my list.")
+
+
 def b_trade(a, day, quiet=False):
     """Make the account match last night's AI picks list. quiet=True (later runs) only retries what the
     morning run couldn't do, without logging a no-trade note."""
@@ -592,8 +628,11 @@ def b_trade(a, day, quiet=False):
         sell_coin(a, p, now, px[t][0], f"It left my AI picks list last night: it {g['why']}." if g and g.get("why")
                   else "It's no longer on my AI picks list.")
         acted += 1
+    out = a.setdefault("out_4h", {})
+    for t in [t for t in out if t not in picks]:
+        del out[t]                                     # off the list: it can be bought again if it's picked again
     have = {p["ticker"] for p in a["positions"]}
-    new = [t for t in picks if t not in have]
+    new = [t for t in picks if t not in have and t not in out]
     mh = market_hot(day)
     hot = ({t: mh for t in new} if mh else
            hot_now(day, [(t, info.get(t, {}).get("sector", "")) for t in new if day.fresh(t)]))
@@ -616,8 +655,7 @@ def b_trade(a, day, quiet=False):
                  f"on the list since {day_str(dt.date.fromisoformat(added[t]))}" if added.get(t) else "on the list")
         why = (f"On my AI picks list ({since}), {rank} by relative strength among liquid coins"
                + (f": {inf['why']}." if inf.get("why") else "."))
-        plan = dict(text=f"hold while it ranks in the top {SC.CFG['AI_KEEP']} (checked each night) and sell the morning "
-                         "after it drops out.")
+        plan = dict(text=b_plan_text(), x4h=True)
         if buy_coin(a, now, t, px[t][0], budget, why, plan):
             acted += 1
     if quiet:
@@ -971,6 +1009,8 @@ def step(a, day, btc_daily):
             if a["id"] == "D":
                 d_watch(a, day)
             else:
+                if a["id"] == "B":
+                    b_exits(a, day)
                 a_exits(a, day) if a["id"] in ("A", "C") else marks(a, day)
             return None
         start(a, day, btc_daily)
@@ -999,6 +1039,7 @@ def step(a, day, btc_daily):
     elif a["id"] == "D":
         d_trade(a, day, first, late)
     else:
+        b_exits(a, day)
         b_trade(a, day, quiet=not first)
         marks(a, day)
     if first or late:
