@@ -65,11 +65,10 @@
    "n": 18,
    "bull": 72.2,
    "bull_ema": 85.2,
-   "rsi": 46.9,
-   "rsi_prev": 54.7,
+   "rsi": 47.0,
+   "rsi_prev": 54.8,
    "miss": [
     "breadth 72% not above its 10-day average 85%",
-    "RSI 46.9 not above BTC's 47.0",
     "RSI 47 not rising (was 55)"
    ]
   },
