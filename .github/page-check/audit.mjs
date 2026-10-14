@@ -7,6 +7,9 @@ const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
 const errs = []; p.on("pageerror", e => errs.push(e.message));
 await p.goto(URL, { waitUntil: "networkidle" }); await p.waitForTimeout(1000);
+// the page shows one tab at a time: bring up the tab an element is in before clicking it
+{ const click0 = p.click.bind(p);
+  p.click = async (sel, o) => { await p.evaluate(s => { const e = document.querySelector(s); if (e && window.showTabFor) window.showTabFor(e); }, sel).catch(() => {}); return click0(sel, o); }; }
 
 // ---- 1. data files for every clickable ticker
 const res = await p.evaluate(async () => {

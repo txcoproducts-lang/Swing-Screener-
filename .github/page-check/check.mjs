@@ -16,8 +16,29 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(1500);
   log(`[${name}] title=${await p.title()} rows=${await p.$$eval("#t tbody tr", r => r.length)} sectorCharts=${await p.$$eval(".ch canvas", c => c.length)}`);
   await p.screenshot({ path: `${out}/${name}-1-top.png` });
+  // the page shows one tab at a time: bring up the tab an element is in before looking at or clicking it
+  const showFor = sel => p.evaluate(s => { const e = document.querySelector(s); if (e && window.showTabFor) window.showTabFor(e); }, sel).catch(() => {});
+  const click0 = p.click.bind(p);
+  p.click = async (sel, o) => { await showFor(sel); return click0(sel, o); };
+  for (const id of await p.$$eval("nav.tabs a", as => as.map(a => a.dataset.tab))) {
+    await click0(`nav.tabs a[data-tab="${id}"]`); await p.waitForTimeout(id === "news" ? 7000 : 700);
+    if (id === "news") log(`[${name}] news: ${await p.$eval("#nwh", e => e.innerText).catch(() => "no header")}, iframes=${await p.$$eval("#nwc iframe", f => f.length)}`);
+    await p.screenshot({ path: `${out}/${name}-tab-${id}.png` });
+  }
+  if (await p.$('nav.tabs a[data-tab="news"]')) {     // a sector's news, then one of its strongest stocks
+    await click0('.bar.nw button:nth-child(2)'); await p.waitForTimeout(6000);
+    log(`[${name}] sector news: ${await p.$eval("#nwh", e => e.innerText)}, iframes=${await p.$$eval("#nwc iframe", f => f.length)}`);
+    await p.screenshot({ path: `${out}/${name}-tab-news-sector.png` });
+    if (await p.$("#nwl button")) {
+      await click0("#nwl button"); await p.waitForTimeout(6000);
+      log(`[${name}] stock news: ${await p.$eval("#nwh", e => e.innerText)}, iframes=${await p.$$eval("#nwc iframe", f => f.length)}`);
+      await p.screenshot({ path: `${out}/${name}-tab-news-stock.png` });
+    }
+  }
+  if (await p.$("nav.tabs")) { await click0('nav.tabs a[data-tab="today"]'); await p.waitForTimeout(300); }
   // paper trading tiles and each account's breakdown
   await p.waitForSelector(".pp-tile", { timeout: 15000 }).catch(() => {});
+  await showFor("#pp");
   await p.evaluate(() => { const e = document.getElementById("pp"); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 60); });
   log(`[${name}] paper tiles: ${(await p.$$eval(".pp-tile", ts => ts.map(t => t.innerText.replace(/\n/g, " | ")))).join(" || ") || "none: " + (await p.$eval("#pp", e => e.textContent).catch(() => "no section"))}`);
   await p.screenshot({ path: `${out}/${name}-0-paper.png` });
@@ -33,12 +54,13 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   }
   for (const k of ["nu", "bo", "ai"]) {
     await p.click(`.bar.pk button[data-pk="${k}"]`); await p.waitForTimeout(300);
+    await showFor(".bar.pk");
     await p.evaluate(() => { const e = document.querySelector(".bar.pk"); window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); });
     log(`[${name}] top picks ${k}: ${await p.$$eval(`.pkl[data-pk="${k}"] tbody tr`, r => r.length)} rows`);
     await p.screenshot({ path: `${out}/${name}-1-picks-${k}.png` });
   }
   // the OVTLYR plan's Plan M list (opened), the breadth heatmap, and the sector charts with their breadth strips
-  const at = sel => p.evaluate(s => { const e = document.querySelector(s); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); return !!e; }, sel);
+  const at = sel => p.evaluate(s => { const e = document.querySelector(s); if (e && window.showTabFor) window.showTabFor(e); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); return !!e; }, sel);
   if (await at("#ssh")) {          // strongest sector, strongest stock: each score is its three parts, highest first
     await p.waitForTimeout(200);
     const ss = await p.$$eval("#ss tbody tr", rs => rs.map(r => [...r.cells].map(c => c.dataset.v)));
@@ -76,12 +98,12 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
     await p.screenshot({ path: `${out}/${name}-1-sector-charts.png` });
   }
   await p.click('.bar.pk button[data-pk="nu"]');
-  await (await p.$("#t")).scrollIntoViewIfNeeded();
+  await showFor("#t"); await (await p.$("#t")).scrollIntoViewIfNeeded();
   await p.screenshot({ path: `${out}/${name}-2-table.png` });
   const obf = await p.$('.bar button[data-f="Overbought"]');
   if (obf) {                         // the user's overbought rule: the stocks it kept from being setups, with why
     await obf.click(); await p.waitForTimeout(200);
-    await (await p.$("#t")).scrollIntoViewIfNeeded();
+    await showFor("#t"); await (await p.$("#t")).scrollIntoViewIfNeeded();
     await p.screenshot({ path: `${out}/${name}-2-table-overbought.png` });
     await p.click('.bar button[data-f="setups"]'); await p.waitForTimeout(200);
   }
