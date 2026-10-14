@@ -1,5 +1,5 @@
 {
- "as_of": "2026-10-11",
+ "as_of": "2026-10-12",
  "picks": [
   {
    "ticker": "ZEC",
@@ -44,10 +44,22 @@
    "spy": 83679.47
   },
   {
-   "ticker": "DASH",
-   "added": "2026-10-11",
-   "price": 52.7394,
-   "spy": 83679.47
+   "ticker": "RAY",
+   "added": "2026-10-12",
+   "price": 2.13521,
+   "spy": 81762.56
+  },
+  {
+   "ticker": "ENA",
+   "added": "2026-10-12",
+   "price": 0.205666,
+   "spy": 81762.56
+  },
+  {
+   "ticker": "UNI",
+   "added": "2026-10-12",
+   "price": 6.9682,
+   "spy": 81762.56
   }
  ],
  "closed": [
@@ -59,6 +71,16 @@
    "dropped": "2026-10-11",
    "out": 0.078623,
    "spy_out": 83679.47,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "DASH",
+   "added": "2026-10-11",
+   "price": 52.7394,
+   "spy": 83679.47,
+   "dropped": "2026-10-12",
+   "out": 49.0717,
+   "spy_out": 81762.56,
    "why": "fell out of the top 20"
   }
  ]

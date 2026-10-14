@@ -1,0 +1,287 @@
+{
+ "asof": "2026-10-12",
+ "market": {
+  "ok": false,
+  "checks": [
+   {
+    "k": "heat",
+    "ok": false,
+    "text": "BTC heatmap (RSI) 47, down from 54 (needs under 70 and rising)"
+   },
+   {
+    "k": "signal",
+    "ok": true,
+    "text": "BTC buy signal: 10 EMA 83,283.19 above the 20 EMA 83,112.36"
+   },
+   {
+    "k": "trend",
+    "ok": true,
+    "text": "BTC 10/20/50 uptrend: close 81,762.56 above the 50 EMA 80,087.44"
+   },
+   {
+    "k": "breadth",
+    "ok": false,
+    "text": "Market breadth: 60% of coins have the 10 EMA above the 20, below its 10-day average of 79%"
+   },
+   {
+    "k": "hot",
+    "ok": true,
+    "text": "Your overbought rule: 60% of coins rising, not over the 75 line"
+   }
+  ],
+  "spy": {
+   "date": "2026-10-12",
+   "close": 81762.56,
+   "high": 84249.22,
+   "e10": 83283.19,
+   "e20": 83112.36,
+   "e50": 80087.44,
+   "rsi": 47.0,
+   "rsi_prev": 54.3,
+   "atr": 2080.49,
+   "cci": -119.0
+  },
+  "breadth": {
+   "pct": 60.0,
+   "ema": 78.8
+  }
+ },
+ "sectors": {
+  "AI & data": {
+   "ok": false,
+   "n": 10,
+   "bull": 90.0,
+   "bull_ema": 97.9,
+   "rsi": 49.7,
+   "rsi_prev": 58.0,
+   "miss": [
+    "overbought by your rule: 90% of its coins rising, over the 75 line",
+    "breadth 90% not above its 10-day average 98%",
+    "RSI 50 not rising (was 58)"
+   ]
+  },
+  "DeFi": {
+   "ok": false,
+   "n": 18,
+   "bull": 72.2,
+   "bull_ema": 85.2,
+   "rsi": 46.9,
+   "rsi_prev": 54.7,
+   "miss": [
+    "breadth 72% not above its 10-day average 85%",
+    "RSI 46.9 not above BTC's 47.0",
+    "RSI 47 not rising (was 55)"
+   ]
+  },
+  "Exchange tokens": {
+   "ok": false,
+   "n": 8,
+   "bull": 37.5,
+   "bull_ema": 62.8,
+   "rsi": 47.7,
+   "rsi_prev": 52.4,
+   "miss": [
+    "breadth 38% not above its 10-day average 63%",
+    "RSI 48 not rising (was 52)"
+   ]
+  },
+  "Gaming": {
+   "ok": false,
+   "n": 7,
+   "bull": 85.7,
+   "bull_ema": 97.0,
+   "rsi": 52.4,
+   "rsi_prev": 60.1,
+   "miss": [
+    "overbought by your rule: 86% of its coins rising, over the 75 line",
+    "breadth 86% not above its 10-day average 97%",
+    "RSI 52 not rising (was 60)"
+   ]
+  },
+  "Infrastructure": {
+   "ok": false,
+   "n": 8,
+   "bull": 50.0,
+   "bull_ema": 82.6,
+   "rsi": 51.1,
+   "rsi_prev": 54.8,
+   "miss": [
+    "breadth 50% not above its 10-day average 83%",
+    "RSI 51 not rising (was 55)"
+   ]
+  },
+  "Layer 1": {
+   "ok": false,
+   "n": 25,
+   "bull": 72.0,
+   "bull_ema": 82.8,
+   "rsi": 46.9,
+   "rsi_prev": 54.0,
+   "miss": [
+    "breadth 72% not above its 10-day average 83%",
+    "RSI 46.9 not above BTC's 47.0",
+    "RSI 47 not rising (was 54)"
+   ]
+  },
+  "Layer 2": {
+   "ok": false,
+   "n": 7,
+   "bull": 57.1,
+   "bull_ema": 76.1,
+   "rsi": 51.6,
+   "rsi_prev": 60.4,
+   "miss": [
+    "breadth 57% not above its 10-day average 76%",
+    "RSI 52 not rising (was 60)"
+   ]
+  },
+  "Memes": {
+   "ok": false,
+   "n": 8,
+   "bull": 12.5,
+   "bull_ema": 51.1,
+   "rsi": 40.6,
+   "rsi_prev": 45.0,
+   "miss": [
+    "breadth 12% not above its 10-day average 51%",
+    "RSI 41 not above BTC's 47",
+    "RSI 41 not rising (was 45)"
+   ]
+  },
+  "Payments": {
+   "ok": false,
+   "n": 9,
+   "bull": 22.2,
+   "bull_ema": 56.6,
+   "rsi": 42.2,
+   "rsi_prev": 48.8,
+   "miss": [
+    "breadth 22% not above its 10-day average 57%",
+    "RSI 42 not above BTC's 47",
+    "RSI 42 not rising (was 49)"
+   ]
+  }
+ },
+ "etf": {
+  "BTC": {
+   "under": "BTC",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "BTC heatmap (RSI) 47 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": true,
+     "text": "BTC buy signal: 10 EMA above the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": true,
+     "text": "BTC uptrend: close 81,762.56 above the 50 EMA 80,087.44"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "BTC value zone: close 81,762.56, zone 83,112.36-87,273.34 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "BTC order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "cci",
+     "ok": true,
+     "text": "Your overbought rule: BTC CCI -119 is not over 100"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 60% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [],
+   "date": "2026-10-12",
+   "close": 81762.56,
+   "high": 84249.22,
+   "e10": 83283.19,
+   "e20": 83112.36,
+   "e50": 80087.44,
+   "rsi": 47.0,
+   "rsi_prev": 54.3,
+   "atr": 2080.49,
+   "cci": -119.0
+  },
+  "ETH": {
+   "under": "ETH",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "ETH heatmap (RSI) 38 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "ETH buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "ETH uptrend: close 2,444.36 below the 50 EMA 2,500.36"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "ETH value zone: close 2,444.36, zone 2,584.74-2,755.53 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "ETH order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "cci",
+     "ok": true,
+     "text": "Your overbought rule: ETH CCI -137 is not over 100"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 60% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "ETH's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-12",
+   "close": 2444.36,
+   "high": 2576.58,
+   "e10": 2554.34,
+   "e20": 2584.74,
+   "e50": 2500.36,
+   "rsi": 37.6,
+   "rsi_prev": 44.5,
+   "atr": 85.3964,
+   "cci": -136.8
+  }
+ },
+ "setups": [],
+ "funnel": {
+  "signal": 1,
+  "rules": 0,
+  "sector": 0,
+  "hot": 0,
+  "near_ob": 0,
+  "earnings": 0,
+  "setups": 0,
+  "earn_checked": false
+ },
+ "dropped": [],
+ "prev_asof": "2026-10-11",
+ "live_at": null
+}
