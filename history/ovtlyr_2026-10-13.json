@@ -21,7 +21,7 @@
    {
     "k": "breadth",
     "ok": true,
-    "text": "Market breadth: 42% of stocks have the 10 EMA above the 20, above its 10-day average of 32%"
+    "text": "Market breadth: 41% of stocks have the 10 EMA above the 20, above its 10-day average of 32%"
    },
    {
     "k": "hot",
@@ -42,8 +42,8 @@
    "cci": 93.4
   },
   "breadth": {
-   "pct": 41.6,
-   "ema": 31.9
+   "pct": 41.5,
+   "ema": 31.8
   }
  },
  "sectors": {
@@ -128,14 +128,14 @@
   },
   "Information Technology": {
    "ok": false,
-   "n": 75,
-   "bull": 68.0,
-   "bull_ema": 67.6,
+   "n": 74,
+   "bull": 67.6,
+   "bull_ema": 67.2,
    "rsi": 53.2,
-   "rsi_prev": 53.4,
+   "rsi_prev": 53.3,
    "miss": [
     "RSI 53 not above SPY's 60",
-    "RSI 53.2 not rising (was 53.4)"
+    "RSI 53.2 not rising (was 53.3)"
    ]
   },
   "Materials": {
