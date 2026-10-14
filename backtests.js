@@ -93,19 +93,32 @@ function lineChart(wrap, dates, lines, o) {
     wrap.replaceChildren();
     const n = dates.length;
     if (n < 2) { wrap.append(el('div', {class: 'bx-none', text: o.empty || 'Not enough days yet for a chart.'})); return; }
-    const W = Math.max(260, Math.floor(wrap.clientWidth || 300)), H = W < 420 ? Math.min(o.h, 190) : o.h, m = {l: o.money ? 56 : 48, r: 10, t: 10, b: 22};
+    const W = Math.max(260, Math.floor(wrap.clientWidth || 300)), H = W < 420 ? Math.min(o.h, 190) : o.h;
     const vals = lines.flatMap(l => l.vals).filter(v => v != null).concat(o.base != null ? [o.base] : []);
-    let lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = Math.max((hi - lo) * 0.06, o.money ? 5 : 1);
-    const ticks = niceTicks(o.money && lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi + pad, 4);
-    lo = ticks[0]; hi = ticks[ticks.length - 1];
-    const iw = W - m.l - m.r, X = i => m.l + i * iw / (n - 1), Y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+    let lo = Math.min(...vals), hi = Math.max(...vals), ticks;
+    // a log scale when the lines end up far apart (10 years of a plan against BTC), so every line stays readable
+    const log = o.money && lo > 0 && hi / lo > 8;
+    if (log) {
+      const L = Math.log10;
+      ticks = [];
+      for (let e = Math.floor(L(lo)); e <= Math.ceil(L(hi)); e++) [1, 2, 5].forEach(k => { const t = k * Math.pow(10, e); if (t >= lo / 1.3 && t <= hi * 1.3) ticks.push(t); });
+      if (ticks.length > 7) ticks = ticks.filter(t => /^1/.test(String(t)));
+      lo = Math.min(lo / 1.1, ticks[0]); hi = Math.max(hi * 1.1, ticks[ticks.length - 1]);
+    } else {
+      const pad = Math.max((hi - lo) * 0.06, o.money ? 5 : 1);
+      ticks = niceTicks(o.money && lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi + pad, 4);
+      lo = ticks[0]; hi = ticks[ticks.length - 1];
+    }
     const fmt = v => o.money ? '$' + v.toLocaleString('en-US') : (v > 0 ? '+' : '') + v.toLocaleString('en-US') + '%';
+    const m = {l: 14 + 6.6 * Math.max(...ticks.map(t => fmt(t).length)), r: 10, t: log ? 18 : 10, b: 22};
+    const tr = v => log ? Math.log10(v) : v;
+    const iw = W - m.l - m.r, X = i => m.l + i * iw / (n - 1), Y = v => m.t + (tr(hi) - tr(v)) / (tr(hi) - tr(lo)) * (H - m.t - m.b);
     const s = svg('svg', {class: 'bx-svg', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.aria || lines.map(l => l.name).join(', ')});
     ticks.forEach(t => {
       s.append(svg('line', {class: 'bx-grid', x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t)}));
       s.append(svg('text', {class: 'bx-ax', x: m.l - 6, y: Y(t) + 4, 'text-anchor': 'end'}, fmt(t)));
     });
+    if (log) s.append(svg('text', {class: 'bx-ax', x: W - m.r, y: 11, 'text-anchor': 'end'}, 'Log scale: equal % moves look the same size'));
     if (o.base != null) s.append(svg('line', {x1: m.l, x2: W - m.r, y1: Y(o.base), y2: Y(o.base), stroke: '#c9d0da', 'stroke-dasharray': '3 3'}));
     const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 64))));
     let prev = o.label(dates[n - 1]);
