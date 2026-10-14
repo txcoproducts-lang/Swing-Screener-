@@ -65,7 +65,7 @@ const res = await p.evaluate(async () => {
     if (D.bt) {      // the 10-year backtest: its trades rebuild its return, and the table cell matches it
       const b = D.bt; stats.bt = (stats.bt || 0) + 1; (stats.btYears ||= []).push(b.years);
       const eq = b.trades.reduce((m, t) => m * t[3] / t[2], 1), bad = [];
-      if (Math.abs((eq - 1) * 100 - b.rules) > 0.2) bad.push(`rules ${b.rules}% vs trades ${((eq - 1) * 100).toFixed(1)}%`);
+      if (Math.abs(eq / (1 + b.rules / 100) - 1) > 0.005)     // trade prices are rounded to the cent bad.push(`rules ${b.rules}% vs trades ${((eq - 1) * 100).toFixed(1)}%`);
       if (b.trades.length !== b.n) bad.push(`${b.n} trades vs ${b.trades.length} listed`);
       if (b.trades.some((t, i) => t[0] > t[1] || i && t[0] < b.trades[i - 1][1] || t[0] < b.start)) bad.push("trades overlap or out of order");
       const i0 = s ? s.t.indexOf(b.start) : -1;      // holding: from the start close, when it is in the daily chart's 5 years
@@ -74,6 +74,10 @@ const res = await p.evaluate(async () => {
       if (r && r.bt === "") bad.push("table cell empty");
       bad.forEach(x => issues.push(`${tk} backtest: ${x}`));
       if (b.rules > b.hold) stats.btBeat = (stats.btBeat || 0) + 1;
+      const A = stats.btAgg ||= { inmkt: [], n: [], win: [], ret: [], why: {}, show: [] };
+      A.inmkt.push(b.inmkt); A.n.push(b.n); if (b.win != null) A.win.push(b.win);
+      b.trades.forEach(t => { A.ret.push((t[3] / t[2] - 1) * 100); A.why[t[4]] = (A.why[t[4]] || 0) + 1; });
+      if (["SPY", "NVDA", "AAPL", "MSFT", "EMR", "XLK"].includes(tk)) A.show.push(`${tk} rules ${b.rules}% hold ${b.hold}% spy ${b.spy}% n ${b.n} win ${b.win}% in ${b.inmkt}%`);
     } else if (rows[tk]) (stats.btMissing ||= []).push(tk);
     if (r && s) {
       const n = s.c.length, pc = (a, b) => (a / b - 1) * 100;
@@ -101,7 +105,10 @@ log(`RSI / CCI vs data: ${res.stats.oscChecked} stocks checked, ${res.stats.oscM
 log(`rows with an options contract: ${res.stats.withContract}`);
 { const y = (res.stats.btYears || []).sort((a, b) => a - b);
   log(`10-year backtests: ${res.stats.bt || 0} (years covered: min ${y[0]}, median ${y[y.length >> 1]}); rules beat holding on ${res.stats.btBeat || 0}; ` +
-      `table stocks without one: ${(res.stats.btMissing || []).join(", ") || "none"}`); }
+      `table stocks without one: ${(res.stats.btMissing || []).join(", ") || "none"}`);
+  const A = res.stats.btAgg, med = a => a.slice().sort((x, z) => x - z)[a.length >> 1];
+  if (A) { log(`  medians: in the market ${med(A.inmkt)}% of days, ${med(A.n)} trades, ${med(A.win)}% winners; ${A.ret.length} trades, average ${(A.ret.reduce((x, z) => x + z, 0) / A.ret.length).toFixed(2)}%, median ${med(A.ret).toFixed(2)}%; ended by ${JSON.stringify(A.why)}`);
+           A.show.forEach(x => log("  " + x)); } }
 
 // ---- 1b. top picks lists against the chart data
 const pk = await p.evaluate(async () => {
