@@ -1639,7 +1639,7 @@ def ov_screen_html(ov, unit="coin", group="Category"):
     chips = "".join(f'<span class="ovk {"y" if c["ok"] else "n"}" title="{html_esc(c["text"])}">{"✓" if c["ok"] else "✗"} '
                     f'{OV_MKT.get(c["k"], c["k"])}</span>' for c in m["checks"])
     keys = [k for k in OV_RULES if any(r[5][OV_RULES.index(k)] != "-" for r in rows) or k in ("ob",)]
-    data = json.dumps(dict(rules=[[OV_RULES.index(k), *OV_LABELS[k]] for k in keys], rows=rows, unit=unit),
+    data = json.dumps(dict(rules=[[OV_RULES.index(k), *OV_LABELS[k]] for k in keys], rows=rows, unit=unit, ch=ov.get("charted") or []),
                       separators=(",", ":")).replace("</", "<\\/")
     legend = " · ".join(f"<b>{OV_LABELS[k][0]}</b>: {html_esc(OV_LABELS[k][1])}" for k in keys)
     secs = sorted({r[1] for r in rows if r[1]})
@@ -1647,7 +1647,7 @@ def ov_screen_html(ov, unit="coin", group="Category"):
             f'{"on" if m["ok"] else "off"}</span>{chips}</div>'
             f'<div class="hint">Every {unit} with $10M+ traded a day, checked against Plan M\'s {len(keys)} {unit} rules, closest to a '
             f'setup first. Heat is the 14-day RSI, the plan\'s stand-in for OVTLYR\'s fear &amp; greed. Signal is days since the '
-            f'10 EMA crossed over the 20. Tap a ticker for its chart.</div>'
+            f'10 EMA crossed over the 20. Tap a blue ticker for its chart.</div>'
             f'<div class="ovf"><span class="ovfc" data-f="0"></span><span class="ovfc on" data-f="2"></span><span class="ovfc" data-f="99"></span>'
             f'<select id="ovsec"><option value="">All categories</option>'
             + "".join(f'<option>{html_esc(x)}</option>' for x in secs)
@@ -1676,7 +1676,7 @@ OV_SCREEN_JS = """<style>
 #ov-s,#ov-s tbody{display:block}#ov-s tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:9px 2px;border-bottom:1px solid var(--line)}
 #ov-s td{border:0;padding:0}#ov-s td.oz{display:block;flex-basis:100%;white-space:normal}.oz .odr{display:flex;gap:3px;margin:2px 0}.oz .om{color:var(--dn);font-size:12px;text-align:left}#ov-s thead{display:none}}
 </style><script>(function(){
-const D=JSON.parse(document.getElementById('ov-data').textContent),T=document.getElementById('ov-s'),S=document.getElementById('ovsec');
+const D=JSON.parse(document.getElementById('ov-data').textContent),CH=new Set(D.ch),T=document.getElementById('ov-s'),S=document.getElementById('ovsec');
 let lim=2;
 const miss=r=>D.rules.filter(q=>r[5][q[0]]==='0'),n0=r=>miss(r).length;
 function heat(v){const st=[[30,[47,111,237]],[45,[130,170,240]],[55,[226,230,236]],[65,[255,190,110]],[75,[226,80,60]]];v=Math.max(30,Math.min(75,v));
@@ -1688,7 +1688,7 @@ function draw(){
  const head='<thead><tr><th>Ticker</th><th class="os">'+(D.unit==='coin'?'Category':'Sector')+'</th><th class="oc">Close</th><th>Heat</th><th class="oc">Signal</th>'
   +D.rules.map(q=>'<th class="c" title="'+q[2]+'">'+q[1]+'</th>').join('')+'<th></th><th class="ow">Missing</th></tr></thead>';
  T.innerHTML=head+'<tbody>'+(rows.length?rows.slice(0,400).map(r=>{const m=miss(r),k=m.length,ms=m.map(q=>q[1]).join(', ');
-  return '<tr><td><b class="tk" data-tk="'+r[0]+'">'+r[0]+'</b></td><td class="os mut">'+r[1]+'</td><td class="oc">'+r[2]+'</td>'
+  return '<tr><td>'+(CH.has(r[0])?'<b class="tk" data-tk="'+r[0]+'">'+r[0]+'</b>':'<b>'+r[0]+'</b>')+'</td><td class="os mut">'+r[1]+'</td><td class="oc">'+r[2]+'</td>'
   +'<td><span class="oh" style="background:'+heat(r[3])+'">'+Math.round(r[3])+'</span></td><td class="oc">'+(r[4]===null?'<span class="mut">—</span>':r[4]+'d')+'</td>'
   +D.rules.map(q=>'<td class="c">'+dot(r[5][q[0]])+'</td>').join('')+'<td>'+away(k)+'</td><td class="ow">'+ms+'</td>'
   +'<td class="oz"><div class="odr">'+D.rules.map(q=>dot(r[5][q[0]])).join('')+'</div><div class="om">'+(k?'Missing: '+ms:'Passes every rule')+'</div></td></tr>'}).join('')
@@ -2698,6 +2698,7 @@ def main():
     listed = [r["ticker"] for k in ("nu", "bo", "ai") for r in (lists or {}).get(k, {}).get("rows", [])]
     listed += [h["ticker"] for k in ("nu", "bo") for h in (lists or {}).get(k, {}).get("hot", [])]
     listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
+    listed += [r[0] for r in (ov or {}).get("screen") or [] if r[5].count("0") <= 2]   # the OVTLYR screener's closest
     extra = {sym: etf_frames[sym] for sym in SECTOR_ETF.values() if sym in etf_frames and sym.endswith("-IDX")}
     chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + [BENCH] + list(OV["ETF"]) + list(extra)))
     print(f"Building trend charts and 10-year backtests for {len(chart_tks)} coins and indexes...")
@@ -2710,6 +2711,8 @@ def main():
             print(f"  rules beat holding the coin on {sum(x > 0 for x in e)} of {len(e)}, median {np.median(e):+.0f} points")
     except Exception as e:                 # extras; never block the scan
         print("  coin charts failed:", e)
+    if ov:                                 # the OVTLYR screener links only the tickers that have a chart file
+        ov["charted"] = [r[0] for r in ov.get("screen") or [] if (out / "data" / f"{r[0]}.json").exists()]
     for k in ("rules", "hold", "bench", "start"):
         picks[f"bt_{k}"] = picks.ticker.map({t: b[k] for t, b in bts.items()})
     html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh, sw, etf_frames.get(BENCH))
