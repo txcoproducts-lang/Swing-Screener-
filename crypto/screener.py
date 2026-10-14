@@ -1404,6 +1404,51 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
+BT_JS = Path(__file__).resolve().parent.parent / "backtests.js"   # the Backtests tab, shared with the stock page
+BT_PLANS = Path(__file__).resolve().parent / "history" / "plan_backtests.json"   # research/plan_backtest.py, Saturdays
+PAPER_SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/crypto-paper/paper/"
+
+
+def bt_research(df):
+    """The research list for the Backtests tab (the stock page's list-and-signal tests were run on stocks only)."""
+    out = []
+    if "bt_rules" in df and df.bt_rules.notna().any():
+        b = df.dropna(subset=["bt_rules", "bt_hold"])
+        n, won = len(b), int((b.bt_rules > b.bt_hold).sum())
+        med = lambda c: round(float(b[c].median()))
+        out.append(dict(name="Rules vs hold, each coin", scope=f"Each of tonight's {n} liquid coins, up to 10 years", unit="%", sign=True,
+                        verdict=f"Your rules won on {won} of {n}",
+                        text=f"Each coin's history (up to 10 years) traded on your rules (buy a setup that isn't overbought, sell on your "
+                             f"exit or an 8% stop) against just holding it. Your rules beat holding on {won} of {n}; many coins fell a "
+                             "long way, and the rules sit in cash through most of a fall. Medians below; click any coin in the Coins tab "
+                             "for its own numbers.",
+                        bars=[["Your rules (median)", med("bt_rules"), "#2f6fed"], ["Holding the coin", med("bt_hold"), "#8a94a3"]]
+                             + ([["Holding BTC", med("bt_bench"), "#8a94a3"]] if "bt_bench" in b and b.bt_bench.notna().any() else [])))
+    out.append(dict(name="Strongest category score", scope="40% market, 40% category, 20% coin", verdict="Tested inside Your system",
+                    text="It has no test of its own: Your system and Your system, after 2 PM buy only from this list, highest score "
+                         "first, so their backtests above are its test. The stock page's research tests (order blocks, the Top picks "
+                         "lists) were run on stocks only."))
+    return out
+
+
+def bt_tab(df):
+    """The Backtests tab's section and its data."""
+    if not BT_JS.exists():
+        return "", ""
+    plans = json.loads(BT_PLANS.read_text(encoding="utf-8")) if BT_PLANS.exists() else None
+    data = dict(bench="BTC", unit="coin", paperSrc=PAPER_SRC, plans=plans, research=bt_research(df),
+                note=("Plan backtests: daily bars on " + (plans or {}).get("universe", "today's largest coins") + ", $1,000 each, every "
+                      "fill 0.05% worse than the price. Coins that died aren't in today's list, so these results are flattered, and "
+                      "most coins have far less than 10 years of history. A daily test can't copy everything the paper accounts do: "
+                      "your 4-hour exit is checked on daily closes, the after-2 PM plan buys at the next day's close, and OVTLYR's "
+                      "order block check is left out. Rebuilt every Saturday" + (f" (last: {plans['asof']})" if plans else "")
+                      + ". Past results don't promise future ones. Not financial advice."))
+    html = ('<h2>Backtests</h2><div class="hint">Every test we\'ve run on coins: your four plans side by side, each plan\'s own '
+            'backtest and paper trial, then the research.</div><div id="btx"></div>')
+    js = "window.BTDATA=" + json.dumps(data, separators=(",", ":")).replace("</", "<\\/") + ";\n" + BT_JS.read_text(encoding="utf-8")
+    return html, js
+
+
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
 PAPER_HINT = ("Four paper accounts with $1,000 each, trading coins until Apr 6, 2027, the same rules as the stock page's "
               "accounts (no options, so coins where those buy calls). <b>Your system</b> trades your screener setups on the strongest category, strongest coin list at about "
@@ -2145,13 +2190,14 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                f'Your overbought rule left out {n_ob} setup{"s" if n_ob != 1 else ""} tonight: they are marked Overbought, with why.')
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
+    bt_sec, bt_js = bt_tab(picks)
     meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof} (daily bars close at midnight UTC) · "
             + f"""{n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out""")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Categories"), ("stocks", "Coins")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
-        [("paper", "Paper trading")] if paper_js else []) + [("news", "News")]
+        [("paper", "Paper trading")] if paper_js else []) + ([("backtests", "Backtests")] if bt_js else []) + [("news", "News")]
     tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
     paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -2286,6 +2332,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
+<section class="tab" id="tab-backtests" hidden>{bt_sec}</section>
 <section class="tab" id="tab-news" hidden>{news}</section></main>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
@@ -2573,7 +2620,7 @@ document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script>
-<script>{paper_js}</script></body></html>"""
+<script>{paper_js}</script><script>{bt_js}</script></body></html>"""
 
 # --------------------------------------------------------------------- main
 def main():

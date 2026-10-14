@@ -1468,6 +1468,82 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
+BT_JS = Path(__file__).resolve().parent / "backtests.js"   # the Backtests tab (every backtest, with line graphs)
+BT_PLANS = Path(__file__).resolve().parent / "history" / "plan_backtests.json"   # research/plan_backtest.py, Saturdays
+PAPER_SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/"
+# The research tests behind the page's lists and signals, from their reports (research/*_results.md); the Backtests tab
+# shows them under the plans. Colors: blue = the tested idea, grey = what it's measured against, amber = a loss.
+AI_YEARS = [("2014-10-01", 0, 0, 0), ("2014-12-31", 7.8, 8.4, 5.7), ("2015-12-31", -3.4, -0.4, 0.7), ("2016-12-30", 5.0, 18.6, 14.4),
+            ("2017-12-29", 29.9, 23.7, 21.5), ("2018-12-31", -2.4, -6.3, -6.0), ("2019-12-31", 33.4, 32.5, 31.8),
+            ("2020-12-31", 11.7, 12.8, 16.8), ("2021-12-31", 9.1, 35.5, 31.9), ("2022-12-30", -9.3, -8.6, -18.7),
+            ("2023-12-29", 13.9, 16.9, 24.6), ("2024-12-31", 52.0, 16.0, 26.5), ("2025-12-31", 45.7, 16.2, 18.2),
+            ("2026-10-02", 60.3, 15.8, 13.0)]
+
+
+def bt_research(df):
+    """The research list for the Backtests tab: each test's name, scope, one-line verdict, what it found, and a chart
+    (bars: [label, value, color], or a line chart)."""
+    blue, grey, amber = "#2f6fed", "#8a94a3", "#c27a00"
+    grow = lambda k: [round(v, 2) for v in np.cumprod([1000] + [1 + r[k] / 100 for r in AI_YEARS[1:]])]
+    out = [
+        dict(name="AI picks list", scope="S&P 500 as it was each day, 2014-2026", verdict="+19.4% a year vs SPY +14.2%",
+             text="Hold the 10 stocks with the best relative strength (at most 3 per sector), keep each while it ranks in the top 20. "
+                  "It trailed from 2014 to 2021 (+11.9% a year vs SPY +15.4%) and led from 2022 (+32.3% vs +12.3%). Its edge over the "
+                  "average stock, 6.2% a year, isn't proven: the 95% range runs from -3.4% to +15.8%. This is the list Claude's picks "
+                  "trades; its plan backtest above adds your exit and overbought rule.",
+             line=dict(dates=[r[0] for r in AI_YEARS], lines=[dict(name="AI picks", color="#d6453d", vals=grow(1)),
+                                                              dict(name="Average stock", color=amber, dash=True, vals=grow(2)),
+                                                              dict(name="SPY", color=grey, dash=True, vals=grow(3))])),
+        dict(name="Order blocks", scope="1,000 stocks, 10 years, daily bars", verdict="No edge as support", unit="R", sign=True,
+             text="Buying the first pullback into a bullish block made +0.10R a trade, but random price zones made +0.13R, so the "
+                  "profit came from the stocks rising, not the blocks. Bearish blocks held as resistance a little better than random "
+                  "(shorting them lost 0.03R against 0.08R). 1R = the amount risked; 2:1 target, 20-day limit.",
+             bars=[["Bullish blocks", 0.10, blue], ["Random zones", 0.13, grey], ["Bearish blocks (short)", -0.03, amber],
+                   ["Random zones (short)", -0.08, grey]]),
+        dict(name="Breakout watch", scope="S&P 500, 2014-2026", verdict="Breaks out more, returns don't", unit="%",
+             text="The tightest setups within 5% of a 50-day high broke out within 10 days 47% of the time, against 27% for the "
+                  "average stock, but did 0.30% worse than it over the next 20 days because many breakouts fail.",
+             bars=[["Broke out in 10 days", 47, blue], ["Average stock", 27, grey]]),
+        dict(name="New uptrends", scope="S&P 500, 2014-2026", verdict="Same as the average stock", unit="%", sign=True,
+             text="About 9 stocks a day turned into an uptrend by your rule. Over the next 20 trading days they did -0.10% against "
+                  "the average stock, and half of them beat it. A good place to look, not a buy signal on its own.",
+             bars=[["Next 20 days vs average", -0.10, amber], ["Average stock", 0, grey]]),
+    ]
+    if "bt_rules" in df and df.bt_rules.notna().any():
+        b = df.dropna(subset=["bt_rules", "bt_hold"])
+        n, won = len(b), int((b.bt_rules > b.bt_hold).sum())
+        med = lambda c: round(float(b[c].median()))
+        out.append(dict(name="10-year rules vs hold", scope=f"Each of tonight's {n} liquid stocks", unit="%", sign=True,
+                        verdict=f"Holding won on {n - won} of {n}",
+                        text=f"Each stock's last 10 years traded on your rules (buy a setup that isn't overbought, sell on your exit or "
+                             f"an 8% stop) against just holding it. Your rules beat holding on {won} of {n}: in long rising markets they "
+                             "sit in cash much of the time. Medians below; click any ticker in the Stocks tab for its own numbers.",
+                        bars=[["Your rules (median)", med("bt_rules"), blue], ["Holding the stock", med("bt_hold"), grey]]
+                             + ([["Holding SPY", med("bt_spy"), grey]] if "bt_spy" in b else [])))
+    out.append(dict(name="Strongest sector score", scope="40% market, 40% sector, 20% stock", verdict="Tested inside Your system",
+                    text="It has no test of its own: Your system and Your system, after 2 PM buy only from this list, highest score "
+                         "first, so their 10-year backtests above are its test."))
+    return out
+
+
+def bt_tab(df):
+    """The Backtests tab's section and its data."""
+    if not BT_JS.exists():
+        return "", ""
+    plans = json.loads(BT_PLANS.read_text(encoding="utf-8")) if BT_PLANS.exists() else None
+    data = dict(bench="SPY", unit="stock", paperSrc=PAPER_SRC, plans=plans, research=bt_research(df),
+                note=("Plan backtests: 10 years of daily bars on the S&P 500 as it was each day (" + (plans or {}).get("universe", "")
+                      + "), $1,000 each, every fill 0.05% worse than the price. A daily test can't copy everything the paper accounts do: "
+                      "Your system buys shares (there's no free history of option prices), your 4-hour exit is checked on daily "
+                      "closes, the after-2 PM plan buys at the next day's close, and OVTLYR's order block and earnings checks are "
+                      "left out. Stocks that left the index and stopped trading are missing. Rebuilt every Saturday"
+                      + (f" (last: {plans['asof']})" if plans else "") + ". Past results don't promise future ones. Not financial advice."))
+    html = ('<h2>Backtests</h2><div class="hint">Every test we\'ve run: your four plans side by side, each plan\'s own 10-year '
+            'backtest and paper trial, then the research behind the page\'s lists and signals.</div><div id="btx"></div>')
+    js = "window.BTDATA=" + json.dumps(data, separators=(",", ":")).replace("</", "<\\/") + ";\n" + BT_JS.read_text(encoding="utf-8")
+    return html, js
+
+
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
 PAPER_HINT = ("Four paper accounts with $1,000 each, trading until Apr 6, 2027. <b>Your system</b> trades your screener "
               "setups on the strongest sector, strongest stock list with your option rules at about 10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but "
@@ -2278,13 +2354,14 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                f'Your overbought rule left out {n_ob} setup{"s" if n_ob != 1 else ""} tonight: they are marked Overbought, with why.')
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
+    bt_sec, bt_js = bt_tab(picks)
     meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
-        [("paper", "Paper trading")] if paper_js else []) + [("news", "News")]
+        [("paper", "Paper trading")] if paper_js else []) + ([("backtests", "Backtests")] if bt_js else []) + [("news", "News")]
     tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
     paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -2419,6 +2496,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
+<section class="tab" id="tab-backtests" hidden>{bt_sec}</section>
 <section class="tab" id="tab-news" hidden>{news}</section></main>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
@@ -2699,7 +2777,7 @@ document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
 </script>
-<script>{paper_js}</script></body></html>"""
+<script>{paper_js}</script><script>{bt_js}</script></body></html>"""
 
 # --------------------------------------------------------------------- main
 def main():
