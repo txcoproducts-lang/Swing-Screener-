@@ -1624,7 +1624,169 @@ def line_data(bh):
     return dict(t=[d.strftime("%Y-%m-%d") for d in idx], g=g)
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None):
+# ------------------------------------------------------------ Today and News tabs
+# The page opens on Today: your three steps in order (the market moving up, the strongest category, the strongest coin
+# in it), then every category strongest first, the strongest coins, and a glance at the other tabs.
+def spy_checks(spy, w, mkt_hot=""):
+    """Bitcoin and the whole market's breadth against your rules, as (text, ok, detail)."""
+    out = []
+    if spy is not None and len(spy) > 150:
+        c = spy.Close
+        e10, e20, e50 = ema(c, 10).iloc[-1], ema(c, 20).iloc[-1], ema(c, 50).iloc[-1]
+        m150 = (ema(c, 150) if CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean()).iloc[-1]
+        px = c.iloc[-1]
+        out += [(f"{BENCH} 10 EMA above the 20 EMA", e10 > e20, f"{e10:.2f} vs {e20:.2f}"),
+                (f"{BENCH} closed above its 50 EMA", px > e50, f"{px:.2f} vs {e50:.2f}"),
+                (f"{BENCH} above its 150-day {'EMA' if CFG['LONG_MA_TYPE'] == 'EMA' else 'average'}", px > m150, f"{px:.2f} vs {m150:.2f}")]
+    if w:
+        out.append(("More coins turning up", bool(w["on"]) and w["z"] != 2,
+                    f"{w['rise']:.0f}% rising, {'above' if w['rise'] > w['avg'] else 'below'} its 10-day average {w['avg']:.0f}%"))
+    out.append(("Market not overbought", not mkt_hot,
+                html_esc(mkt_hot) if mkt_hot else f"breadth {w['rise']:.0f}, under the {CFG['OB_BREADTH']} line" if w else "breadth not available"))
+    return out
+
+
+def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
+    w = sws.get(MARKET)
+    checks = spy_checks(spy, w, mkt_hot)
+    mkt_ok = all(ok for _, ok, _ in checks)
+    sh = lambda n: html_esc(SHORT_SECTOR.get(n, n))
+    tk = lambda t: f'<b class="tk" data-tk="{t}">{t}</b>'
+    tick = lambda ok: f'<span class="ok{"" if ok else " no"}">{"✓" if ok else "✕"}</span>'
+    ss = df[df.ss_ok].sort_values("strength", ascending=False) if "ss_ok" in df else df.iloc[:0]
+    secs = sorted((n for n in sws if n != MARKET), key=lambda n: -sws[n]["rise"])
+    n_on = {n: int((ss.sector == n).sum()) for n in secs}
+    lead = next((n for n in secs if n_on[n]), None)
+
+    # step 1: the market
+    if spy is not None and len(spy) > 1:
+        px, p1 = spy.Close.iloc[-1], spy.Close.iloc[-2]
+        spark_ = spark(spy.Close.iloc[-30:], 96, 40, "var(--up)" if mkt_ok else "var(--dn)")
+        spx = f'${fp(px)} <span class="{"up" if px >= p1 else "dn"}">{(px / p1 - 1) * 100:+.2f}%</span>'
+    else:
+        spark_, spx = "", ""
+    rtxt = f"{w['rise']:.0f}% of coins rising" if w else ""
+    s1 = (f'<div class="step"><div class="n">Step 1 · The market</div><div class="sp">{spark_}</div>'
+          f'<div class="big">{tick(mkt_ok)}{BENCH} {"is moving up" if mkt_ok else "is not moving up"}</div>'
+          f'<div class="sub">{spx}{" · " if spx and w else ""}{rtxt}</div>'
+          '<div class="chks">' + "".join(f'<div class="chk">{tick(ok)}<span>{t}<div class="sub">{d}</div></span></div>' for t, ok, d in checks)
+          + '</div>' + ('' if mkt_ok else '<div class="hint warn">Not everything is in your favor yet: wait for the market before buying.</div>') + '</div>')
+
+    # step 2: the strongest sector
+    def srow(i, n, short=False):
+        x = sws[n]
+        col = "var(--warn)" if x["z"] == 2 else "var(--up)" if x["on"] else "var(--dn)"
+        tag = ('<span class="pill p-w">Over 75</span>' if x["z"] == 2 else
+               '<span class="pill p-w">Near 75</span>' if x["rise"] >= CFG["OB_BREADTH"] - 5 and n_on[n] == 0 else
+               f'<span class="pill p-up">{n_on[n]} coin{"s" if n_on[n] != 1 else ""}</span>' if n_on[n] else
+               '<span class="pill p-n">' + ("fading" if not x["on"] else "none pass") + '</span>')
+        return (f'<div class="sr" data-sector="{html_esc(n)}" role="button" tabindex="0" title="Show {sh(n)} in the coin table">'
+                f'<span class="rk">{i + 1}</span><span class="nm">{sh(n)}</span>'
+                f'<span class="sbar"><b style="width:{min(x["rise"], 100):.0f}%;background:{col}"></b><i style="left:{min(x["avg"], 100):.0f}%"></i>'
+                f'<u style="left:{CFG["OB_BREADTH"]}%"></u></span><span class="v">{x["rise"]:.0f}%</span><span class="tag">{tag}</span></div>')
+    if lead:
+        L = sws[lead]
+        top = secs[0]
+        why = ""
+        if top != lead:
+            t = sws[top]
+            why = (f'{sh(top)} is higher ({t["rise"]:.0f}%) but ' + ("is over the 75 line." if t["z"] == 2 else "is fading." if not t["on"] else
+                   "every one of its uptrend coins is overbought." if int((df.core & (df.sector == top)).sum()) else "has no coin in your uptrend."))
+        s2 = (f'<div class="step"><div class="n">Step 2 · Strongest category</div><div class="big">{sh(lead)} '
+              f'<span class="pill p-up">{L["rise"]:.0f}% rising</span></div><div class="sub">{why or f"{sh(lead)} leads the categories you can trade tonight."}</div>'
+              '<div class="mini">' + "".join(srow(i, n) for i, n in enumerate(secs[:4])) + '</div></div>')
+    else:
+        s2 = ('<div class="step"><div class="n">Step 2 · Strongest category</div><div class="big">None tonight</div>'
+              '<div class="sub">No category is turning up and rising with a coin in your uptrend that isn\'t overbought.</div>'
+              '<div class="mini">' + "".join(srow(i, n) for i, n in enumerate(secs[:4])) + '</div></div>')
+
+    # step 3: the strongest coin
+    def strow(r):
+        return (f'<div class="st"><span>{tk(r.ticker)}<div class="sub">{sh(r.sector)}</div></span>'
+                f'<span><span class="score"><b style="width:{r.ss_mkt:.1f}%;background:var(--sc1)"></b><b style="width:{r.ss_sec:.1f}%;background:var(--acc)"></b>'
+                f'<b style="width:{r.ss_stk:.1f}%;background:var(--up)"></b></span><span class="sub">{r.setup if r.has_setup else "no setup"} · RSI {r.rsi:.0f}</span></span>'
+                f'<span class="chg"><span>${fp(r.close)}</span><span class="{"up" if r.chg1d >= 0 else "dn"}">{r.chg1d:+.2f}%</span></span>'
+                f'<span class="sc">{r.strength:.0f}</span></div>')
+    if len(ss):
+        b = ss.iloc[0]
+        s3 = (f'<div class="step"><div class="n">Step 3 · Strongest coin</div><div class="big">{tk(b.ticker)} '
+              f'<span class="pill p-up">score {b.strength:.0f}</span></div><div class="sub">#1 in {sh(b.sector)} · '
+              f'{b.setup if b.has_setup else "no setup"} · ${fp(b.close)}</div>'
+              '<div class="mini">' + "".join(strow(r) for r in ss.iloc[1:5].itertuples()) + '</div></div>')
+    else:
+        s3 = ('<div class="step"><div class="n">Step 3 · Strongest coin</div><div class="big">None tonight</div>'
+              '<div class="sub">No coin passes every check.</div></div>')
+
+    secs_card = ('<div class="tcard"><h3>All categories, strongest first <a data-go="sectors">Category charts ›</a></h3>'
+                 '<div class="hint">Share of each category\'s coins with the 10 EMA over the 20 · tick = its 10-day '
+                 f'average · dashed = your {CFG["OB_BREADTH"]} line. Tap a category to see its coins.</div>'
+                 + "".join(srow(i, n) for i, n in enumerate(secs))
+                 + '<div class="lgd"><span><i style="background:var(--up)"></i>Rising (upswing)</span><span><i style="background:var(--dn)"></i>Fading</span>'
+                 f'<span><i style="background:var(--warn)"></i>Over {CFG["OB_BREADTH"]} = overbought</span></div></div>') if secs else ""
+    st_card = ('<div class="tcard"><h3>Strongest coins in the strongest categories <a data-go="stocks">All ' + str(len(ss)) + ' ›</a></h3>'
+               '<div class="hint">Score out of 100 = market 40% + sector 40% + the coin\'s strength in its category 20%</div>'
+               + ("".join(strow(r) for r in ss.head(10).itertuples()) or '<div class="hint pke">No coin passes tonight.</div>')
+               + '<div class="lgd"><span><i style="background:var(--sc1)"></i>Market</span><span><i style="background:var(--acc)"></i>Category</span>'
+               '<span><i style="background:var(--up)"></i>Coin</span></div></div>')
+
+    chips = lambda rows: "".join(f'<span>{tk(r["ticker"])}</span>' for r in rows) or '<span class="mut">none tonight</span>'
+    pk = ('<div class="tcard"><h3>Top picks <a data-go="picks">Open ›</a></h3><div class="hint">The three lists, strongest first</div>'
+          + "".join(f'<div class="sub">{lbl}</div><div class="chips">{chips(lists[k]["rows"][:8])}</div>'
+                    for k, lbl in (("nu", "New uptrends"), ("bo", "Breakout watch"), ("ai", "AI picks")))
+          + '</div>') if lists else ""
+    pp = ('<div class="tcard"><h3>Paper trading <a data-go="paper">Open ›</a></h3><div class="hint">Four $1,000 accounts. Tap one for its trades.</div>'
+          '<div id="tdpp"><div class="hint">Loading…</div></div></div>')
+    if ov:
+        m, f = ov["market"], ov["funnel"]
+        ovc = ('<div class="tcard"><h3>OVTLYR plan <a data-go="ovtlyr">Open ›</a></h3>'
+               f'<div class="hint">Plan M is {"on" if m["ok"] else "off"}: market checks {sum(c["ok"] for c in m["checks"])} of {len(m["checks"])} · '
+               f'{f["setups"]} Plan M setup{"s" if f["setups"] != 1 else ""}</div>'
+               + "".join(f'<div class="chk">{tick(c["ok"])}<span>{html_esc(c["text"])}</span></div>' for c in m["checks"] if not c["ok"])
+               + "".join(f'<div class="chk">{tick(e["ok"])}<span>Plan ETF {k} {"set up" if e["ok"] else "not set up"}</span></div>' for k, e in ov["etf"].items())
+               + '</div>')
+    else:
+        ovc = ""
+    return (f'<div class="meta">{meta}</div><div class="steps">{s1}{s2}{s3}</div>'
+            f'<div class="tgrid">{secs_card}{st_card}</div><div class="trow">{pk}{pp}{ovc}</div>')
+
+
+def sector_tiles(df, sws, bh, etfs=None, unit="coin"):
+    """A colored tile per category, strongest first: Rising tonight, its last 5 days as a line, and its state."""
+    etfs = etfs or {}
+    ss = df[df.ss_ok] if "ss_ok" in df else df.iloc[:0]
+    secs = sorted((n for n in sws if n != MARKET and n in (bh or {})), key=lambda n: -sws[n]["rise"])
+    out = []
+    for n in secs:
+        w, k = sws[n], int((ss.sector == n).sum())
+        r = w["rise"]
+        bg, dark = (("#c98a2b", 0) if w["z"] == 2 or r >= CFG["OB_BREADTH"] - 5 else ("#1f8a5b", 0) if r >= 55 else
+                    ("#4fa37d", 0) if r >= 40 else ("#a3b394", 0) if r >= 25 else ("#ddd6ca", 1))
+        tag = ("OVER 75" if w["z"] == 2 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
+        line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
+        sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
+        out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
+                   f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
+                   f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
+    return ('<div class="hint">Colored by the share of coins rising (10 EMA over 20), strongest first · line = the last 5 days. '
+            f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
+
+
+def news_html(df, sws, etfs=None, market="crypto", suf="USD", lbl="Strongest coins"):
+    """News tab: TradingView's free news feed, for the whole crypto market or one of a category's strongest coins."""
+    etfs = etfs or {}
+    ss = df[df.ss_ok].sort_values("strength", ascending=False) if "ss_ok" in df else df.iloc[:0]
+    secs = sorted((n for n in sws if n != MARKET), key=lambda n: -sws[n]["rise"])
+    lead = {n: list(ss[ss.sector == n].ticker.head(4)) for n in secs}
+    btn = lambda n: (f'<button data-n="{html_esc(n)}" data-sym="{"AMEX:" + etfs[n] if etfs.get(n) else ""}">{html_esc(SHORT_SECTOR.get(n, n))}'
+                     + (f' <span class="mut">{sws[n]["rise"]:.0f}%</span>' if n in sws else '') + '</button>')
+    return ('<h2>News</h2><div class="hint">Crypto market news first. Tap a category (strongest first) for news on its strongest '
+            'coin, then any of its other strongest coins. From TradingView\'s free news feed.</div>'
+            f'<div class="bar nw"><button class="on" data-n="" data-sym="">Market</button>{"".join(btn(n) for n in secs)}</div>'
+            f'<div class="nwl" id="nwl" hidden></div><div class="nwh" id="nwh"></div><div id="nwc" class="nwc"></div>'
+            f'<script>const NEWS={json.dumps(dict(lead=lead, market=market, suf=suf, lbl=lbl), separators=(",", ":"))};</script>')
+
+
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -1691,12 +1853,12 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                  + "".join(f'<button data-r="{k}"' + (' class="on"' if k == QTR else '') + f'>{lbl}</button>'
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
-    sector_html = ('<h2>Category breadth</h2>'
-                   + ('<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
+    bt_html = ('<h2>Breadth over time</h2><div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
                       '(the fast half of your uptrend rule), by day for the last 3 months; greener = more coins rising. ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
-                      f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html if heat else "")
+                      f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
+    sector_html = ('<h2>Category breadth</h2>'
                    + '<div class="hint">Click a category to filter the coin list. ± is the change vs 5 days ago.'
                    + '</div><div class="wrap"><table id="s"><thead><tr>'
                    '<th>Category</th><th>In uptrend</th>' + ('<th>Rising (10 &gt; 20)</th>' if MARKET in sws else '') + '<th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
@@ -1765,31 +1927,81 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                f'Your overbought rule left out {n_ob} setup{"s" if n_ob != 1 else ""} tonight: they are marked Overbought, with why.')
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
+    meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof} (daily bars close at midnight UTC) · "
+            + f"""{n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out""")
+    today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
+    news = news_html(df, sws)
+    tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Categories"), ("stocks", "Coins")] + (
+        [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
+        [("paper", "Paper trading")] if paper_js else []) + [("news", "News")]
+    tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
     paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crypto Screener {asof}</title><style>
-:root{{--bg:#fff;--fg:#1b1b1f;--mut:#6b6b76;--card:#f4f4f7;--line:#e2e2e8;--up:#12803c;--dn:#c2271d;--acc:#2a5bd7;--b5:#c96a12;--b10:#2a5bd7;--warn:#fab219}}
-@media(prefers-color-scheme:dark){{:root{{--bg:#111114;--fg:#ececf1;--mut:#9a9aa6;--card:#1b1b20;--line:#2c2c34;--up:#3ecf70;--dn:#ff6b61;--acc:#7aa2ff;--b5:#c98232;--b10:#5d8cf2;--warn:#fab219}}}}
-body{{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px -apple-system,system-ui,sans-serif}}
-h1{{font-size:20px;margin:0 0 2px}} .meta{{color:var(--mut);margin-bottom:14px}}
+:root{{--bg:#f4f6f9;--fg:#14202e;--mut:#6b7686;--card:#fff;--line:#e4e8ee;--up:#12936b;--dn:#d6453d;--acc:#2f6fed;--b5:#c96a12;--b10:#2a5bd7;--warn:#e0a020;--sc1:#a9bff5;color-scheme:light}}
+body{{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}}
+html{{scroll-padding-top:112px}}
+header.top{{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}}
+.hd{{max-width:1240px;margin:auto;padding:12px 20px 0;display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap}}
+h1{{font-size:19px;margin:0;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center}}h1::before{{content:'';width:10px;height:10px;border-radius:3px;background:var(--acc);margin-right:8px}}
+.asof{{margin-left:auto;color:var(--mut);font-size:12px}}
+nav.tabs{{max-width:1240px;margin:auto;padding:0 12px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}}nav.tabs::-webkit-scrollbar{{display:none}}
+nav.tabs a{{padding:11px 10px 9px;color:var(--mut);font-weight:600;text-decoration:none;border-bottom:2.5px solid transparent;white-space:nowrap}}
+nav.tabs a.on{{color:var(--fg);border-color:var(--acc)}}
+main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display:none}}.tab>h2:first-child{{margin-top:4px}}
+.meta{{color:var(--mut);font-size:12px;margin-bottom:12px}}.meta .reg{{margin:0 4px 0 0;padding:1px 8px}}@media(min-width:601px){{.meta .reg{{display:none}}}}
+.steps{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}}
+.step,.tcard{{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(20,32,46,.05);padding:16px 18px;position:relative;min-width:0}}
+.step .n{{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}}
+.step .big{{font-size:22px;font-weight:800;letter-spacing:-.4px;margin:4px 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}}.step .big .tk{{text-decoration:none}}
+.step .sp{{position:absolute;right:16px;top:14px}}.step .sub,.tcard .sub{{color:var(--mut);font-size:12px}}.step>.sub{{font-size:13px}}
+.ok{{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--up) 14%,transparent);color:var(--up);font-size:12px;font-weight:800;flex:none}}
+.ok.no{{background:color-mix(in srgb,var(--dn) 14%,transparent);color:var(--dn)}}
+.chks{{margin-top:10px}}.chk{{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:13px}}.chk .ok{{width:18px;height:18px;font-size:10px;margin-top:1px}}
+.mini{{margin-top:10px}}.pill{{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}}
+.p-up{{background:color-mix(in srgb,var(--up) 13%,transparent);color:var(--up)}}.p-w{{background:color-mix(in srgb,var(--warn) 20%,transparent);color:#9a6700}}.p-n{{background:var(--bg);color:var(--mut)}}
+.tgrid{{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:14px}}.trow{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}}
+.tcard h3{{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:8px}}.tcard h3 a{{margin-left:auto;font-size:12px;color:var(--acc);font-weight:600;cursor:pointer}}.tcard .hint{{margin-bottom:8px}}
+.sr{{display:grid;grid-template-columns:22px 112px minmax(40px,1fr) 42px 82px;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;cursor:pointer}}
+.sr:first-of-type{{border-top:0}}.sr:hover .nm{{color:var(--acc)}}.sr .rk{{color:var(--mut);font-weight:700;font-size:12px}}.sr .nm{{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.sr .v{{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}}
+.step .sr{{grid-template-columns:16px 92px minmax(30px,1fr) 38px 78px}}
+.sbar{{position:relative;height:8px;background:var(--bg);border-radius:4px}}.sbar b{{position:absolute;left:0;top:0;bottom:0;border-radius:4px}}
+.sbar i{{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg);opacity:.45}}.sbar u{{position:absolute;top:-4px;bottom:-4px;border-left:1.5px dashed var(--warn)}}
+.st{{display:grid;grid-template-columns:96px minmax(0,1fr) 80px 34px;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}}.st:first-of-type{{border-top:0}}
+.score{{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--bg);margin-bottom:3px}}.score b{{display:block}}
+.st>span:first-child .sub{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.st .sc{{font-weight:800;text-align:right;font-size:16px;font-variant-numeric:tabular-nums}}.st .chg{{text-align:right;font-size:12px;font-variant-numeric:tabular-nums;display:flex;flex-direction:column}}
+.lgd{{display:flex;gap:12px;flex-wrap:wrap;color:var(--mut);font-size:11px;margin-top:8px}}.lgd i{{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}}
+.chips{{display:flex;flex-wrap:wrap;gap:6px;margin:3px 0 8px}}.chips>span{{background:var(--bg);border-radius:8px;padding:3px 8px;font-size:12px}}.chips .tk{{text-decoration:none}}
+.tdp{{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;cursor:pointer}}.tdp:first-child{{border-top:0}}.tdp b:nth-child(2){{text-align:right}}.tdp .sub:nth-child(4){{text-align:right}}
+.stiles{{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin:10px 0 6px}}
+.stile{{border-radius:14px;padding:12px;color:#fff;position:relative;min-height:112px;display:flex;flex-direction:column;cursor:pointer}}.stile:hover{{filter:brightness(1.06)}}
+.stile .nm{{font-weight:700;font-size:15px;padding-right:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.stile .e{{font-size:11px;opacity:.85}}.stile .v{{font-size:28px;font-weight:800;margin-top:auto;letter-spacing:-.5px}}
+.stile .bd{{position:absolute;right:10px;top:10px;font-size:10px;font-weight:700;background:rgba(255,255,255,.25);border-radius:999px;padding:2px 7px}}.stile .spk{{position:absolute;right:10px;bottom:12px}}
+.stile.dk{{color:var(--fg)}}.stile.dk .bd{{background:rgba(0,0,0,.08)}}
+.bar.nw{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.bar.nw button{{margin:0}}.nwl{{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;font-size:12px;color:var(--mut)}}.nwl[hidden]{{display:none}}
+.nwl button{{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-weight:700;color:var(--fg);cursor:pointer}}.nwl button.on{{border-color:var(--acc);color:var(--acc)}}
+.nwh{{font-size:12px;color:var(--mut);margin:10px 0 6px}}.nwh a{{color:var(--acc)}}.nwc{{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:200px}}
+@media(max-width:900px){{.steps,.tgrid,.trow{{grid-template-columns:minmax(0,1fr)}}}}
+@media(max-width:600px){{.hd{{padding:10px 14px 0}}.asof{{width:100%;margin:0}}main{{padding:12px 12px 30px}}nav.tabs{{padding:0 4px}}.step,.tcard{{padding:14px}}.step .big{{font-size:20px}}
+.hd .reg,.asof{{display:none}}.stiles{{grid-template-columns:1fr 1fr;gap:8px}}.stile{{min-height:98px}}.stile .v{{font-size:24px}}.sr,.step .sr{{grid-template-columns:18px 96px minmax(30px,1fr) 38px}}.sr .tag{{display:none}}.st{{grid-template-columns:86px minmax(0,1fr) 34px}}.st .chg{{display:none}}html{{scroll-padding-top:120px}}}}
 .reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
-.reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--card);color:var(--mut)}}
+.reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--bg);color:var(--mut)}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px}}
-.card{{background:var(--card);border-radius:10px;padding:10px 12px;color:var(--mut)}}.lbl{{font-size:12px}}.val{{font-size:24px;font-weight:700;color:var(--fg)}}.sub{{font-size:11px;margin-bottom:4px}}
+.card{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--mut)}}.lbl{{font-size:12px}}.val{{font-size:24px;font-weight:700;color:var(--fg)}}.sub{{font-size:11px;margin-bottom:4px}}
 .up{{color:var(--up)}}.dn{{color:var(--dn)}}
 .bar button{{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-right:6px;font-size:13px}}.bar button.on{{border-color:var(--acc);color:var(--acc)}}
-.wrap{{overflow-x:auto;margin-top:10px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
-th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--bg);cursor:pointer;color:var(--mut);font-weight:600}}
+.wrap{{overflow-x:auto;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
+th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--card);cursor:pointer;color:var(--mut);font-weight:600}}
 td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(19),td:nth-child(20){{text-align:left}}
 .obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--warn) 45%,transparent)}}
 .ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
 #t td:nth-child(2) .sec{{white-space:normal;min-width:150px;max-width:220px}}
-td:first-child,th:first-child{{position:sticky;left:0;background:var(--bg);z-index:1}}th:first-child{{z-index:2}}
+td:first-child,th:first-child{{position:sticky;left:0;background:var(--card);z-index:1}}th:first-child{{z-index:2}}
 .sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
 .demo{{background:var(--dn);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}}
 h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12px}}
 .bar2{{height:4px;background:var(--line);border-radius:2px;margin-top:3px;min-width:90px}}.bar2 i{{display:block;height:100%;border-radius:2px}}
-#s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:var(--card)}}#s td:nth-child(2){{text-align:left}}
+#s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:color-mix(in srgb,var(--acc) 9%,var(--card))}}#s td:nth-child(2){{text-align:left}}
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
@@ -1832,17 +2044,16 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
-.mkt{{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;margin:2px 0 8px}}.mkt a{{padding:6px 18px;border-radius:999px;color:var(--fg);text-decoration:none;font-weight:600;font-size:14px}}.mkt a.on{{background:var(--acc);color:var(--bg)}}</style></head><body>
-{banner}<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a></nav>
-<h1>Crypto Screener<span class="reg {rcls}">{reg}</span></h1>
-<div class="meta">Data as of {asof} (daily bars close at midnight UTC) · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out</div>
-<div class="cards">{cards}</div>
-{paper_html}
-{ss_html(df, sw, mkt_hot)}
-{picks_html(lists, earn, calls)}
-{ov_html(ov)}
-{sector_html}
-{chart_html}
+.mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}</style></head><body>
+<header class="top"><div class="hd"><h1>Crypto Screener</h1>
+<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a></nav>
+<span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {asof}</span></div>
+<nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
+<main>{banner}
+<section class="tab" id="tab-today">{today}</section>
+<section class="tab" id="tab-market" hidden><h2>Market</h2><div class="cards">{cards}</div>{bt_html}</section>
+<section class="tab" id="tab-sectors" hidden><h2>Categories</h2>{sector_tiles(df, sws, bh, {})}{sector_html}{chart_html}</section>
+<section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Coins <span id="secf" class="chip" hidden></span></h2>
 {ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
@@ -1850,7 +2061,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
 Your overbought rule: a coin with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose category's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). The same rules as the stock screener, on coins; 52-week and 12-month windows count 365 days, since coins trade every day. No option columns: coins have no options a normal brokerage account can buy. Traded / day = the 20-day average in dollars.
 Click any coin for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
-Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks (not coins), but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div>
+Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks (not coins), but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div></section>
+<section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
+<section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
+<section class="tab" id="tab-paper" hidden>{paper_html}</section>
+<section class="tab" id="tab-news" hidden>{news}</section></main>
 <div id="cm" hidden><div class="box"><div class="top"><b id="cmt"></b>
 <div class="bar iv src"><button class="on" data-src="trend">Trend</button><button data-src="tv">Indicators</button></div>
 <div class="bar iv tfb"><button data-iv="240">4H</button><button class="on" data-iv="D">Daily</button><button data-iv="W">Weekly</button><button data-iv="M">Monthly</button></div>
@@ -1859,6 +2074,47 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
 <div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
+const TABS=[...document.querySelectorAll('section.tab')];let newsOn=false;
+function showTab(id){{if(!document.getElementById('tab-'+id))id='today';TABS.forEach(t=>t.hidden=t.id!=='tab-'+id);
+document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.tab===id));
+if(location.hash!=='#'+id)history.replaceState(null,'','#'+id);
+// charts drawn while their tab was hidden had no width: refit them once the tab shows
+const T=document.getElementById('tab-'+id);requestAnimationFrame(()=>requestAnimationFrame(()=>T.querySelectorAll('.bar.tf button.on,.bar.blr button.on').forEach(b=>b.click())));if(id==='news'&&!newsOn){{newsOn=true;newsInit()}}}}
+window.showTabFor=e=>{{const t=e&&e.closest('section.tab');if(t&&t.hidden)showTab(t.id.slice(4))}};
+const goTo=e=>{{if(!e)return;showTabFor(e);e.scrollIntoView({{behavior:'smooth',block:'start'}})}};
+document.querySelectorAll('nav.tabs a').forEach(a=>a.onclick=e=>{{e.preventDefault();showTab(a.dataset.tab);window.scrollTo(0,0)}});
+document.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{{showTab(a.dataset.go);window.scrollTo(0,0)}});
+window.addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
+// ---- News: TradingView's free news widget for the market, a sector ETF or a stock
+function newsInit(){{const box=document.getElementById('nwc'),hd=document.getElementById('nwh'),ld=document.getElementById('nwl');if(!box)return;
+function feed(sym,label){{box.innerHTML='<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
+const cfg={{isTransparent:true,displayMode:'regular',width:'100%',height:innerWidth<600?560:680,colorTheme:'light',locale:'en'}};
+Object.assign(cfg,sym?{{feedMode:'symbol',symbol:sym}}:{{feedMode:'market',market:NEWS.market}});
+const sc=document.createElement('script');sc.src='https://s3.tradingview.com/external-embedding/embed-widget-timeline.js';sc.async=true;sc.textContent=JSON.stringify(cfg);
+sc.onerror=()=>{{box.innerHTML='<div class="hint" style="padding:16px">News could not load here. Use the TradingView link above.</div>'}};box.firstChild.appendChild(sc);
+const u=sym?'https://www.tradingview.com/symbols/'+sym.replace(':','-')+'/news/':'https://www.tradingview.com/news/';
+hd.innerHTML='News for <b>'+label+'</b> · <a href="'+u+'" target="_blank" rel="noopener">open on TradingView ↗</a>'}}
+function lead(n){{const ts=n?(NEWS.lead[n]||[]):[];ld.hidden=!ts.length;ld.innerHTML=ts.length?NEWS.lbl+': '+ts.map(t=>'<button data-t="'+t+'">'+t+'</button>').join(''):'';
+ld.querySelectorAll('button').forEach(b=>b.onclick=()=>{{ld.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));feed(b.dataset.t.replace(/-/g,'.')+NEWS.suf,b.dataset.t)}})}}
+document.querySelectorAll('.bar.nw button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.nw button').forEach(x=>x.classList.toggle('on',x===b));
+const n=b.dataset.n,sym=b.dataset.sym;lead(n);
+if(n&&!sym){{const f=ld.querySelector('button');if(f)f.click();else{{feed('','the market');hd.insertAdjacentHTML('afterbegin','No coin in '+b.firstChild.textContent.trim()+' passes tonight. ')}}return}}
+feed(sym,n?b.firstChild.textContent.trim()+' ('+sym.split(':').pop()+')':'the market')}});
+feed('','the market')}}
+// ---- Today: tap a sector to see its stocks; the paper accounts in brief once they load
+document.querySelectorAll('#tab-today .sr,.stile').forEach(r=>{{const go=()=>{{const s=document.querySelector('#s tbody tr[data-sector="'+r.dataset.sector+'"]');if(s){{if(!s.classList.contains('sel'))s.click();else goTo(document.getElementById('t'))}}}};
+r.onclick=go;r.onkeydown=e=>{{if(e.key==='Enter'||e.key===' '){{e.preventDefault();go()}}}}}});
+(function(){{const pp=document.getElementById('pp'),td=document.getElementById('tdpp');if(!pp||!td)return;
+const sync=()=>{{const ts=[...pp.querySelectorAll('.pp-tile')];if(!ts.length){{const h=pp.querySelector('.hint');if(h)td.innerHTML='<div class="hint">'+h.textContent+'</div>';return}}
+td.replaceChildren(...ts.map(t=>{{const r=document.createElement('div');r.className='tdp';r.setAttribute('role','button');r.tabIndex=0;
+const d=t.querySelector('.pp-d span');r.innerHTML='<b></b><b></b><span class="sub"></span><span class="sub"></span>';
+r.children[0].textContent=t.querySelector('.pp-h b').textContent;r.children[1].textContent=t.querySelector('.pp-val').textContent;
+r.children[2].textContent=(t.querySelector('.pp-f span')||{{}}).textContent||'';if(d){{r.children[3].textContent=d.textContent;r.children[3].className='sub '+d.className;r.children[1].className=d.className}}
+r.onclick=()=>t.click();return r}}))}};new MutationObserver(sync).observe(pp,{{childList:true}});sync()}})();
+showTab(location.hash.slice(1)||'today');
+</script>
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
 const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};
@@ -1996,7 +2252,7 @@ function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='a
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
 document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
-document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();document.getElementById('t').scrollIntoView({{behavior:'smooth'}})}});
+document.querySelectorAll('#s tbody tr').forEach(r=>r.onclick=()=>{{fSec=fSec===r.dataset.sector?null:r.dataset.sector;apply();goTo(document.getElementById('t'))}});
 chip.onclick=()=>{{fSec=null;apply()}};
 function sortable(id){{const tb=document.querySelector('#'+id+' tbody');document.querySelectorAll('#'+id+' th').forEach((h,i)=>h.onclick=()=>{{const d=h.dataset.d=h.dataset.d==='1'?-1:1;
 [...tb.rows].sort((a,b)=>{{const x=a.cells[i].dataset.v??a.cells[i].textContent,y=b.cells[i].dataset.v??b.cells[i].textContent,nx=parseFloat(x),ny=parseFloat(y);return (isNaN(nx)||isNaN(ny)?String(x).localeCompare(String(y)):nx-ny)*d}}).forEach(r=>tb.appendChild(r))}})}}
@@ -2008,13 +2264,13 @@ try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk but
 (function(){{const d=document.getElementById('ovm');if(!d)return;
 try{{if(localStorage.getItem('ovm')==='1')d.open=true}}catch(e){{}}
 d.addEventListener('toggle',()=>{{try{{localStorage.setItem('ovm',d.open?'1':'0')}}catch(e){{}}}});
-document.querySelectorAll('a[href="#ovm"]').forEach(a=>a.onclick=e=>{{e.preventDefault();d.open=true;d.scrollIntoView({{behavior:'smooth',block:'start'}})}})}})();
+document.querySelectorAll('a[href="#ovm"]').forEach(a=>a.onclick=e=>{{e.preventDefault();d.open=true;goTo(d)}})}})();
 // ---- ticker chart pop-up (TradingView widget: 4H/D/W/M, indicators preloaded, more via its Indicators menu)
 const cm=document.getElementById('cm');let cmSym=null,cmIv='D',tvLoading=null;
 const tvSym=t=>t+'USD';                     // TradingView finds BTCUSD, ETHUSD... on its own
 function tvLib(){{return tvLoading||(tvLoading=new Promise((ok,no)=>{{const s=document.createElement('script');s.src='https://s3.tradingview.com/tv.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)}}))}}
 function tvDraw(){{document.getElementById('cmw').innerHTML='<div id="cmc"></div>';
-const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+const dark=false;          // the page is light on every device
 tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbol:tvSym(cmSym),interval:cmIv,timezone:'America/Chicago',
 theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
 studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
@@ -2213,7 +2469,7 @@ def main():
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames, extra)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  coin charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh, sw)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh, sw, etf_frames.get(BENCH))
     (out / "latest.html").write_text(html, encoding="utf-8")
     picks.to_csv(out / f"screener_{asof}.csv", index=False)
     secb.round(1).to_csv(out / f"sectors_{asof}.csv", index=False)
