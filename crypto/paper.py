@@ -12,7 +12,7 @@ until 2027-04-06, when the stock trial ends too.
 
 Coins trade every day, so this runs every day, weekends too, on the stock accounts' clock: GitHub Actions runs it
 every 30 minutes (.github/workflows/crypto-paper.yml); the first run at or after 10:00 New York time sells and buys
-(C only sells), later runs check stops, C buys at the first run at or after 3:00 PM, D checks its closing-price exits
+(C only sells), later runs check stops and the 4-hour exit, C buys at the first run at or after 3:00 PM, D checks its closing-price exits
 at the first run at or after 3:30 PM, and the first run after 4 PM records the day's value. "Last night's screener"
 is the run after the previous day's bar closed at midnight UTC. The accounts are saved on the crypto-paper branch
 (paper/A.json to D.json), which the crypto page reads. Every buy, sell and daily decision is logged with its reason.
@@ -39,6 +39,7 @@ P = dict(
     A_CAP=0.30,                   # each buy: at most this share of the account's value (your rule, from 2026-10-09)
     A_SCAN=15,                    # how far down the setups to look for one that passes the checks at buying time
     A_STOP=0.08,                  # sell on an 8% drop (the stock accounts' stop for shares)
+    A_4H_FROM="2026-10-14",       # your exit from this day: the 4-hour EMA10 under the EMA20 and the price under the 4-hour EMA50
     # C: A's rules, buying only in the afternoon
     C_BUY=dt.time(15, 0),         # 2:00 PM Central: the first run at or after this buys
     # B: my AI picks
@@ -64,10 +65,10 @@ def rules(aid):
         return d_rules()
     if aid in ("A", "C"):
         when = ("Buys and sells at about 10:00 New York time, every day (coins trade on weekends too), then checks its "
-                "stop every 30 minutes until 5:45 PM New York time." if aid == "A" else
+                "exits every 30 minutes until 5:45 PM New York time." if aid == "A" else
                 "Buys only after 2:00 PM Central (3:00 PM New York), at the first check after that, using the same "
-                "setups as Your system. Sells on the same signals: the trend check at about 10:00 New York time, then the "
-                "stop every 30 minutes until 5:45 PM New York time.")
+                "setups as Your system. Sells on the same signals, checked every 30 minutes from 10:00 AM to 5:45 PM New "
+                "York time.")
         return [
             "Uses your screener on coins: last night's setups (Momentum and Pullback), in the coin table's order. "
             "Last night = the screener run after the day's bar closed at midnight UTC (7 PM Central in winter, 8 PM in summer).",
@@ -81,9 +82,11 @@ def rules(aid):
             f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
             f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the coin's "
             f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20, last night).",
-            f"Sells if the coin drops {P['A_STOP']:.0%} or after a daily close below the 50-day EMA or 150-day average "
-            "(the stock accounts' exits for shares).",
-            "The exits are my defaults, since your screener doesn't set any. Tell me yours and I'll switch.",
+            "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
+            "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
+            "Trend view's 4H bars (4 hours each from midnight UTC) and only bars that close after the buy count. It "
+            "sells at the next check after the bar closes; bars that close overnight sell at about 10:00 New York time.",
+            f"Safety net, my default: it also sells if the coin drops {P['A_STOP']:.0%}.",
         ]
     return [
         f"Copies my AI picks list for coins: up to {P['B_SLOTS']} coins, at most {SC.CFG['AI_CAP']} per category, ranked by "
@@ -159,10 +162,32 @@ def qty_str(q):
     return f"{q:,.8f}".rstrip("0").rstrip(".") if q < 1000 else f"{q:,.0f}" if q >= 100000 else f"{q:,.2f}"
 
 
-def ema50_150(close):
-    """Last close, its 50-day EMA and its 150-day average (the price half of your uptrend rule)."""
-    c = close.dropna()
-    return float(c.iloc[-1]), float(SC.ema(c, 50).iloc[-1]), float(c.rolling(150).mean().iloc[-1])
+def exit_4h(hourly, since, now):
+    """Your exit: the first 4-hour bar (from midnight UTC, as the Trend view draws them) closed after `since` (and by
+    `now`) with EMA10 < EMA20 and close < EMA50, as (bar close time, close, e10, e20, e50), or None. Times are UTC,
+    without a time zone."""
+    h = hourly.dropna(subset=["Close"])
+    h = h.tz_convert("UTC").tz_localize(None) if h.index.tz is not None else h
+    b = SC.to_4h(h[h.index < now])
+    if b.empty:
+        return None
+    ends = pd.DatetimeIndex(b.index) + pd.Timedelta(hours=4)
+    b, ends = b[ends <= now], ends[ends <= now]
+    if len(b) < 60:
+        return None
+    c = b["Close"]
+    e10, e20, e50 = SC.ema(c, 10), SC.ema(c, 20), SC.ema(c, 50)
+    print(f"  4-hour bar closed {ends[-1]:%Y-%m-%d %H:%M}: close {c.iloc[-1]:.4g}, EMA10 {e10.iloc[-1]:.4g}, "
+          f"EMA20 {e20.iloc[-1]:.4g}, EMA50 {e50.iloc[-1]:.4g}")
+    for i in range(len(b)):
+        if ends[i] > since and e10.iloc[i] < e20.iloc[i] and c.iloc[i] < e50.iloc[i]:
+            return ends[i], float(c.iloc[i]), float(e10.iloc[i]), float(e20.iloc[i]), float(e50.iloc[i])
+    return None
+
+
+def plan_text(t, plan):
+    return (f"sell after a 4-hour bar on {t} closes with the 10 EMA under the 20 and the price under the 50 EMA (your "
+            f"exit), or if it drops {P['A_STOP']:.0%} (to {usd(plan['stop'])}).")
 
 
 # ------------------------------------------------------------------ market data (Yahoo, on GitHub Actions)
@@ -214,6 +239,13 @@ class Yahoo:
                 d = d.tz_convert("UTC").tz_localize(None)
             out[t] = d[d.index.date <= through]
         return out
+
+    def hourly(self, tickers, today):
+        """{coin: hourly bars over the last year}, for the 4-hour exit (the Trend view's 4H bars are built from these)."""
+        tks = sorted(set(tickers))
+        if not tks:
+            return {}
+        return SC.yf_batch(tks, start=(today - dt.timedelta(days=365)).isoformat(), interval="60m")
 
     def session(self, tickers, today):
         """{coin: (open, high, low)} of today's daily bar so far (the UTC day), from 1-minute bars."""
@@ -419,26 +451,41 @@ def passed_over(passed, n):
     return f" Passed over as overbought (your rule): {', '.join(left[:5])}{more}." if left else ""
 
 
-def a_exits(a, day, trend):
-    """The stop on every run; with trend=True (the morning run) also last night's close against the 50-day EMA and
-    150-day average."""
+def new_exits(a, day):
+    """Your 4-hour exit replaced my daily trend-break exit on Oct 14, mid-trial: rewrite the plans of coins bought
+    before then, once, and say so in the log."""
+    old = [p for p in a["positions"] if not p["plan"].get("x4h")]
+    for p in old:
+        p["plan"]["text"] = plan_text(p["ticker"], p["plan"])
+        p["plan"]["x4h"] = True
+    if old:
+        note(a, day.now, "Exit rule changed (your rule, from Oct 14): " + ", ".join(p["label"] for p in old)
+             + (" now sell" if len(old) > 1 else " now sells") + " once a 4-hour bar closes with the 10 EMA under the 20 "
+             "and the price under the 50 EMA, instead of on a daily close below the 50-day EMA or 150-day average. "
+             f"The {P['A_STOP']:.0%} stop stays.")
+
+
+def a_exits(a, day):
+    """Your 4-hour exit and the stop, on every run."""
     now = day.now
     if not a["positions"]:
         return
+    new_exits(a, day)
     px = day.price([p["ticker"] for p in a["positions"]])
-    if trend:
-        bars = day.mkt.daily([p["ticker"] for p in a["positions"]], day.prev_day)
-        for p in a["positions"]:
-            d = bars.get(p["ticker"])
-            if d is None or len(d) < 150:
-                continue
-            c, e50, m150 = ema50_150(d["Close"])
-            if c >= e50 and c >= m150:
-                continue
-            below = " and ".join(([f"its 50-day EMA ({usd(e50)})"] if c < e50 else [])
-                                 + ([f"its 150-day average ({usd(m150)})"] if c < m150 else []))
-            p["exit"] = (f"{p['ticker']} closed at {usd(c)} on {day_str(d.index[-1])} (UTC), below {below}, so it's out of "
-                         "your uptrend.")
+    hourly = day.mkt.hourly([p["ticker"] for p in a["positions"]], day.today)
+    utc = now.tz_convert("UTC").tz_localize(None)
+    for p in a["positions"]:
+        h = hourly.get(p["ticker"])
+        if p.get("exit") or h is None:
+            continue
+        print(f"  {p['ticker']}, your 4-hour exit:")
+        bought = pd.Timestamp(p["buy"]["t"], tz=NY).tz_convert("UTC").tz_localize(None)
+        x = exit_4h(h, max(bought, pd.Timestamp(P["A_4H_FROM"], tz=NY).tz_convert("UTC").tz_localize(None)), utc)
+        if x:
+            end, c, e10, e20, e50 = x
+            end_ny = end.tz_localize("UTC").tz_convert(NY)
+            p["exit"] = (f"Your exit: the 4-hour bar that closed {day_str(end_ny)} at {end_ny:%-I:%M %p} New York time closed "
+                         f"at {usd(c)}, under its 50 EMA ({usd(e50)}), with the 10 EMA ({usd(e10)}) under the 20 ({usd(e20)}).")
     for p in list(a["positions"]):
         t = p["ticker"]
         if not day.fresh(t):
@@ -507,8 +554,8 @@ def a_buys(a, day):
         n, r, S = pick
         t = r.ticker
         stop = SC.rp(S * (1 - P["A_STOP"]))
-        plan = dict(stop=stop, text=f"sell if it drops {P['A_STOP']:.0%} (to {usd(stop)}) or after {t} closes below its "
-                                    "50-day EMA or 150-day average.")
+        plan = dict(stop=stop, x4h=True)
+        plan["text"] = plan_text(t, plan)
         why = (f"{setup_why(r, n, src)} {money(budget)} ({within}). The coin itself: there are no options to buy on it."
                + passed_over(passed, n))
         if buy_coin(a, now, t, S, budget, why, plan) is None:
@@ -924,7 +971,7 @@ def step(a, day, btc_daily):
             if a["id"] == "D":
                 d_watch(a, day)
             else:
-                a_exits(a, day, trend=False) if a["id"] in ("A", "C") else marks(a, day)
+                a_exits(a, day) if a["id"] in ("A", "C") else marks(a, day)
             return None
         start(a, day, btc_daily)
         close_day(a, day, float(btc_daily["Close"].iloc[-1]))
@@ -946,7 +993,7 @@ def step(a, day, btc_daily):
     if today >= a["end"]:
         end_trial(a, day)
     elif a["id"] in ("A", "C"):
-        a_exits(a, day, trend=first)
+        a_exits(a, day)
         if (first and a["id"] == "A") or late:      # A buys in the morning, C at the first run after 2 PM Central
             a_buys(a, day)
     elif a["id"] == "D":

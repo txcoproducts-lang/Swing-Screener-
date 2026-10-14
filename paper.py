@@ -6,12 +6,14 @@
      0.15 delta when nothing in 0.50-0.80 fits that (the user's rule from 2026-10-09). Shares when no call fits.
   C  "Your system, after 2 PM": the same rules as A, but it only buys after 2:00 PM Central (3:00 PM New York).
      It sells on the same signals as A. Started 2026-10-07, at the user's request.
+     A and C sell on the user's 4-hour exit (from 2026-10-14): a 4-hour bar closing with EMA10 < EMA20 and the price
+     under the 4-hour EMA50, with my stops as safety nets.
   B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), as shares.
   D  "OVTLYR plan": OVTLYR's Plan M, Plan ETF and Plan #SICADFU from the deck the user shared, as shares, on the
      plan screener.py builds each night (history/ovtlyr_<date>.json). Started 2026-10-07, at the user's request.
 
 GitHub Actions runs this every 30 minutes on weekdays (.github/workflows/paper.yml). On a market day the
-first run at or after 10:00 New York time sells and buys (C only sells), later runs check stops and targets,
+first run at or after 10:00 New York time sells and buys (C only sells), later runs check stops and the 4-hour exit,
 C buys at the first run at or after 3:00 PM, D checks its closing-price exits at the first run at or after 3:30 PM,
 and the first run after 4 PM records the closing value. The accounts are saved on the paper-trading branch
 (paper/A.json to D.json), which the page reads. Every
@@ -40,7 +42,8 @@ P = dict(
     A_CAP=0.30,                   # each buy: at most this share of the account's value (your rule, from 2026-10-09)
     A_DELTA_LO=0.15,              # when no call in your delta range fits the cap, take a cheaper one down to this delta
     A_SCAN=15,                    # how far down the setups to look for a call that fits the budget
-    A_TARGET=0.50, A_STOP=0.50,   # calls: sell at +50% (bid) or -50% (mid)
+    A_TARGET=None, A_STOP=0.50,   # calls: no profit target (winners ride to the 4-hour exit, from 2026-10-14); sell at -50% (mid)
+    A_4H_FROM="2026-10-14",       # your exit from this day: the 4-hour EMA10 under the EMA20 and the price under the 4-hour EMA50
     A_EXIT_DTE=5,                 # calls: sell this many days before expiry
     A_SHARE_STOP=0.08,            # shares: sell on an 8% drop
     # C: A's rules, buying only in the afternoon
@@ -72,10 +75,10 @@ def rules(aid):
     dlo, dhi = SC.CFG["PK_DELTA"]
     if aid in ("A", "C"):
         when = ("Buys and sells at about 10:00 New York time, once the opening half hour's swings settle and option "
-                "spreads narrow, then checks stops and targets every 30 minutes until the close." if aid == "A" else
+                "spreads narrow, then checks its exits every 30 minutes until the close." if aid == "A" else
                 "Buys only after 2:00 PM Central (3:00 PM New York), at the first check after that, using the same "
-                "setups and option rules as Your system. Sells on the same signals: the trend check at about 10:00 New "
-                "York time, then stops and targets every 30 minutes until the close.")
+                "setups and option rules as Your system. Sells on the same signals, checked every 30 minutes from about "
+                "10:00 New York time until the close.")
         return [
             "Uses your screener: last night's setups (Momentum and Pullback), in the stock table's order.",
             f"Holds {P['A_SLOTS']} positions at a time, and never spends more than {P['A_CAP']:.0%} of the account "
@@ -90,10 +93,14 @@ def rules(aid):
             f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
             f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
             f"sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
-            f"Sells a call at +{P['A_TARGET']:.0%} (at the bid), at -{P['A_STOP']:.0%}, {P['A_EXIT_DTE']} days before "
-            "expiry, or after a close below the 50-day EMA or 150-day average.",
-            f"Sells shares if they drop {P['A_SHARE_STOP']:.0%} or after a close below the 50-day EMA or 150-day average.",
-            "The exits are my defaults, since your screener doesn't set any. Tell me yours and I'll switch.",
+            "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
+            "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
+            "Trend view's 4H bars (9:30 AM-1:30 PM and 1:30-4:00 PM New York) and only bars that close after the buy "
+            "count. It sells at the next check after the bar closes; a 4:00 PM bar sells at about 10:00 the next morning.",
+            "Safety nets, my defaults: "
+            + (f"a call sells at +{P['A_TARGET']:.0%} (at the bid), " if P["A_TARGET"] else "")
+            + f"a call sells at -{P['A_STOP']:.0%} or {P['A_EXIT_DTE']} days before expiry, and shares sell on a "
+            f"{P['A_SHARE_STOP']:.0%} drop." + ("" if P["A_TARGET"] else " No profit target: winners ride until the 4-hour exit."),
         ]
     return [
         f"Copies my AI picks list: up to {P['B_SLOTS']} stocks, at most {SC.CFG['AI_CAP']} per sector, ranked by "
@@ -164,10 +171,47 @@ def money(x):
     return f"-${abs(x):,.2f}" if x < 0 else f"${x:,.2f}"
 
 
-def ema50_150(close):
-    """Last close, its 50-day EMA and its 150-day average (the price half of your uptrend rule)."""
-    c = close.dropna()
-    return float(c.iloc[-1]), float(SC.ema(c, 50).iloc[-1]), float(c.rolling(150).mean().iloc[-1])
+def bar_end_4h(start):
+    """When one of the Trend view's 4H bars closes: 9:30 AM-1:30 PM and 1:30-4:00 PM New York."""
+    d = start.normalize()
+    return d + pd.Timedelta(hours=13.5) if start.hour * 60 + start.minute < 13 * 60 + 30 else d + pd.Timedelta(hours=16)
+
+
+def exit_4h(hourly, since, now):
+    """Your exit: the first 4-hour bar closed after `since` (and by `now`) with EMA10 < EMA20 and close < EMA50, as
+    (bar close time, close, e10, e20, e50), or None. Times are New York, without a time zone."""
+    h = hourly.dropna(subset=["Close"])
+    h = h.tz_convert(NY).tz_localize(None) if h.index.tz is not None else h
+    b = SC.to_4h(h[h.index < now])
+    if b.empty:
+        return None
+    ends = pd.DatetimeIndex([bar_end_4h(t) for t in b.index])
+    b = b[ends <= now]
+    ends = ends[ends <= now]
+    if len(b) < 60:
+        return None
+    c = b["Close"]
+    e10, e20, e50 = SC.ema(c, 10), SC.ema(c, 20), SC.ema(c, 50)
+    print(f"  4-hour bar closed {ends[-1]:%Y-%m-%d %H:%M}: close {c.iloc[-1]:.4g}, EMA10 {e10.iloc[-1]:.4g}, "
+          f"EMA20 {e20.iloc[-1]:.4g}, EMA50 {e50.iloc[-1]:.4g}")
+    for i in range(len(b)):
+        if ends[i] > since and e10.iloc[i] < e20.iloc[i] and c.iloc[i] < e50.iloc[i]:
+            return ends[i], float(c.iloc[i]), float(e10.iloc[i]), float(e20.iloc[i]), float(e50.iloc[i])
+    return None
+
+
+def exit_text(t):
+    return f"after a 4-hour bar on {t} closes with the 10 EMA under the 20 and the price under the 50 EMA (your exit)"
+
+
+def call_plan_text(t, plan, exp, exit_by):
+    return ((f"sell at +{P['A_TARGET']:.0%} (a bid of {money(plan['target'])}), " if plan.get("target") else "sell ")
+            + exit_text(t) + f", or as safety nets at -{P['A_STOP']:.0%} ({money(plan['stop'])}) or on "
+            f"{day_str(exit_by)} at the latest ({plural((exp - exit_by).days, 'day')} before expiry).")
+
+
+def share_plan_text(t, plan):
+    return f"sell {exit_text(t)}, or if it drops {P['A_SHARE_STOP']:.0%} (to {money(plan['stop'])})."
 
 
 def opt_label(t, exp, strike):
@@ -209,6 +253,13 @@ class Yahoo:
             return {}
         fr = SC.yf_batch(tks, period=period, interval="1d")
         return {t: d[d.index.date <= through] for t, d in fr.items()}
+
+    def hourly(self, tickers, today):
+        """{ticker: hourly bars over the last year}, for the 4-hour exit (the Trend view's 4H bars are built from these)."""
+        tks = sorted(set(tickers))
+        if not tks:
+            return {}
+        return SC.yf_batch(tks, start=(today - dt.timedelta(days=365)).isoformat(), interval="60m")
 
     def session(self, tickers, today):
         """{ticker: (open, high, low)} of today's trading so far, from 1-minute bars."""
@@ -499,26 +550,46 @@ def passed_over(passed, n):
     return f" Passed over as overbought (your rule): {', '.join(left[:5])}{more}." if left else ""
 
 
-def a_exits(a, day, trend):
-    """Stops, targets and time exits; with trend=True (the morning run) also last night's close against the
-    50-day EMA and 150-day average."""
+def new_exits(a, day):
+    """Your 4-hour exit replaced my daily trend-break exit and the +50% target on Oct 14, mid-trial: rewrite the plans
+    of positions bought before then, once, and say so in the log."""
+    old = [p for p in a["positions"] if not p["plan"].get("x4h")]
+    for p in old:
+        if p["kind"] == "shares":
+            p["plan"]["text"] = share_plan_text(p["ticker"], p["plan"])
+        else:
+            if not P["A_TARGET"]:
+                p["plan"].pop("target", None)
+            exp = dt.date.fromisoformat(p["option"]["exp"])
+            p["plan"]["text"] = call_plan_text(p["ticker"], p["plan"], exp, dt.date.fromisoformat(p["plan"]["exit_by"]))
+        p["plan"]["x4h"] = True
+    if old:
+        note(a, day.now, "Exit rule changed (your rule, from Oct 14): " + ", ".join(p["label"] for p in old)
+             + (" now sell" if len(old) > 1 else " now sells") + " once a 4-hour bar closes with the 10 EMA under the 20 "
+             "and the price under the 50 EMA, instead of on a daily close below the 50-day EMA or 150-day average"
+             + ("" if P["A_TARGET"] or all(p["kind"] == "shares" for p in old) else ", and calls no longer sell at +50%")
+             + ". The stops" + ("" if all(p["kind"] == "shares" for p in old) else " and the expiry exit") + " stay.")
+
+
+def a_exits(a, day):
+    """Your 4-hour exit, stops and the expiry exit, on every run."""
     now = day.now
     if not a["positions"]:
         return
+    new_exits(a, day)
     px = day.price([p["ticker"] for p in a["positions"]])
-    if trend:
-        bars = day.mkt.daily([p["ticker"] for p in a["positions"]], day.prev_day)
-        for p in a["positions"]:
-            d = bars.get(p["ticker"])
-            if d is None or len(d) < 150:
-                continue
-            c, e50, m150 = ema50_150(d["Close"])
-            if c >= e50 and c >= m150:
-                continue
-            below = " and ".join(([f"its 50-day EMA ({money(e50)})"] if c < e50 else [])
-                                 + ([f"its 150-day average ({money(m150)})"] if c < m150 else []))
-            p["exit"] = (f"{p['ticker']} closed at {money(c)} on {day_str(d.index[-1])}, below {below}, so it's out of "
-                         "your uptrend.")
+    hourly = day.mkt.hourly([p["ticker"] for p in a["positions"]], day.today)
+    nyt = now.tz_convert(NY).tz_localize(None)
+    for p in a["positions"]:
+        h = hourly.get(p["ticker"])
+        if p.get("exit") or h is None:
+            continue
+        print(f"  {p['ticker']}, your 4-hour exit:")
+        x = exit_4h(h, max(pd.Timestamp(p["buy"]["t"]), pd.Timestamp(P["A_4H_FROM"])), nyt)
+        if x:
+            end, c, e10, e20, e50 = x
+            p["exit"] = (f"Your exit: the 4-hour bar that closed {day_str(end)} at {end:%-I:%M %p} closed at {money(c)}, "
+                         f"under its 50 EMA ({money(e50)}), with the 10 EMA ({money(e10)}) under the 20 ({money(e20)}).")
     for p in list(a["positions"]):
         t = p["ticker"]
         if p["kind"] == "shares":
@@ -546,7 +617,7 @@ def a_exits(a, day, trend):
         left = (exp - day.today).days
         if p.get("exit"):
             sell_call(a, p, now, q["bid"], p["exit"])
-        elif q["bid"] >= p["plan"]["target"]:
+        elif p["plan"].get("target") and q["bid"] >= p["plan"]["target"]:
             sell_call(a, p, now, q["bid"], f"The bid reached {money(q['bid'])}, past the +{P['A_TARGET']:.0%} target "
                                            f"({money(p['plan']['target'])}).")
         elif q["mid"] <= p["plan"]["stop"]:
@@ -641,10 +712,10 @@ def a_buys(a, day):
             exit_by = exp - dt.timedelta(days=P["A_EXIT_DTE"])
             while exit_by.weekday() >= 5:              # the first market day inside the last week
                 exit_by += dt.timedelta(days=1)
-            plan = dict(target=r4(entry * (1 + P["A_TARGET"])), stop=r4(entry * (1 - P["A_STOP"])), exit_by=exit_by.isoformat())
-            plan["text"] = (f"sell at +{P['A_TARGET']:.0%} (a bid of {money(plan['target'])}), at -{P['A_STOP']:.0%} "
-                            f"({money(plan['stop'])}), on {day_str(exit_by)} at the latest ({plural((exp - exit_by).days, 'day')} before "
-                            f"expiry), or after {t} closes below its 50-day EMA or 150-day average.")
+            plan = dict(stop=r4(entry * (1 - P["A_STOP"])), exit_by=exit_by.isoformat(), x4h=True)
+            if P["A_TARGET"]:
+                plan["target"] = r4(entry * (1 + P["A_TARGET"]))
+            plan["text"] = call_plan_text(t, plan, exp, exit_by)
             why = (f"{setup_why(r, n, src)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
                    f"{f['oi']:,}, IV {f['iv']:.0f}%, bid {money(f['bid'])} / ask {money(f['ask'])}. "
                    + (f"None of the top {P['A_SCAN']} setups had a call at {dlo:.2f}-{SC.CFG['PK_DELTA'][1]:.2f} delta "
@@ -679,8 +750,8 @@ def a_buys(a, day):
             reason = (f"none of the top {P['A_SCAN']} setups had a call that fits your rules this morning (15-30 days out, "
                       f"delta {P['A_DELTA_LO']:.2f}-0.80, open interest over 500, a tight bid/ask).")
         stop = r4(S * (1 - P["A_SHARE_STOP"]))
-        plan = dict(stop=stop, text=f"sell if it drops {P['A_SHARE_STOP']:.0%} (to {money(stop)}) or after {t} closes below "
-                                    "its 50-day EMA or 150-day average.")
+        plan = dict(stop=stop, x4h=True)
+        plan["text"] = share_plan_text(t, plan)
         if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src)} Why shares, not a call: {reason}{passed_over(passed, n)}",
                       plan) is None:
             return
@@ -1267,7 +1338,7 @@ def step(a, day, spy_daily):
     elif a["id"] in ("A", "C"):
         if first:
             splits(a, day)
-        a_exits(a, day, trend=first)
+        a_exits(a, day)
         if (first and a["id"] == "A") or late:      # A buys in the morning, C at the first run after 2 PM Central
             a_buys(a, day)
     elif a["id"] == "D":
