@@ -14,10 +14,10 @@ await p.goto(URL, { waitUntil: "networkidle" }); await p.waitForTimeout(1000);
 // ---- 1. data files for every clickable ticker
 const res = await p.evaluate(async () => {
   const tks = [...new Set([...document.querySelectorAll(".tk")].map(e => e.dataset.tk))];
-  const H = [...document.querySelectorAll("#t thead th")].map(h => h.textContent), CI = H.indexOf("Contract"), RI = H.indexOf("RSI"), CC = H.indexOf("CCI");
+  const H = [...document.querySelectorAll("#t thead th")].map(h => h.textContent), CI = H.indexOf("Contract"), RI = H.indexOf("RSI"), CC = H.indexOf("CCI"), X = k => H.indexOf(k);
   const rows = Object.fromEntries([...document.querySelectorAll("#t tbody tr")].map(r => {
     const v = [...r.cells].map(c => c.dataset.v);
-    return [v[0], { close: +v[3], open: +v[4], d1: +v[5], d5: +v[6], m1: +v[7], rsi: RI < 0 ? NaN : +v[RI], cci: CC < 0 ? NaN : +v[CC],
+    return [v[0], { close: +v[X("Close")], open: +v[X("Open")], d1: +v[X("1D %")], d5: +v[X("5D %")], m1: +v[X("1M %")], bt: X("10y rules vs hold") < 0 ? "" : v[X("10y rules vs hold")], rsi: RI < 0 ? NaN : +v[RI], cci: CC < 0 ? NaN : +v[CC],
                     contract: (CI < 0 ? "" : r.cells[CI]?.textContent) || "" }];
   }));
   // RSI (14, Wilder) and CCI (20) recomputed from the chart data, as screener.py computes them
@@ -62,6 +62,19 @@ const res = await p.evaluate(async () => {
       if (tf === "D") (stats.dailyBars ||= []).push(n);
     }
     const r = rows[tk], s = D.D;
+    if (D.bt) {      // the 10-year backtest: its trades rebuild its return, and the table cell matches it
+      const b = D.bt; stats.bt = (stats.bt || 0) + 1; (stats.btYears ||= []).push(b.years);
+      const eq = b.trades.reduce((m, t) => m * t[3] / t[2], 1), bad = [];
+      if (Math.abs((eq - 1) * 100 - b.rules) > 0.2) bad.push(`rules ${b.rules}% vs trades ${((eq - 1) * 100).toFixed(1)}%`);
+      if (b.trades.length !== b.n) bad.push(`${b.n} trades vs ${b.trades.length} listed`);
+      if (b.trades.some((t, i) => t[0] > t[1] || i && t[0] < b.trades[i - 1][1] || t[0] < b.start)) bad.push("trades overlap or out of order");
+      const i0 = s ? s.t.indexOf(b.start) : -1;      // holding: from the start close, when it is in the daily chart's 5 years
+      if (i0 >= 0 && Math.abs((s.c[s.c.length - 1] / s.c[i0] - 1) * 100 - b.hold) > 0.5) bad.push(`hold ${b.hold}% vs chart ${((s.c[s.c.length - 1] / s.c[i0] - 1) * 100).toFixed(1)}%`);
+      if (r && r.bt !== "" && Math.abs(+r.bt - (b.rules - b.hold)) > 0.15) bad.push(`table ${r.bt} vs ${(b.rules - b.hold).toFixed(1)} pts`);
+      if (r && r.bt === "") bad.push("table cell empty");
+      bad.forEach(x => issues.push(`${tk} backtest: ${x}`));
+      if (b.rules > b.hold) stats.btBeat = (stats.btBeat || 0) + 1;
+    } else if (rows[tk]) (stats.btMissing ||= []).push(tk);
     if (r && s) {
       const n = s.c.length, pc = (a, b) => (a / b - 1) * 100;
       const chk = { close: [r.close, s.c[n - 1]], open: [r.open, s.o[n - 1]], d1: [r.d1, pc(s.c[n - 1], s.c[n - 2])], d5: [r.d5, pc(s.c[n - 1], s.c[n - 6])], m1: [r.m1, pc(s.c[n - 1], s.c[n - 22])] };
@@ -86,6 +99,9 @@ log(`data issues: ${res.issues.length}`); res.issues.slice(0, 40).forEach(i => l
 log(`table vs data mismatches: ${res.stats.numMismatch.length}`); res.stats.numMismatch.slice(0, 40).forEach(i => log("  " + i));
 log(`RSI / CCI vs data: ${res.stats.oscChecked} stocks checked, ${res.stats.oscMismatch.length} off`); res.stats.oscMismatch.slice(0, 20).forEach(i => log("  " + i));
 log(`rows with an options contract: ${res.stats.withContract}`);
+{ const y = (res.stats.btYears || []).sort((a, b) => a - b);
+  log(`10-year backtests: ${res.stats.bt || 0} (years covered: min ${y[0]}, median ${y[y.length >> 1]}); rules beat holding on ${res.stats.btBeat || 0}; ` +
+      `table stocks without one: ${(res.stats.btMissing || []).join(", ") || "none"}`); }
 
 // ---- 1b. top picks lists against the chart data
 const pk = await p.evaluate(async () => {

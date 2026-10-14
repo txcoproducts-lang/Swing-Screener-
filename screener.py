@@ -334,6 +334,75 @@ def order_blocks(b, n_show, times):
     return zones
 
 
+# ----------------------------------------------------------- 10-year backtest
+BT = dict(YEARS=10, STOP=0.08)   # each stock's last 10 years on the user's rules, against holding it and holding SPY
+
+
+def backtest(d, spy, years=None):
+    """The user's rules on one stock's daily bars, against buy-and-hold of the stock and of SPY over the same days.
+    Buy at the next open after a close with one of the page's setups (Momentum or Pullback, as analyze() finds them)
+    that isn't overbought (RSI over 70 or CCI over 100). Sell at the next open after a close with EMA10 under EMA20
+    and the price under EMA50 (the user's 4-hour exit, on daily bars: Yahoo keeps only ~2 years of intraday bars), or
+    on an 8% drop from the entry (the paper accounts' share stop). Cash earns nothing while out; no costs.
+    Breadth (the market's or sector's over 75) isn't checked: it needs every stock's history that far back."""
+    years = years or BT["YEARS"]
+    o, h, l, c = (d[k].to_numpy(float) for k in ("Open", "High", "Low", "Close"))
+    if len(c) < 260:
+        return None
+    C = d["Close"]
+    e10, e20, e50 = ema(C, 10), ema(C, 20), ema(C, 50)
+    lm = (lambda n: ema(C, n)) if CFG["LONG_MA_TYPE"] == "EMA" else (lambda n: C.rolling(n).mean())
+    m150 = lm(150)
+    r, a = rsi(C), atr(d)
+    cc = cci(d)
+    hi252 = C.rolling(252, min_periods=200).max()
+    prior20 = C.shift().rolling(20).max()
+    core = (e10 > e20) & (C > e50) & (C > m150)
+    ext = (C - e20) / a
+    mom = core & r.between(55, 80) & (ext <= 3) & ((C > prior20) | (C >= 0.97 * hi252))
+    x50150 = e50 > m150
+    depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
+    pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
+    buy = ((mom | pull) & (r <= CFG["OB_RSI"]) & ~(cc > CFG["OB_CCI"])).to_numpy()
+    sell = ((e10 < e20) & (C < e50)).to_numpy()
+    ok = hi252.notna().to_numpy() & m150.notna().to_numpy()
+    first = d.index[-1] - pd.DateOffset(years=years)
+    s = max(int(np.searchsorted(d.index, first)), int(np.argmax(ok)) if ok.any() else len(c))
+    if s >= len(c) - 20:
+        return None
+    eq, pos, trades, days_in, last = 1.0, None, [], 0, len(c) - 1
+    for i in range(s, last + 1):
+        if pos is None:
+            if buy[i] and i < last:
+                pos = (i + 1, o[i + 1])
+            continue
+        days_in += 1                            # bar i is held: its stop first, then its close for the exit
+        stop = pos[1] * (1 - BT["STOP"])
+        if l[i] <= stop:
+            px, j, why = min(o[i], stop), i, "stop"     # a gap under the stop sells at the open
+        elif sell[i] and i < last:
+            px, j, why = o[i + 1], i + 1, "exit"
+        else:
+            continue
+        trades.append((pos[0], j, pos[1], px, why))
+        eq *= px / pos[1]
+        pos = None
+    if pos is not None:                         # still holding: marked at the last close
+        trades.append((pos[0], last, pos[1], c[-1], "open"))
+        eq *= c[-1] / pos[1]
+    t0, t1 = d.index[s], d.index[-1]
+    sp = spy.loc[(spy.index >= t0) & (spy.index <= t1)] if spy is not None else None
+    ds = lambda i: d.index[i].strftime("%Y-%m-%d")
+    wins = sum(1 for t in trades if t[3] > t[2])
+    return dict(
+        start=t0.strftime("%Y-%m-%d"), end=t1.strftime("%Y-%m-%d"), years=round((t1 - t0).days / 365.25, 1),
+        rules=round((eq - 1) * 100, 1), hold=round((c[-1] / c[s] - 1) * 100, 1),
+        spy=round((float(sp.iloc[-1]) / float(sp.iloc[0]) - 1) * 100, 1) if sp is not None and len(sp) > 1 else None,
+        n=len(trades), win=round(wins / len(trades) * 100) if trades else None,
+        inmkt=round(days_in / max(1, last + 1 - s) * 100), holding=pos is not None,
+        trades=[[ds(t[0]), ds(t[1]), round(t[2], 2), round(t[3], 2), t[4]] for t in trades])
+
+
 def write_stock_charts(tickers, out, demo=False, known=None):
     """One JSON per ticker (4H / D / W / M), loaded by the chart pop-up on click."""
     if demo:
@@ -355,24 +424,33 @@ def write_stock_charts(tickers, out, demo=False, known=None):
             if miss:
                 f.update(yf_batch(miss, size=10, **kw))
             return f
-        daily = fetch(period="10y", interval="1d")
+        # 10 years for the backtest plus a year and a half to warm up its averages (the 150-day and the 52-week high)
+        daily = fetch(start=(dt.date.today() - dt.timedelta(days=round(365.25 * (BT["YEARS"] + 1.5)))).isoformat(), interval="1d")
         monthly = fetch(period="max", interval="1mo")
         # explicit dates: with period= yfinance starts at the listing date for some recent IPOs (GEV) and Yahoo rejects it
         hourly = fetch(start=(dt.date.today() - dt.timedelta(days=700)).isoformat(), interval="60m")
     dd = out / "data"; dd.mkdir(parents=True, exist_ok=True)
-    n = 0
+    n, bts = 0, {}
+    spy = daily["SPY"]["Close"] if "SPY" in daily else None
     for t in tickers:
         d = daily.get(t)
         if d is None or len(d) < 60:
             continue
         rec = {"D": trend_series(d, STOCK_BARS["D"], blocks=True), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
+        try:
+            bt = backtest(d, spy)
+        except Exception as e:              # extras; never lose the chart over it
+            print("  backtest failed", t, e)
+            bt = None
+        if bt:
+            rec["bt"] = bts[t] = bt
         if t in monthly and len(monthly[t]) > 20:
             rec["M"] = trend_series(monthly[t], STOCK_BARS["M"])
         if t in hourly and len(hourly[t]) > 60:
             rec["4H"] = trend_series(to_4h(hourly[t]), STOCK_BARS["4H"], intraday=True)
         (dd / f"{t}.json").write_text(json.dumps(rec, separators=(",", ":")), encoding="utf-8")
         n += 1
-    return n
+    return n, bts
 
 # --------------------------------------------------------------- indicators
 def ema(s, n): return s.ewm(span=n, adjust=False).mean()
@@ -1824,7 +1902,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
               '<div class="mini">' + "".join(srow(i, n) for i, n in enumerate(secs[:4])) + '</div></div>')
     else:
         s2 = ('<div class="step"><div class="n">Step 2 · Strongest sector</div><div class="big">None tonight</div>'
-              '<div class="sub">No sector is turning up and rising with a stock in your uptrend that isn\'t overbought.</div>'
+              '<div class="sub">No sector is turning up and rising with a stock in your uptrend that isn’t overbought.</div>'
               '<div class="mini">' + "".join(srow(i, n) for i, n in enumerate(secs[:4])) + '</div></div>')
 
     # step 3: the strongest stock
@@ -2027,7 +2105,15 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         txt = f"{v:.1f}" if round(v) in (hi, lo) else f"{v:.0f}"         # 70.4 reads "70.4", not "70", next to its tag
         return f"{txt}{' ' + tag if tag else ''}"
     mkt_hot = breadth_hot(None, {g: round(float(b.rise.iloc[-1]), 1) for g, b in (bh or {}).items()})
-    head = ["Ticker", "Setup", "Score", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "CCI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
+    def btc(r):
+        """10-year backtest cell: points the rules beat (or trailed) holding the stock, with both returns under it."""
+        ru, ho = r.get("bt_rules"), r.get("bt_hold")
+        if ru is None or ru != ru:
+            return ""
+        e = ru - ho
+        return (f'<span class="{"up" if e > 0 else "dn"}">{e:+,.0f} pts</span>'
+                f'<div class="sec">{ru:+,.0f}% vs {ho:+,.0f}%</div>')
+    head = ["Ticker", "Setup", "Score", "10y rules vs hold", "Close", "Open", "1D %", "5D %", "1M %", "RSI", "CCI", "ATR %", "RelVol", "From 52w hi", "vs EMA10", "vs EMA20", "vs EMA50",
             ">150", ">200", "50x150", "Contract", "Δ", "Γ", "Θ/day", "Vega", "IV", "Bid/Ask", "OI"]
     rows = []
     for _, r in picks.iterrows():
@@ -2042,12 +2128,13 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         pct = lambda v: f'<span class="{"up" if v > 0 else "dn"}">{v:+.1f}</span>'
         why_ob = r.get("ob") or (mkt_hot if r.get("blocked") else "")
         st = (f'<span class="obl">Overbought</span><div class="sec">{html_esc(why_ob)}</div>' if r.setup == "Overbought" else r.setup)
-        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', st, f"{r.score:.0f}", f"{r.close:.2f}",
+        cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', st, f"{r.score:.0f}", btc(r), f"{r.close:.2f}",
                  f"{r.open:.2f}", pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), zone(r.rsi, CFG["OB_RSI"], CFG["OS_RSI"]),
                  zone(r.get("cci"), CFG["OB_CCI"], CFG["OS_CCI"]), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
                  num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
                  flag(r.p150), flag(r.p200), cross] + oc
-        raw = [r.ticker, r.setup, r.score, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
+        bte = r.get("bt_rules") - r.get("bt_hold") if r.get("bt_rules") == r.get("bt_rules") and r.get("bt_rules") is not None else ""
+        raw = [r.ticker, r.setup, r.score, bte, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
                r.vs20, r.vs50] + [""] * 11
         tds = "".join(f'<td data-v="{raw[i]}">{c}</td>' for i, c in enumerate(cells))
         rows.append(f'<tr data-setup="{r.setup}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
@@ -2175,6 +2262,8 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
 #cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
+#cmbt{{padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;max-height:45%;overflow:auto}}#cmbt .btl b{{white-space:nowrap}}#cmbt details summary{{cursor:pointer;color:var(--acc)}}
+#cmbt .btt{{overflow:auto;max-height:180px;margin-top:4px}}#cmbt table{{border-collapse:collapse;font-size:12px}}#cmbt th,#cmbt td{{padding:2px 8px 2px 0;text-align:left;white-space:nowrap}}
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
 .mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}</style></head><body>
@@ -2194,7 +2283,8 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
 Your overbought rule: a stock with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
-Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random. Not financial advice.</div></section>
+Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
+10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup that isn't overbought (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data; breadth isn't checked that far back. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
@@ -2205,7 +2295,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
@@ -2406,7 +2496,22 @@ studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
 function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
-cm.hidden=false;document.body.style.overflow='hidden';draw()}}
+cm.hidden=false;document.body.style.overflow='hidden';draw();btDraw(t)}}
+function loadData(sym){{return dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))}}
+// ---- 10-year backtest strip: your rules on this stock vs holding it vs holding SPY, and every trade
+function btDraw(sym){{const el=document.getElementById('cmbt');el.hidden=true;el.innerHTML='';
+loadData(sym).then(D=>{{if(sym!==cmSym||!D.bt)return;const b=D.bt,p=v=>v==null?'n/a':(v>=0?'+':'')+Math.round(v).toLocaleString('en-US')+'%',
+pts=(a,c)=>{{const e=a-c;return'<b class="'+(e>0?'up':'dn')+'">'+(e>=0?'+':'')+Math.round(e).toLocaleString('en-US')+' pts</b>'}},
+y=b.years>=9.9?'10 years':b.years+' years',m=v=>'$'+Math.round(1000*(1+v/100)).toLocaleString('en-US');
+const tr=b.trades.slice().reverse().map(t=>{{const r=(t[3]/t[2]-1)*100;return'<tr><td>'+t[0]+'</td><td>'+(t[4]==='open'?'still in':t[1])+'</td><td>'+t[2].toFixed(2)+'</td><td>'+t[3].toFixed(2)+
+'</td><td class="'+(r>0?'up':'dn')+'">'+(r>=0?'+':'')+r.toFixed(1)+'%</td><td>'+(t[4]==='stop'?'8% stop':t[4]==='exit'?'trend exit':'open')+'</td></tr>'}}).join('');
+el.innerHTML='<div class="btl"><b>Backtest, '+y+'</b> <span class="mut">('+b.start+' to '+b.end+')</span>: '+
+'your rules <b>'+p(b.rules)+'</b> · holding '+sym+' <b>'+p(b.hold)+'</b> · holding SPY <b>'+p(b.spy)+'</b></div>'+
+'<div class="btl">Rules vs holding '+sym+': '+pts(b.rules,b.hold)+(b.spy==null?'':' · rules vs SPY: '+pts(b.rules,b.spy))+
+' · $1,000 became '+m(b.rules)+' on the rules, '+m(b.hold)+' holding'+'</div>'+
+'<details><summary>'+b.n+' trades, '+(b.win==null?'none':b.win+'% winners')+', in the market '+b.inmkt+'% of days'+(b.holding?', in a trade now':'')+'</summary>'+
+'<div class="mut">Buy at the next open after a setup (Momentum or Pullback) that isn’t overbought; sell at the next open after a daily close with EMA10 under EMA20 and the price under EMA50 (your 4-hour exit on daily bars: Yahoo only keeps about 2 years of 4-hour data), or on an 8% drop. Breadth isn’t checked this far back; cash earns nothing while out; no trading costs.</div>'+
+(tr?'<div class="btt"><table><thead><tr><th>Bought</th><th>Sold</th><th>In</th><th>Out</th><th>Return</th><th>Why</th></tr></thead><tbody>'+tr+'</tbody></table></div>':'')+'</details>';el.hidden=false}}).catch(()=>{{}})}}
 function closeChart(){{cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML=''}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
 let cmSrc='trend',cmOB=true,cmRng='1Y';const dataCache={{}};
@@ -2423,7 +2528,7 @@ zs.forEach(z=>{{const x1=ts.timeToCoordinate(z[0]),x2=z[5]?ts.width():ts.timeToC
 if(x1==null||x2==null||y1==null||y2==null)return;rs.push({{x1:x1-sp,x2:z[5]?x2:x2+sp,y1:Math.min(y1,y2),y2:Math.max(y1,y2),col:z[4]>0?'#2962ff':'#f57c00',fresh:z[5]}})}})}}}}}}
 function trendDraw(){{const w=document.getElementById('cmw');w.innerHTML='<div id="cmc"></div>';const lg=document.getElementById('cmlg');lg.textContent='Loading…';
 const tf=cmIv==='240'?'4H':cmIv,sym=cmSym;
-(dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))).then(D=>{{
+loadData(sym).then(D=>{{
 if(sym!==cmSym||cmSrc!=='trend')return;const s=D[tf];if(!s){{lg.textContent='No '+tf+' data for '+sym+'.';return}}
 if(!window.LightweightCharts){{lg.textContent='Chart library blocked.';return}}
 const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim(),UP=V('--up'),DN=V('--dn');
@@ -2629,11 +2734,18 @@ def main():
     listed += [h["ticker"] for k in ("nu", "bo") for h in (lists or {}).get(k, {}).get("hot", [])]
     listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
     chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values())))
-    print(f"Building trend charts for {len(chart_tks)} tickers...")
+    print(f"Building trend charts and 10-year backtests for {len(chart_tks)} tickers...")
+    bts = {}
     try:
-        print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames)} chart files")
+        n, bts = write_stock_charts(chart_tks, out, a.demo, frames)
+        print(f"  wrote {n} chart files, {len(bts)} backtests")
+        if bts:
+            e = [b["rules"] - b["hold"] for b in bts.values()]
+            print(f"  rules beat holding the stock on {sum(x > 0 for x in e)} of {len(e)}, median {np.median(e):+.0f} points")
     except Exception as e:                 # extras; never block the scan
         print("  stock charts failed:", e)
+    for k in ("rules", "hold", "spy", "start"):
+        picks[f"bt_{k}"] = picks.ticker.map({t: b[k] for t, b in bts.items()})
     html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"))
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")

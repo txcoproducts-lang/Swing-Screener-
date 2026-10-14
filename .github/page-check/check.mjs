@@ -114,6 +114,12 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(2500);
   log(`[${name}] opened ${tk}: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
   await p.screenshot({ path: `${out}/${name}-3-trend-daily.png` });
+  log(`[${name}] backtest: "${(await p.$eval("#cmbt", e => e.hidden ? "(hidden)" : e.textContent)).slice(0, 200)}"`);
+  if (await p.$("#cmbt:not([hidden]) summary")) {
+    await p.click("#cmbt summary"); await p.waitForTimeout(300);
+    await p.screenshot({ path: `${out}/${name}-3-backtest-trades.png` });
+    await p.click("#cmbt summary"); await p.waitForTimeout(200);
+  }
   await p.click('.bar.rng button[data-rng="5Y"]'); await p.waitForTimeout(1500);
   log(`[${name}] daily 5Y: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
   await p.screenshot({ path: `${out}/${name}-3-trend-daily-5y.png` });
