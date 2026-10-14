@@ -35,6 +35,18 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
       await p.screenshot({ path: `${out}/${name}-tab-news-stock.png` });
     }
   }
+  if (await p.$('nav.tabs a[data-tab="backtests"]')) {     // the Backtests tab: whole page, then the 10-year switch
+    await click0('nav.tabs a[data-tab="backtests"]');
+    await p.waitForFunction(() => !/Loading/.test(document.querySelector("#btx .bx-kps")?.innerText || "Loading"), null, { timeout: 15000 }).catch(() => {});
+    await p.waitForTimeout(800);
+    log(`[${name}] backtests: ${(await p.$eval("#btx .bx-kps", e => e.innerText.replace(/\n/g, " | ")).catch(() => "no summary"))}; ` +
+        `plan cards=${await p.$$eval("#btx .bx-pg > .bx-card", c => c.length)}, charts=${await p.$$eval("#btx svg.bx-svg", c => c.length)}, ` +
+        `research=${await p.$$eval("#btx .bx-acc", c => c.length)}`);
+    await p.screenshot({ path: `${out}/${name}-6-backtests.png`, fullPage: true });
+    await click0('#btx .bx-seg button[data-m="bt"]'); await p.waitForTimeout(500);
+    log(`[${name}] backtests, 10-year view: ${await p.$eval("#btx .bx-card .bx-num", e => e.innerText).catch(() => "?")}`);
+    await p.screenshot({ path: `${out}/${name}-6-backtests-10y.png` });
+  }
   if (await p.$("nav.tabs")) { await click0('nav.tabs a[data-tab="today"]'); await p.waitForTimeout(300); }
   // paper trading tiles and each account's breakdown
   await p.waitForSelector(".pp-tile", { timeout: 15000 }).catch(() => {});
