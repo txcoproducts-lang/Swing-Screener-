@@ -39,6 +39,14 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   }
   // the OVTLYR plan's Plan M list (opened), the breadth heatmap, and the sector charts with their breadth strips
   const at = sel => p.evaluate(s => { const e = document.querySelector(s); if (e) window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 40); return !!e; }, sel);
+  if (await at("#ssh")) {          // strongest sector, strongest stock: each score is its three parts, highest first
+    await p.waitForTimeout(200);
+    const ss = await p.$$eval("#ss tbody tr", rs => rs.map(r => [...r.cells].map(c => c.dataset.v)));
+    const bad = ss.filter((r, i) => Math.abs(+r[2] - (+r[3] + +r[4] + +r[5])) > 0.15 || (i && +r[2] > +ss[i - 1][2] + 1e-9)).map(r => r[1]);
+    log(`[${name}] strongest sector list: ${ss.length} rows, ${ss.filter(r => r[8] === "1").length} setups, top ${ss.slice(0, 5).map(r => r[1] + " " + r[2]).join(", ")}; problems: ${bad.length ? bad.join(", ") : "none"}`);
+    await p.screenshot({ path: `${out}/${name}-1-strongest.png` });
+    await at("#ss"); await p.screenshot({ path: `${out}/${name}-1-strongest-list.png` });
+  }
   if (await p.$("#ovm")) {
     await p.evaluate(() => { document.getElementById("ovm").open = true; }); await at("#ovm"); await p.waitForTimeout(300);
     log(`[${name}] Plan M list: ${await p.$eval("#ovm summary", e => e.innerText.replace(/\n/g, " "))}`);
