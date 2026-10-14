@@ -80,7 +80,10 @@ def rules(aid):
                 "setups and option rules as Your system. Sells on the same signals, checked every 30 minutes from about "
                 "10:00 New York time until the close.")
         return [
-            "Uses your screener: last night's setups (Momentum and Pullback), in the stock table's order.",
+            "Uses your screener: last night's setups (Momentum and Pullback) on the strongest sector, strongest stock "
+            "list (your rule, from Oct 14): the stock is in your uptrend, its sector is turning up and rising (its "
+            "breadth above its 10-day average), and it goes highest score first. The score is 40% the market (S&P 500 "
+            "breadth), 40% the sector (its breadth) and 20% the stock (its relative strength rank inside its sector).",
             f"Holds {P['A_SLOTS']} positions at a time, and never spends more than {P['A_CAP']:.0%} of the account "
             "on one buy. " + when,
             f"Buys a call by your rules ({lo}-{hi} days out, delta {dlo:.2f}-{dhi:.2f}, open interest over "
@@ -467,8 +470,19 @@ def settle_call(a, pos, now, under):
 
 
 # ------------------------------------------------------------------ A: your screener and option rules
-def setup_why(r, n, src="last night's screener"):
-    """Plain-words reason a screener row is a setup."""
+def ss_why(r, n, src):
+    """Where a setup sits on the strongest sector, strongest stock list (your rule from Oct 14), in plain words."""
+    sec = SC.SHORT_SECTOR.get(r.sector, r.sector)
+    return (f"#{n} setup on the strongest sector, strongest stock list in {src}, score {r.strength:g} of 100: market "
+            f"{r.ss_mkt:g} of 40, sector {r.ss_sec:g} of 40 ({sec} is turning up and rising), stock {r.ss_stk:g} of 20 "
+            f"(#{r.rs_n:.0f} of {r.rs_of:.0f} in {sec} on relative strength).")
+
+
+def setup_why(r, n, src="last night's screener", ranked=False):
+    """Plain-words reason a screener row is a setup; ranked = the setups are in the strongest-sector list's order."""
+    if ranked:                                   # "#n setup in ... (score s): it ..." -> "It's a Momentum setup (score s): it ..."
+        body = setup_why(r, n, src).split(", a ", 1)[1]
+        return f"{ss_why(r, n, src)} It's a {body.replace('(score ', '(screener score ', 1)}"
     if r.setup == "Momentum":
         b = r.get("brk20")
         brk = bool(b) if b is not None and b == b else r.from_hi < -3
@@ -643,9 +657,12 @@ def a_buys(a, day):
                      + (f" (the latest is from {day_str(sd)})." if sd else "."), "day")
         return
     src = day.source(sd)
-    setups = scr[scr.has_setup.astype(bool)].reset_index(drop=True)
+    setups, ranked = SC.ss_order(scr)
     if setups.empty:
-        note(a, now, f"No new buy: {src} found no setups.", "day")
+        n_all = int(scr.has_setup.astype(bool).sum())
+        note(a, now, f"No new buy: {src} found no setups." if not n_all else
+             f"No new buy: none of the {plural(n_all, 'setup')} in {src} is on the strongest sector, strongest stock list "
+             "(in your uptrend, in a sector that is turning up and rising, not overbought).", "day")
         return
     sold_today = {p["ticker"] for p in a["closed"] if p["sell"]["t"][:10] == day.today.isoformat()}
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]
@@ -716,7 +733,7 @@ def a_buys(a, day):
             if P["A_TARGET"]:
                 plan["target"] = r4(entry * (1 + P["A_TARGET"]))
             plan["text"] = call_plan_text(t, plan, exp, exit_by)
-            why = (f"{setup_why(r, n, src)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
+            why = (f"{setup_why(r, n, src, ranked)} Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest "
                    f"{f['oi']:,}, IV {f['iv']:.0f}%, bid {money(f['bid'])} / ask {money(f['ask'])}. "
                    + (f"None of the top {P['A_SCAN']} setups had a call at {dlo:.2f}-{SC.CFG['PK_DELTA'][1]:.2f} delta "
                       f"that fits your rules for {money(budget)} or less ({within}), so it takes a cheaper one, down to "
@@ -752,7 +769,7 @@ def a_buys(a, day):
         stop = r4(S * (1 - P["A_SHARE_STOP"]))
         plan = dict(stop=stop, x4h=True)
         plan["text"] = share_plan_text(t, plan)
-        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src)} Why shares, not a call: {reason}{passed_over(passed, n)}",
+        if buy_shares(a, now, t, S, budget, f"{setup_why(r, n, src, ranked)} Why shares, not a call: {reason}{passed_over(passed, n)}",
                       plan) is None:
             return
 
