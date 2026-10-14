@@ -1263,7 +1263,43 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_ow
     funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), hot=len(in_sec) - len(cool), near_ob=near_n,
                   earnings=earn_n, setups=len(setups), earn_checked=bool(earn))
     return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel, dropped=dropped,
-                prev_asof=(prev or {}).get("asof"))
+                prev_asof=(prev or {}).get("asof"), screen=ov_screen(locals()))
+
+
+OV_RULES = ("sig", "trend", "e10", "rsi", "px", "sec", "hot", "ob", "earn")   # the screener's 9 Plan M rules, in order
+
+
+def ov_screen(v):
+    """The OVTLYR screener: every liquid stock against Plan M's 9 rules (OV_RULES), so the page can show the stocks closest
+    to a setup. v: ovtlyr_plan()'s locals. Each row: ticker, sector, close, RSI, days since the buy signal (None when the
+    10 EMA is under the 20) and one character per rule: 1 pass, 0 fail, - not checked. Earnings are only looked up for
+    stocks that miss at most one of the other rules, to keep the nightly run short."""
+    C, R, e10, e20, e50, age, c_ = (v[k] for k in ("C", "R", "e10", "e20", "e50", "age", "c_"))
+    lo, hi, secs, sectors, hot_own, frames, asof = (v[k] for k in ("lo", "hi", "secs", "sectors", "hot_own", "frames", "asof"))
+    x10, x20, x50, r0, r1 = e10.iloc[-1], e20.iloc[-1], e50.iloc[-1], R.iloc[-1], R.iloc[-2]
+    rows = {}
+    for t in c_.index[v["liquid"].to_numpy(bool)]:
+        px = float(c_[t])
+        rows[t] = dict(sig=bool(age[t] <= OV["SIGNAL_DAYS"] - 1), trend=bool(x10[t] > x20[t] and px > x50[t]),
+                       e10=bool(px > x10[t]), rsi=bool(r0[t] > r1[t]), px=bool(lo <= px <= hi),
+                       sec=bool(secs.get(sectors.get(t) or "Other", {}).get("ok")), hot=t not in hot_own,
+                       ob=not ob_near(ov_blocks(frames[t]), px, asof), earn=None)
+    if v["earn"]:
+        near = [t for t, ok in rows.items() if sum(not x for k, x in ok.items() if k != "earn") <= 1]
+        dates = dict(v["dates"])
+        dates.update(v["earn"]([t for t in near if t not in dates][:80]) if near else {})
+        for t in near:
+            e = dates.get(t)
+            rows[t]["earn"] = not (e and (dt.date.fromisoformat(e) - v["entry"]).days < OV["EARN_DAYS"])
+    out = []
+    for t, ok in rows.items():
+        k = age[t]
+        out.append([t, sectors.get(t) or "", round(float(c_[t]), 2), round(float(r0[t]), 1),
+                    int(k) if k == k and x10[t] > x20[t] else None,
+                    "".join("-" if ok[r] is None else "1" if ok[r] else "0" for r in OV_RULES)])
+    rs = v["rs"]
+    out.sort(key=lambda r: (r[5].count("0"), -(rs[r[0]] if rs[r[0]] == rs[r[0]] else 0)))
+    return out
 
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
@@ -1696,7 +1732,8 @@ def ov_html(ov):
               + ("" if m["ok"] else " The market rules fail tonight, so the paper account won't buy these.") + "</div>")
     live = (f'<div class="hint warn">Built at {ov["live_at"]} New York time, before the close, from prices that are not closes yet. '
             'The paper account only trades on the plan from a run after the close.</div>' if ov.get("live_at") else "")
-    return ('<h2>OVTLYR plan</h2><div class="hint">OVTLYR\'s Plan M, Plan ETF and Plan #SICADFU from the trading-plan deck, '
+    return ('<h2>OVTLYR plan</h2><div class="ovseg"><button data-ov="plan" class="on">Plan</button>'
+            '<button data-ov="scr">Screener</button></div><div id="ov-plan"><div class="hint">OVTLYR\'s Plan M, Plan ETF and Plan #SICADFU from the trading-plan deck, '
             'rebuilt from this page\'s data; the <b>OVTLYR plan</b> paper account trades it. OVTLYR\'s fear &amp; greed heatmap and '
             'buy/sell signals are private, so this uses stand-ins: heatmap = 14-day RSI; buy signal = the 10 EMA crossing above the '
             f'20 EMA (it counts for {OV["SIGNAL_DAYS"]} trading days); sell signal = the 10 EMA under the 20; breadth = the share of '
@@ -1704,7 +1741,101 @@ def ov_html(ov):
             'check.</div>'
             f'{live}<div class="ovg">{mk}{sc}{et}</div><details id="ovm" class="ovm">{summ}{table}{gone}{funnel}</details>'
             '<div class="hint">Click <b>Plan M stocks</b> for every stock that passes the plan tonight. The list is rebuilt each '
-            'night: stocks that newly pass are marked New, and stocks that stop passing drop off, with the reason.</div>')
+            'night: stocks that newly pass are marked New, and stocks that stop passing drop off, with the reason.</div></div>'
+            + ov_screen_html(ov))
+
+
+OV_LABELS = dict(  # the screener's columns: short name, what it checks
+    sig=("Buy signal", f"the 10 EMA crossed over the 20 in the last {OV['SIGNAL_DAYS']} trading days"),
+    trend=("Uptrend", "10 EMA over the 20 and the close over the 50 EMA"),
+    e10=("Over 10 EMA", "the close above the 10 EMA"),
+    rsi=("RSI rising", "the heatmap stand-in warming up"),
+    px=("$10-$350", "the deck's price range"),
+    sec=("Sector passes", "its sector passes the plan's sector rules (Health Care is excluded)"),
+    hot=("Not overbought", f"your rule: RSI {CFG['OB_RSI']} or under and CCI {CFG['OB_CCI']} or under"),
+    ob=("Clear of order blocks", f"more than {OV['OB_GAP']:.0%} from an untouched order block"),
+    earn=("No earnings soon", f"{OV['EARN_DAYS']}+ days to earnings; looked up for stocks one rule or less from a setup"))
+OV_MKT = dict(heat="SPY heat rising", signal="SPY buy signal", trend="SPY uptrend", breadth="Breadth rising", hot="Not overbought")
+
+
+def ov_screen_html(ov, unit="stock", group="Sector"):
+    """The OVTLYR screener view: the market checks, then every stock against Plan M's 9 rules, closest to a setup first.
+    The rows go in as JSON and the page builds the table, so 500 stocks stay small."""
+    rows = ov.get("screen")
+    if rows is None:
+        return ""
+    m = ov["market"]
+    chips = "".join(f'<span class="ovk {"y" if c["ok"] else "n"}" title="{html_esc(c["text"])}">{"✓" if c["ok"] else "✗"} '
+                    f'{OV_MKT.get(c["k"], c["k"])}</span>' for c in m["checks"])
+    keys = [k for k in OV_RULES if any(r[5][OV_RULES.index(k)] != "-" for r in rows) or k in ("ob",)]
+    data = json.dumps(dict(rules=[[OV_RULES.index(k), *OV_LABELS[k]] for k in keys], rows=rows, unit=unit),
+                      separators=(",", ":")).replace("</", "<\\/")
+    legend = " · ".join(f"<b>{OV_LABELS[k][0]}</b>: {html_esc(OV_LABELS[k][1])}" for k in keys)
+    secs = sorted({r[1] for r in rows if r[1]})
+    return (f'<div id="ov-scr" hidden><div class="ovmk"><b>Market</b> <span class="pill {"y" if m["ok"] else "n"}">Plan M '
+            f'{"on" if m["ok"] else "off"}</span>{chips}</div>'
+            f'<div class="hint">Every {unit} with 1M+ shares a day, checked against Plan M\'s {len(keys)} {unit} rules, closest to a '
+            f'setup first. Heat is the 14-day RSI, the plan\'s stand-in for OVTLYR\'s fear &amp; greed. Signal is days since the '
+            f'10 EMA crossed over the 20. Tap a ticker for its chart.</div>'
+            f'<div class="ovf"><span class="ovfc" data-f="0"></span><span class="ovfc on" data-f="2"></span><span class="ovfc" data-f="99"></span>'
+            f'<select id="ovsec"><option value="">All {group.lower()}s</option>'
+            + "".join(f'<option>{html_esc(x)}</option>' for x in secs)
+            + f'</select></div><div class="wrap"><table id="ov-s"></table></div><div class="hint">{legend}</div>'
+            f'<script type="application/json" id="ov-data">{data}</script></div>' + OV_SCREEN_JS)
+
+
+# the screener's look and the Plan | Screener switch; plain strings, so no doubled braces
+OV_SCREEN_JS = """<style>
+.ovseg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;margin:2px 0 12px}
+.ovseg button{border:0;background:none;padding:6px 18px;border-radius:8px;font:inherit;font-weight:700;font-size:13px;color:var(--mut);cursor:pointer}
+.ovseg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.ovmk{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.ovmk b{margin-right:4px}.ovk,.ovmk .pill,.ovfc{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--bg)}
+.ovk.y,.ovmk .pill.y{background:#e5f6ef;color:var(--up)}.ovk.n,.ovmk .pill.n{background:#fdeceb;color:var(--dn)}
+.ovf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}.ovfc{cursor:pointer;border:1px solid var(--line)}.ovfc.on{background:var(--fg);color:var(--card);border-color:var(--fg)}
+.ovf select{font:inherit;font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+#ov-s{width:100%;border-collapse:collapse}#ov-s th{white-space:nowrap}#ov-s th.c{white-space:normal;font-size:11px;line-height:1.2;min-width:52px;text-align:center}#ov-s td{white-space:nowrap}#ov-s td.c{text-align:center}
+.od{display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;font-size:10px;font-weight:800;font-style:normal}
+.od.y{background:#e5f6ef;color:var(--up)}.od.n{background:#fdeceb;color:var(--dn)}.od.u{background:var(--bg);color:var(--mut)}
+.oh{display:inline-block;min-width:30px;text-align:center;border-radius:6px;padding:1px 6px;font-weight:800;font-size:12px;color:#14202e}
+.oa{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--bg);color:var(--mut)}
+.oa.r{background:#e5f6ef;color:var(--up)}.oa.w{background:#fff4de;color:#a86700}
+#ov-s td.ow{color:var(--dn);font-size:12px;white-space:normal;min-width:160px;text-align:left}#ov-s td.oz{display:none}
+@media(max-width:760px){#ov-s .c,#ov-s .os,#ov-s th.c,#ov-s td.ow,#ov-s .oc,#ov-s th{display:none}
+#ov-s,#ov-s tbody{display:block}#ov-s tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:9px 2px;border-bottom:1px solid var(--line)}
+#ov-s td{border:0;padding:0}#ov-s td.oz{display:block;flex-basis:100%;white-space:normal}.oz .odr{display:flex;gap:3px;margin:2px 0}.oz .om{color:var(--dn);font-size:12px;text-align:left}#ov-s thead{display:none}}
+</style><script>(function(){
+const D=JSON.parse(document.getElementById('ov-data').textContent),T=document.getElementById('ov-s'),S=document.getElementById('ovsec');
+let lim=2;
+const miss=r=>D.rules.filter(q=>r[5][q[0]]==='0'),n0=r=>miss(r).length;
+function heat(v){const st=[[30,[47,111,237]],[45,[130,170,240]],[55,[226,230,236]],[65,[255,190,110]],[75,[226,80,60]]];v=Math.max(30,Math.min(75,v));
+ for(let i=1;i<st.length;i++)if(v<=st[i][0]){const[a,ca]=st[i-1],[b,cb]=st[i],t=(v-a)/(b-a);return'rgb('+ca.map((c,j)=>Math.round(c+(cb[j]-c)*t)).join(',')+')'}}
+const dot=c=>c==='1'?'<i class="od y">✓</i>':c==='0'?'<i class="od n">✗</i>':'<i class="od u" title="not checked">·</i>';
+function away(k){return k?'<span class="oa'+(k<=2?' w':'')+'">'+k+' away</span>':'<span class="oa r">Ready</span>'}
+function draw(){
+ const rows=D.rows.filter(r=>(!S.value||r[1]===S.value)&&(lim>=99||n0(r)<=lim));
+ const head='<thead><tr><th>Ticker</th><th class="os">'+(D.unit==='coin'?'Category':'Sector')+'</th><th class="oc">Close</th><th>Heat</th><th class="oc">Signal</th>'
+  +D.rules.map(q=>'<th class="c" title="'+q[2]+'">'+q[1]+'</th>').join('')+'<th></th><th class="ow">Missing</th></tr></thead>';
+ T.innerHTML=head+'<tbody>'+(rows.length?rows.slice(0,400).map(r=>{const m=miss(r),k=m.length,ms=m.map(q=>q[1]).join(', ');
+  return '<tr><td><b class="tk" data-tk="'+r[0]+'">'+r[0]+'</b></td><td class="os mut">'+r[1]+'</td><td class="oc">'+r[2]+'</td>'
+  +'<td><span class="oh" style="background:'+heat(r[3])+'">'+Math.round(r[3])+'</span></td><td class="oc">'+(r[4]===null?'<span class="mut">—</span>':r[4]+'d')+'</td>'
+  +D.rules.map(q=>'<td class="c">'+dot(r[5][q[0]])+'</td>').join('')+'<td>'+away(k)+'</td><td class="ow">'+ms+'</td>'
+  +'<td class="oz"><div class="odr">'+D.rules.map(q=>dot(r[5][q[0]])).join('')+'</div><div class="om">'+(k?'Missing: '+ms:'Passes every rule')+'</div></td></tr>'}).join('')
+  :'<tr><td colspan="20" class="mut">No '+D.unit+' is that close tonight.</td></tr>')+'</tbody>';
+}
+const cnt=l=>D.rows.filter(r=>(!S.value||r[1]===S.value)&&(l>=99||n0(r)<=l)).length;
+function chips(){document.querySelectorAll('.ovfc').forEach(c=>{const l=+c.dataset.f;c.classList.toggle('on',l===lim);
+ c.textContent=(l===0?'Ready ':l===2?'2 rules away or fewer ':'All ')+cnt(l)})}
+document.querySelectorAll('.ovfc').forEach(c=>c.onclick=()=>{lim=+c.dataset.f;chips();draw()});
+S.onchange=()=>{chips();draw()};
+T.onclick=e=>{const t=e.target.closest('.tk');if(t&&window.openChart){e.stopPropagation();openChart(t.dataset.tk)}};
+if(!cnt(2))lim=99;chips();draw();
+document.querySelectorAll('.ovseg button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.ovseg button').forEach(x=>x.classList.toggle('on',x===b));
+ document.getElementById('ov-plan').hidden=b.dataset.ov!=='plan';document.getElementById('ov-scr').hidden=b.dataset.ov!=='scr';
+ try{localStorage.setItem('ovview',b.dataset.ov)}catch(e){}});
+try{if(localStorage.getItem('ovview')==='scr')document.querySelector('.ovseg [data-ov=scr]').click()}catch(e){}
+})();</script>"""
 
 
 def ss_html(df, sw, mkt_hot=""):
