@@ -696,6 +696,53 @@ def chart_breadth(charts, bh):
             s["bs"] = [None if v != v else int(v) for v in src["on"]]          # 1 = upswing, 0 = fading
         c["sw"] = swing_state(b)
 
+# ------------------------------------------------- strongest category, strongest coin
+# The user's rule (2026-10-14), as on the stock page with categories for sectors: find the strongest category, then the
+# strongest coin inside it, and only buy when the category is turning around and rising; a move is 40% the market, 40% the
+# category and 20% the coin. Each part is 0-100:
+#   market   = the crypto market's Rising (the breadth view: the share of coins with the 10 EMA over the 20)
+#   category = the coin's category's Rising
+#   coin     = its relative strength (IBD-style, as the AI picks use) ranked among the liquid coins in its category
+# On the list: a coin in the user's uptrend, in a category in an upswing (Rising above its 10-day average) that isn't over
+# the 75 line, and not overbought itself. Your system and Your system, after 2 PM buy the highest-scoring setup on it.
+SS = dict(W_MKT=0.4, W_SEC=0.4, W_STK=0.2, N=25, PER_SECTOR=3)
+
+
+def ibd_rs(c):
+    """IBD-style relative strength from a close series: 40% on the last 3 months, 20% each on 6, 9 and 12."""
+    r = lambda n: c.iloc[-1] / c.iloc[-1 - n] - 1 if len(c) > n else np.nan
+    return 0.4 * r(QTR) + 0.2 * r(HALF) + 0.2 * r(Q3) + 0.2 * r(YEAR)
+
+
+def strength(df, frames, bh):
+    """Adds the strength score and its parts to df (the liquid coins): rs, rs_n / rs_of (its rank in its category),
+    ss_mkt / ss_sec / ss_stk (each part's points), strength (the total, 0-100), sec_on (its category is in an upswing and
+    not over the 75 line) and ss_ok (on the list). Also returns the market's and each category's state for the page."""
+    sw = {g: swing_state(b) for g, b in bh.items()}
+    m = sw.get(MARKET)
+    df["rs"] = df.ticker.map(lambda t: ibd_rs(frames[t]["Close"]))
+    g = df.groupby("sector").rs
+    df["rs_n"] = g.rank(ascending=False, method="min")
+    df["rs_of"] = g.transform("count")
+    pct = g.rank(pct=True, method="max") * 100            # 100 = the strongest in its category
+    rise = df.sector.map(lambda s: sw[s]["rise"] if s in sw else np.nan)
+    df["ss_mkt"] = round(SS["W_MKT"] * m["rise"], 1) if m else np.nan
+    df["ss_sec"] = (SS["W_SEC"] * rise).round(1)
+    df["ss_stk"] = (SS["W_STK"] * pct).round(1)
+    df["strength"] = (df.ss_mkt + df.ss_sec + df.ss_stk).round(1)
+    df["sec_on"] = df.sector.map(lambda s: bool(s in sw and sw[s]["on"] and sw[s]["z"] != 2))
+    df["ss_ok"] = df.core & df.sec_on & (df.ob == "") & df.strength.notna() & df.rs.notna()
+    return sw
+
+
+def ss_order(scr):
+    """Setups in buying order: on the strongest category, strongest coin list, highest score first. Screener files from
+    before 2026-10-14 have no score, so they keep the coin table's order."""
+    s = scr[scr.has_setup.astype(bool)]
+    if "ss_ok" not in s:
+        return s.reset_index(drop=True), False
+    return s[s.ss_ok.astype(bool)].sort_values("strength", ascending=False, kind="stable").reset_index(drop=True), True
+
 # --------------------------------------------------------------- pick lists
 # Signals for the three lists at the top of the page (New uptrends, Breakout watch, AI picks).
 # The stock version's research/picks_backtest.py chose the rules on 12 years of S&P 500 data; they were not tested on coins.
@@ -1245,7 +1292,7 @@ def card(label, value, sub, series, good=None):
 
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
 PAPER_HINT = ("Four paper accounts with $1,000 each, trading coins until Apr 6, 2027, the same rules as the stock page's "
-              "accounts (no options, so coins where those buy calls). <b>Your system</b> trades your screener setups at about "
+              "accounts (no options, so coins where those buy calls). <b>Your system</b> trades your screener setups on the strongest category, strongest coin list at about "
               "10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but only buys after 2:00 PM Central; "
               "<b>Claude's picks</b> trades my AI picks list; <b>OVTLYR plan</b> trades the OVTLYR plan section below. They "
               "trade every day, weekends too, checking every 30 minutes from 9:40 AM to 5:45 PM New York time. Click one for "
@@ -1454,6 +1501,60 @@ def ov_html(ov):
             'night: coins that newly pass are marked New, and coins that stop passing drop off, with the reason.</div>')
 
 
+def ss_html(df, sw, mkt_hot=""):
+    """Strongest category, strongest coin: the market and the categories, strongest first, each with its strongest coins,
+    then the list itself ranked by the 40 / 40 / 20 score, with each part shown."""
+    if not sw or MARKET not in sw or "strength" not in df:
+        return ""
+    m = sw[MARKET]
+    ok = df[df.ss_ok].sort_values("strength", ascending=False)
+    tk = lambda t: f'<b class="tk" data-tk="{t}">{t}</b>'
+    srows = []
+    secs = sorted((n for n in sw if n != MARKET), key=lambda n: -sw[n]["rise"])
+    for i, n in enumerate(secs):
+        w = sw[n]
+        top = ok[ok.sector == n].sort_values("rs_n").head(SS["PER_SECTOR"])
+        best = ", ".join(tk(t) for t in top.ticker) or (
+            '<span class="mut">none: ' + ("over the 75 line" if w["z"] == 2 else "fading") + "</span>" if not (w["on"] and w["z"] != 2)
+            else '<span class="mut">no coin in your uptrend</span>')
+        srows.append(f'<tr><td data-v="{i + 1}">{i + 1}</td><td data-v="{html_esc(n)}">{html_esc(SHORT_SECTOR.get(n, n))}</td>'
+                     f'<td data-v="{w["rise"]}">{w["rise"]:.0f}%</td><td data-v="{w["avg"]}">{w["avg"]:.0f}%</td>'
+                     f'<td data-v="{int(w["on"] and w["z"] != 2)}">{swing_tag(w)}</td><td data-v="{len(top)}" class="why">{best}</td></tr>')
+    rows = []
+    for i, r in enumerate(ok.head(SS["N"]).itertuples()):
+        st = (f'<b class="{"up" if r.setup == "Momentum" else ""}">{r.setup}</b>' if r.has_setup else '<span class="mut">no setup</span>')
+        rows.append("<tr>" + "".join(f'<td data-v="{v}">{c}</td>' for c, v in [
+            (i + 1, i + 1), (f'{tk(r.ticker)}<div class="sec">{html_esc(r.sector)}</div>', r.ticker),
+            (f"<b>{r.strength:.1f}</b>", r.strength), (f"{r.ss_mkt:.1f}", r.ss_mkt), (f"{r.ss_sec:.1f}", r.ss_sec),
+            (f"{r.ss_stk:.1f}", r.ss_stk), (f"{int(r.rs_n)} of {int(r.rs_of)}", r.rs_n),
+            (f'<span class="{"up" if r.rs > 0 else "dn"}">{r.rs * 100:+.0f}%</span>', round(r.rs, 4)),
+            (st, int(r.has_setup)), (fp(r.close), r.close),
+            (f'<span class="{"up" if r.chg1m > 0 else "dn"}">{r.chg1m:+.1f}%</span>', round(r.chg1m, 2))]) + "</tr>")
+    head = ["#", "Coin", "Score", "Market (40)", "Category (40)", "Coin (20)", "RS rank in category", "RS", "Setup", "Close", "1M"]
+    lst = (f'<div class="wrap"><table id="ss" class="pkt"><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead>'
+           f'<tbody>{"".join(rows)}</tbody></table></div>' if rows else
+           '<div class="hint pke">No coin passes tonight: none is in your uptrend in a category that is turning up and rising.</div>')
+    n_set = int(ok.has_setup.sum())
+    warn = (f'<div class="hint warn obn">The market is overbought tonight ({html_esc(mkt_hot)}), so by your rule nothing gets '
+            'bought from this list.</div>') if mkt_hot else ""
+    return ('<h2 id="ssh">Strongest category, strongest coin</h2>'
+            '<div class="hint">Your rule, as on the stock page with categories for sectors: find the strongest category, '
+            'then the strongest coin inside it. A move is 40% the market, 40% the category and 20% the coin, so the score '
+            'adds up those three parts (100 at most). <b>Market</b> = 40% of the crypto market\'s Rising, the share of coins '
+            'with the 10 EMA over the 20 (the breadth view). <b>Category</b> = 40% of the coin\'s category\'s Rising. '
+            '<b>Coin</b> = 20% of how it ranks on relative strength (IBD-style: 40% on the last 3 months, 20% each on 6, 9 '
+            'and 12) among the liquid coins in its category, 20 for the strongest. On the list: coins in your uptrend, in a '
+            'category that is turning up and rising (Rising '
+            f'above its 10-day average, ▲, and not over your {CFG["OB_BREADTH"]} line), and not overbought themselves. '
+            '<b>Your system</b> and <b>Your system, after 2 PM</b> buy the highest-scoring setup on it.</div>' + warn
+            + f'<div class="hint" style="margin-top:6px">Market tonight: crypto market Rising <b>{m["rise"]:.0f}%</b> '
+            f'(10-day average {m["avg"]:.0f}%) {swing_tag(m)}, worth <b>{SS["W_MKT"] * m["rise"]:.1f}</b> of 40 points '
+            f'for every coin. {len(ok)} coins on the list, {n_set} of them setups.</div>'
+            '<div class="wrap"><table id="ssec" class="pkt"><thead><tr><th>#</th><th>Category</th><th>Rising</th>'
+            '<th>10-day avg</th><th>State</th><th class="why">Strongest coins</th></tr></thead>'
+            f'<tbody>{"".join(srows)}</tbody></table></div>{lst}')
+
+
 def html_esc(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -1523,7 +1624,7 @@ def line_data(bh):
     return dict(t=[d.strftime("%Y-%m-%d") for d in idx], g=g)
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -1701,6 +1802,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .new{{display:inline-block;font-size:11px;font-weight:700;color:var(--up);background:color-mix(in srgb,var(--up) 18%,transparent);padding:1px 7px;border-radius:99px}}
 .ovd{{font-size:12px;margin-top:10px;line-height:1.5}}.ovd ul{{margin:2px 0;padding-left:18px}}.ovm .hint,.ovm+.hint{{margin-top:8px}}
 .pkt .dte{{font-size:10px;color:var(--mut)}}.miss{{color:var(--mut)}}.bar.pk{{margin-top:8px}}.bar.pk .n{{color:var(--mut);font-weight:400}}.pkl .note{{margin-top:6px}}.note a{{color:var(--acc)}}.pke{{padding:10px 0}}.warn{{color:var(--dn);font-weight:600}}
+#ss td:nth-child(2),#ss th:nth-child(2),#ssec td:nth-child(2),#ssec th:nth-child(2){{text-align:left}}
 .obn{{color:var(--fg);font-weight:400;background:color-mix(in srgb,var(--warn) 18%,transparent);border-radius:8px;padding:6px 10px;margin:8px 0}}
 .charts{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px;margin-top:10px}}
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
@@ -1736,6 +1838,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="meta">Data as of {asof} (daily bars close at midnight UTC) · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out</div>
 <div class="cards">{cards}</div>
 {paper_html}
+{ss_html(df, sw, mkt_hot)}
 {picks_html(lists, earn, calls)}
 {ov_html(ov)}
 {sector_html}
@@ -1901,7 +2004,7 @@ sortable('t');sortable('s');apply();
 document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.bar.pk',b.dataset.pk,'pk');
 document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
 try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
-['pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
+['ss','ssec','pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
 (function(){{const d=document.getElementById('ovm');if(!d)return;
 try{{if(localStorage.getItem('ovm')==='1')d.open=true}}catch(e){{}}
 d.addEventListener('toggle',()=>{{try{{localStorage.setItem('ovm',d.open?'1':'0')}}catch(e){{}}}});
@@ -2025,6 +2128,15 @@ def main():
     df["blocked"] = would & ((df.ob != "") | bool(mkt_hot))
     df["has_setup"] = would & ~df.blocked
     df["setup"] = np.where(df.has_setup, df.setup, np.where((df.ob != "") | df.blocked, "Overbought", "Uptrend"))
+    sw = {}
+    try:
+        sw = strength(df, frames, bh)
+        print(f"  strongest category, strongest coin: {int(df.ss_ok.sum())} coins on the list, "
+              f"{int((df.ss_ok & df.has_setup).sum())} of them setups")
+    except Exception as e:                 # never block the scan; the paper accounts then keep the coin table's order
+        import traceback
+        traceback.print_exc()
+        print("  strength score failed:", e)
     secb = sector_breadth(frames, df, sectors)
     picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
     print(f"{int(df.core.sum())} of {len(df)} liquid coins in uptrend; {int(picks.has_setup.sum())} setups ({(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
@@ -2101,7 +2213,7 @@ def main():
         print(f"  wrote {write_stock_charts(chart_tks, out, a.demo, frames, extra)} chart files")
     except Exception as e:                 # extras; never block the scan
         print("  coin charts failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh, sw)
     (out / "latest.html").write_text(html, encoding="utf-8")
     picks.to_csv(out / f"screener_{asof}.csv", index=False)
     secb.round(1).to_csv(out / f"sectors_{asof}.csv", index=False)
