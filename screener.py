@@ -2116,7 +2116,7 @@ main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display
 .nwh{{font-size:12px;color:var(--mut);margin:10px 0 6px}}.nwh a{{color:var(--acc)}}.nwc{{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:200px}}
 @media(max-width:900px){{.steps,.tgrid,.trow{{grid-template-columns:minmax(0,1fr)}}}}
 @media(max-width:600px){{.hd{{padding:10px 14px 0}}.asof{{width:100%;margin:0}}main{{padding:12px 12px 30px}}nav.tabs{{padding:0 4px}}.step,.tcard{{padding:14px}}.step .big{{font-size:20px}}
-.hd .reg,.asof{{display:none}}.stiles{{grid-template-columns:1fr 1fr;gap:8px}}.stile{{min-height:98px}}.stile .v{{font-size:24px}}.sr,.step .sr{{grid-template-columns:18px 96px minmax(30px,1fr) 38px}}.sr .tag{{display:none}}.st{{grid-template-columns:86px minmax(0,1fr) 34px}}.st .chg{{display:none}}html{{scroll-padding-top:120px}}}}
+.hd .reg,.asof,.step .sp{{display:none}}.stiles{{grid-template-columns:1fr 1fr;gap:8px}}.stile{{min-height:98px}}.stile .v{{font-size:24px}}.sr,.step .sr{{grid-template-columns:18px 96px minmax(30px,1fr) 38px}}.sr .tag{{display:none}}.st{{grid-template-columns:86px minmax(0,1fr) 34px}}.st .chg{{display:none}}html{{scroll-padding-top:120px}}}}
 .reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
 .reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--bg);color:var(--mut)}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px}}
