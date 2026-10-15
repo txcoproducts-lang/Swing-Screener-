@@ -1568,11 +1568,11 @@ BT_PLANS = Path(__file__).resolve().parent / "history" / "plan_backtests.json"  
 PAPER_SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/"
 # The research tests behind the page's lists and signals, from their reports (research/*_results.md); the Backtests tab
 # shows them under the plans. Colors: blue = the tested idea, grey = what it's measured against, amber = a loss.
-AI_YEARS = [("2014-10-01", 0, 0, 0), ("2014-12-31", 7.8, 8.4, 5.7), ("2015-12-31", -3.4, -0.4, 0.7), ("2016-12-30", 5.0, 18.6, 14.4),
-            ("2017-12-29", 29.9, 23.7, 21.5), ("2018-12-31", -2.4, -6.3, -6.0), ("2019-12-31", 33.4, 32.5, 31.8),
-            ("2020-12-31", 11.7, 12.8, 16.8), ("2021-12-31", 9.1, 35.5, 31.9), ("2022-12-30", -9.3, -8.6, -18.7),
-            ("2023-12-29", 13.9, 16.9, 24.6), ("2024-12-31", 52.0, 16.0, 26.5), ("2025-12-31", 45.7, 16.2, 18.2),
-            ("2026-10-02", 60.3, 15.8, 13.0)]
+AI_YEARS = [("2014-10-01", 0, 0, 0), ("2014-12-31", 9.4, 8.4, 5.7), ("2015-12-31", -8.8, -0.4, 0.7), ("2016-12-30", 6.1, 18.6, 14.4),
+            ("2017-12-29", 31.1, 23.7, 21.5), ("2018-12-31", -2.9, -6.3, -6.0), ("2019-12-31", 30.9, 32.5, 31.8),
+            ("2020-12-31", 3.3, 12.8, 16.8), ("2021-12-31", 12.9, 35.5, 31.9), ("2022-12-30", -10.8, -8.5, -18.7),
+            ("2023-12-29", 20.1, 17.0, 24.6), ("2024-12-31", 48.0, 16.0, 26.5), ("2025-12-31", 38.7, 16.0, 18.2),
+            ("2026-10-14", 37.8, 13.6, 11.7)]   # research/picks_backtest.py, rerun 2026-10-15 with the overbought rule (breadth only)
 
 
 def bt_research(df):
@@ -1581,28 +1581,31 @@ def bt_research(df):
     blue, grey, amber = "#2f6fed", "#8a94a3", "#c27a00"
     grow = lambda k: [round(v, 2) for v in np.cumprod([1000] + [1 + r[k] / 100 for r in AI_YEARS[1:]])]
     out = [
-        dict(name="AI picks list", scope="S&P 500 as it was each day, 2014-2026", verdict="+19.4% a year vs SPY +14.2%",
-             text="Hold the 10 stocks with the best relative strength (at most 3 per sector), keep each while it ranks in the top 20. "
-                  "It trailed from 2014 to 2021 (+11.9% a year vs SPY +15.4%) and led from 2022 (+32.3% vs +12.3%). Its edge over the "
-                  "average stock, 6.2% a year, isn't proven: the 95% range runs from -3.4% to +15.8%. This is the list Claude's picks "
+        dict(name="AI picks list", scope="S&P 500 as it was each day, 2014-2026", verdict="+16.6% a year vs SPY +14.0%",
+             text="Hold the 10 stocks with the best relative strength (at most 3 per sector), keep each while it ranks in the top 20, "
+                  "with your overbought rule (no new pick while its sector's or the market's breadth is over 75). It trailed from 2014 "
+                  "to 2021 (+10.4% a year vs SPY +15.4%) and led from 2022 (+26.7% vs +11.9%). Its edge over the average stock, 3.7% "
+                  "a year, isn't proven: the 95% range runs from -5.4% to +12.8%. This is the list Claude's picks "
                   "trades; its plan backtest above adds your exit and overbought rule.",
              line=dict(dates=[r[0] for r in AI_YEARS], lines=[dict(name="AI picks", color="#d6453d", vals=grow(1)),
                                                               dict(name="Average stock", color=amber, dash=True, vals=grow(2)),
                                                               dict(name="SPY", color=grey, dash=True, vals=grow(3))])),
-        dict(name="Order blocks", scope="1,000 stocks, 10 years, daily bars", verdict="No edge as support", unit="R", sign=True,
-             text="Buying the first pullback into a bullish block made +0.10R a trade, but random price zones made +0.13R, so the "
-                  "profit came from the stocks rising, not the blocks. Bearish blocks held as resistance a little better than random "
-                  "(shorting them lost 0.03R against 0.08R). 1R = the amount risked; 2:1 target, 20-day limit.",
-             bars=[["Bullish blocks", 0.10, blue], ["Random zones", 0.13, grey], ["Bearish blocks (short)", -0.03, amber],
-                   ["Random zones (short)", -0.08, grey]]),
+        dict(name="Order blocks", scope="1,000 stocks, 10 years, daily bars", verdict="No proven edge as support", unit="R", sign=True,
+             text="Rerun 2026-10-15. Buying the first pullback into a bullish block (the strong-move blocks the charts draw) made "
+                  "+0.17R a trade, against +0.10R for random price zones; that 0.08R edge isn't proven (95% range -0.02R to +0.25R), "
+                  "and most of the profit came from the stocks rising. Bearish blocks held as resistance a little better than random "
+                  "zones. 1R = the amount risked; 2:1 target, 20-day limit.",
+             bars=[["Bullish blocks", 0.17, blue], ["Random zones", 0.10, grey]]),
         dict(name="Breakout watch", scope="S&P 500, 2014-2026", verdict="Breaks out more, returns don't", unit="%",
-             text="The tightest setups within 5% of a 50-day high broke out within 10 days 47% of the time, against 27% for the "
-                  "average stock, but did 0.30% worse than it over the next 20 days because many breakouts fail.",
-             bars=[["Broke out in 10 days", 47, blue], ["Average stock", 27, grey]]),
+             text="The tightest setups within 5% of a 50-day high broke out within 10 days 46% of the time, against 27% for the "
+                  "average stock, but did 0.31% worse than it over the next 20 days because many breakouts fail. Rerun with your "
+                  "overbought rule (breadth over 75).",
+             bars=[["Broke out in 10 days", 46, blue], ["Average stock", 27, grey]]),
         dict(name="New uptrends", scope="S&P 500, 2014-2026", verdict="Same as the average stock", unit="%", sign=True,
-             text="About 9 stocks a day turned into an uptrend by your rule. Over the next 20 trading days they did -0.10% against "
-                  "the average stock, and half of them beat it. A good place to look, not a buy signal on its own.",
-             bars=[["Next 20 days vs average", -0.10, amber], ["Average stock", 0, grey]]),
+             text="About 7 stocks a day turned into an uptrend by your rule (leaving out sectors and markets over 75). Over the next "
+                  "20 trading days they did -0.19% against the average stock, and half of them beat it. A good place to look, not a "
+                  "buy signal on its own.",
+             bars=[["Next 20 days vs average", -0.19, amber], ["Average stock", 0, grey]]),
     ]
     if "bt_rules" in df and df.bt_rules.notna().any():
         b = df.dropna(subset=["bt_rules", "bt_hold"])
