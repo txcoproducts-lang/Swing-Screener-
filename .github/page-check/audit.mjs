@@ -350,6 +350,13 @@ const tks = await p.$$eval(".tk", e => [...new Set(e.map(x => x.dataset.tk))]);
 let opened = 0; const chartErr = [];
 for (const tk of tks) {
   await p.evaluate(tk => document.querySelector(`.tk[data-tk="${tk}"]`).click(), tk);
+  // a ticker with no trend data switches the pop-up to Indicators (no timeframe buttons): note it and go on
+  await p.waitForTimeout(300);
+  if (await p.$eval(".bar.src button.on", e => e.dataset.src !== "trend")) {
+    chartErr.push(`${tk}: no trend data (${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)})`);
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    await p.evaluate(() => { cmSrc = "trend"; setOn(".bar.src", "trend", "src"); }); opened++; continue;
+  }
   for (const iv of ["D", "D5Y", "240", "W", "M"]) {
     const before = errs.length;
     if (iv === "D5Y") await p.click('.bar.rng button[data-rng="5Y"]');

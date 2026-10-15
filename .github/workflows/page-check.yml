@@ -29,6 +29,7 @@ jobs:
           PAGE_URL: https://txcoproducts-lang.github.io/Swing-Screener-/
         run: cd .github/page-check && node audit.mjs
       - name: Save screenshots to the page-check branch
+        if: always()
         run: |
           cd .github/page-check/shots
           git init -q -b page-check

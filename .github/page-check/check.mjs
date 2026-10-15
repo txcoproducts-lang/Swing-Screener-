@@ -132,6 +132,7 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.waitForTimeout(2500);
   log(`[${name}] opened ${tk}: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
   await p.screenshot({ path: `${out}/${name}-3-trend-daily.png` });
+  log(`[${name}] info line: "${await p.$eval("#cmi", e => e.hidden ? "(hidden)" : e.textContent).catch(() => "(missing)")}"`);
   log(`[${name}] backtest: "${(await p.$eval("#cmbt", e => e.hidden ? "(hidden)" : e.textContent)).slice(0, 200)}"`);
   if (await p.$("#cmbt:not([hidden]) summary")) {
     await p.click("#cmbt summary"); await p.waitForTimeout(300);
