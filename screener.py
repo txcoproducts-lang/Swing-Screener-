@@ -2160,7 +2160,7 @@ def spy_checks(spy, w, mkt_hot=""):
     return out
 
 
-def popup_info(df, sws, spy=None, mkt_hot=""):
+def popup_info(df, sws, spy=None, mkt_hot="", charts=None):
     """The ticker pop-up's info line: each stock's sector, that sector's rating (its rank by Rising, Rising tonight and
     its state) and the market's rating (SPY against your rules, as on Today, and the S&P 500's Rising). Returns the
     JSON the page uses: m = the market's line, s = each sector's line, t = each ticker's sector."""
@@ -2172,12 +2172,20 @@ def popup_info(df, sws, spy=None, mkt_hot=""):
                 f'<span class="{"up" if x["on"] else "dn"}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
     checks = spy_checks(spy, w, mkt_hot)
     n_ok = sum(ok for _, ok, _ in checks)
-    mkt = (f'<span class="lb">Market</span> <b class="{"up" if n_ok == len(checks) else "dn"}">SPY '
+    def today(n):
+        """The group's ETF (index) price on the last bar and its change on the day."""
+        c = ((charts or {}).get(n) or {}).get("D", {}).get("c") or []
+        if len(c) < 2:
+            return ""
+        ch = (c[-1] / c[-2] - 1) * 100
+        return f'{SECTOR_ETF[n]} ${c[-1]:,.2f} <b class="{"up" if ch >= 0 else "dn"}">{ch:+.2f}% today</b>'
+    mkt = (f'<span class="lb">Market</span> ' + (today("S&P 500") + ' · ' if today("S&P 500") else '')
+           + f'<b class="{"up" if n_ok == len(checks) else "dn"}">SPY '
            f'{"is moving up" if n_ok == len(checks) else "is not moving up"}</b> ({n_ok} of {len(checks)} checks) · '
            f'{w["rise"]:.0f}% of S&amp;P 500 stocks rising · {state(w)}')
     secs = sorted((n for n in sws if n != "S&P 500"), key=lambda n: -sws[n]["rise"])
     sec = {n: (f'<span class="lb">Sector</span> <b>{html_esc(SHORT_SECTOR.get(n, n))}</b> · #{i + 1} of {len(secs)} · '
-               f'<b>{sws[n]["rise"]:.0f}%</b> rising · {state(sws[n])}') for i, n in enumerate(secs)}
+               f'<b>{sws[n]["rise"]:.0f}%</b> rising · {state(sws[n])}' + (' · ' + today(n) if today(n) else '')) for i, n in enumerate(secs)}
     tks = {r.ticker: r.sector for r in df[["ticker", "sector"]].itertuples() if r.sector in sec}
     tks.update({e: n for n, e in SECTOR_ETF.items() if n in sec})
     return json.dumps(dict(m=mkt, s=sec, t=tks), separators=(",", ":")).replace("</", "<\\/")
@@ -2490,7 +2498,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
-    pinfo = popup_info(df, sws, spy, mkt_hot)
+    pinfo = popup_info(df, sws, spy, mkt_hot, charts)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (

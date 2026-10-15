@@ -1929,7 +1929,7 @@ def spy_checks(spy, w, mkt_hot=""):
     return out
 
 
-def popup_info(df, sws, spy=None, mkt_hot=""):
+def popup_info(df, sws, spy=None, mkt_hot="", charts=None):
     """The coin pop-up's info line: each coin's category, that category's rating (its rank by Rising, Rising tonight and
     its state) and the market's rating (Bitcoin against your rules, as on Today, and the whole market's Rising). Returns
     the JSON the page uses: m = the market's line, s = each category's line, t = each coin's category."""
@@ -1941,7 +1941,15 @@ def popup_info(df, sws, spy=None, mkt_hot=""):
                 f'<span class="{"up" if x["on"] else "dn"}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
     checks = spy_checks(spy, w, mkt_hot)
     n_ok = sum(ok for _, ok, _ in checks)
-    mkt = (f'<span class="lb">Market</span> <b class="{"up" if n_ok == len(checks) else "dn"}">{BENCH} '
+    def today(n):
+        """The group's ETF (index) price on the last bar and its change on the day."""
+        c = ((charts or {}).get(n) or {}).get("D", {}).get("c") or []
+        if len(c) < 2:
+            return ""
+        ch = (c[-1] / c[-2] - 1) * 100
+        return f'{SECTOR_ETF[n]} ${c[-1]:,.2f} <b class="{"up" if ch >= 0 else "dn"}">{ch:+.2f}% today</b>'
+    mkt = (f'<span class="lb">Market</span> ' + (today(MARKET) + ' · ' if today(MARKET) else '')
+           + f'<b class="{"up" if n_ok == len(checks) else "dn"}">{BENCH} '
            f'{"is moving up" if n_ok == len(checks) else "is not moving up"}</b> ({n_ok} of {len(checks)} checks) · '
            f'{w["rise"]:.0f}% of coins rising · {state(w)}')
     secs = sorted((n for n in sws if n != MARKET), key=lambda n: -sws[n]["rise"])
@@ -2248,7 +2256,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof} (daily bars close at midnight UTC) · "
             + f"""{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out""")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
-    pinfo = popup_info(df, sws, spy, mkt_hot)
+    pinfo = popup_info(df, sws, spy, mkt_hot, charts)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Categories"), ("stocks", "Coins")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
