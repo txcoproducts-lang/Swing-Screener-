@@ -1,0 +1,66 @@
+tickers with charts: 237
+order block boxes: 5661 (765 untouched)
+daily bars per ticker: min 420, median 1260, max 1260 (5 years is about 1,260)
+missing data files: AEE, LNT
+data issues: 14
+  VLO D bad high/low at 2026-10-15
+  VEEV D bad high/low at 2026-10-15
+  PNW D bad high/low at 2026-10-15
+  ACN D bad high/low at 2026-10-15
+  EOG D bad high/low at 2026-10-15
+  XOM D bad high/low at 2026-10-15
+  ATO D bad high/low at 2026-10-15
+  YUM D bad high/low at 2026-10-15
+  KMI D bad high/low at 2026-10-15
+  SO D bad high/low at 2026-10-15
+  PPG D bad high/low at 2026-10-15
+  CMS D bad high/low at 2026-10-15
+  LOW D bad high/low at 2026-10-15
+  CLX D bad high/low at 2026-10-15
+table vs data mismatches: 2
+  KMB open: table 102.87 vs data 102.51
+  LIN open: table 496.76 vs data 496.84
+RSI / CCI vs data: 164 stocks checked, 0 off
+rows with an options contract: 18
+10-year backtests: 235 (years covered: min 0.9, median 10); rules beat holding on 17; table stocks without one: none
+  medians: in the market 34% of days, 24 trades, 39% winners; 5566 trades, average 1.72%, median -1.65%; ended by {"exit":4697,"stop":754,"open":115}
+  SPY rules 125.5% hold 325.5% spy 325.5% n 29 win 59% in 65%
+  XLK rules 140.9% hold 786.6% spy 325.5% n 25 win 60% in 49%
+  EMR rules -6.2% hold 316.6% spy 325.5% n 27 win 33% in 34%
+  AAPL rules 167.7% hold 1172.2% spy 325.5% n 27 win 52% in 42%
+  MSFT rules 155.3% hold 961.7% spy 325.5% n 27 win 52% in 54%
+top picks: 27 new uptrends, 10 breakout watch, 8 AI picks; issues: 0
+pk-nu calls that fit: 4 of 27, closest shown in grey: 11; none for SJM (none fits: no expiry 15-30 days out), WDAY (none fits: no call 0.50-0.80 delta with OI over 500), CSX (none fits: no call 0.50-0.80 delta with OI over 500), NWSA (none fits: no expiry 15-30 days out), MNST (none fits: no expiry 15-30 days out), KVUE (none fits: no call 0.50-0.80 delta with OI over 500), BALL (none fits: no expiry 15-30 days out), OMC (none fits: no expiry 15-30 days out), MAS (none fits: no expiry 15-30 days out), KMB (none fits: no call 0.50-0.80 delta with OI over 500), VRSK (none fits: no expiry 15-30 days out), BRO (none fits: no expiry 15-30 days out)
+pk-bo calls that fit: 1 of 10, closest shown in grey: 4; none for TECH (none fits: no expiry 15-30 days out), GDDY (none fits: no call 0.50-0.80 delta with OI over 500), NWSA (none fits: no expiry 15-30 days out), ACGL (none fits: no expiry 15-30 days out), ICE (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-ai calls that fit: 1 of 8, closest shown in grey: 7
+filter setups: 121 rows, 0 wrong
+filter Super: 106 rows, 0 wrong
+filter Regular: 15 rows, 0 wrong
+filter Momentum: 113 rows, 0 wrong
+filter Pullback: 8 rows, 0 wrong
+filter Overbought: 0 rows, 0 wrong
+filter all: 164 rows, 0 wrong
+overbought rule: 121 setups, 0 marked Overbought, 2 oversold, market breadth 42.4; problems: none
+sector Health Care: 29 rows ok
+sector Consumer Staples: 17 rows ok
+sector Energy: 7 rows ok
+sector Information Technology: 17 rows ok
+sector Financials: 15 rows ok
+sector Consumer Discretionary: 9 rows ok
+sector Materials: 6 rows ok
+sector Communication Services: 3 rows ok
+sector Industrials: 12 rows ok
+sector Utilities: 4 rows ok
+sector Real Estate: 2 rows ok
+sorted 28 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: none
+breadth line: 12 groups x 471 days from 2024-11-27, 7 canvases, problems: none
+Plan M list: 25 stocks (summary says 25), 17 new (summary says 17), 14 dropped, the Market box link opens it: true
+opened 237 tickers x 4 timeframes (daily also at 5Y), problems: 2
+  AEE: no trend data (Trend data not available for AEE here, showing the indicator)
+  LNT: no trend data (Trend data not available for LNT here, showing the indicator)
+paper A Your system: $4,570.11 (updated 2026-10-15 17:00), cash $2,361.64, 2 open, 0 closed, 4 log lines, 2 closes; problems: none
+paper C Your system, after 2 PM: $4,747.75 (updated 2026-10-15 17:00), cash $2,731.75, 2 open, 0 closed, 4 log lines, 2 closes; problems: none
+paper B Claude's picks: $5,061.83 (updated 2026-10-15 17:00), cash $4,037.37, 2 open, 3 closed, 11 log lines, 2 closes; problems: none
+paper D OVTLYR plan: $4,997.51 (updated 2026-10-15 17:00), cash $0.00, 1 open, 0 closed, 4 log lines, 2 closes; problems: none
+page errors overall: none

@@ -1,0 +1,60 @@
+[desktop] title=Swing Screener 2026-10-15 rows=164 sectorCharts=168
+[desktop] news: News for the market · open on TradingView ↗, iframes=1
+[desktop] sector news: News for Health Care (XLV) · open on TradingView ↗, iframes=1
+[desktop] stock news: News for MRNA · open on TradingView ↗, iframes=1
+[desktop] backtests: BACKTESTS ON THIS PAGE | 10 | 4 plans, 6 research tests | PLANS THAT BEAT SPY | 1 of 4 | over 10 years: OVTLYR plan | PAPER TRIAL | Day 1 of 119 | Oct 15, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Claude's picks | +1.2% vs SPY +0.3%; plan cards=4, charts=10, research=6
+[desktop] backtests, 10-year view: OVTLYR plan leads at $142,883
+[desktop] paper tiles: Your system | Updated Oct 15, 5:00 PM ET | Your screener setups and option rules | $4,570.11 | ▼ -$429.89 (-8.6%) since Oct 15 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 15, 5:00 PM ET | Your rules, buying only after 2 PM Central | $4,747.75 | ▼ -$252.25 (-5.0%) since Oct 15 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Claude's picks | Updated Oct 15, 5:00 PM ET | My AI picks list, as shares | $5,061.83 | ▲ +$61.83 (+1.2%) since Oct 15 · SPY +0.3% | 2 open positions · 3 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 15, 5:00 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $4,997.51 | ▼ -$2.49 (-0.0%) since Oct 15 · SPY +0.3% | 1 open position · 0 closed trades | Full breakdown →
+[desktop] paper A: Value $4,570.11 -$429.89 since the start | Return -8.6% SPY +0.3% over the same days | Cash $2,361.64 2 open positions worth $2,208.47 | Closed trades 0 None yet
+[desktop] paper C: Value $4,747.75 -$252.25 since the start | Return -5.0% SPY +0.3% over the same days | Cash $2,731.75 2 open positions worth $2,016.00 | Closed trades 0 None yet
+[desktop] paper B: Value $5,061.83 +$61.83 since the start | Return +1.2% SPY +0.3% over the same days | Cash $4,037.37 2 open positions worth $1,024.46 | Closed trades 3 3 won, 0 lost, +$37.22 in all
+[desktop] paper D: Value $4,997.51 -$2.49 since the start | Return -0.0% SPY +0.3% over the same days | Cash $0.00 1 open position worth $4,997.51 | Closed trades 0 None yet
+[desktop] top picks nu: 27 rows
+[desktop] top picks bo: 10 rows
+[desktop] top picks ai: 8 rows
+[desktop] strongest sector list: 25 rows, 23 setups, top MRNA 64.3, ILMN 63.9, MPC 63.7, CRL 63.5, KO 63.1; problems: none
+[desktop] Plan M list: Plan M stocks: 25 17 new 14 dropped
+[desktop] OVTLYR screener: Ready 25 | 2 rules away or fewer 176 | All 429 | All sectors | Communication Services | Consumer Discretionary | Consumer Staples | Energy | Financials | Health Care | Industrials | Information Technology | Materials | Real Estate | Utilities, rows shown=176
+[desktop] heatmap: S&P 500 42% ▲ | Health Care 68% ▲ | Staples 67% ▲ | Energy 67% ▲ | Utilities 48% ▲ | Discretionary 43% ▲ | Technology 40% ▼ | Materials 38% ▲ | Financials 34% ▲ | Communication 32% ▲ | Industrials 28% ▲ OS | Real Estate 17% ▲ OS | Jul Aug Sep Oct
+[desktop] breadth line: S&P 500: Rising 42.4%5-day avg 36.5%10-day avg 32.6% | ▲ above its 5-day average since Oct 1▲ above its 10-day average since Oct 2
+[desktop] breadth line: Technology: Rising 40.0%5-day avg 48.3%10-day avg 53.2% | ▼ below its 5-day average since Oct 8▼ below its 10-day average since Oct 8
+[desktop] strips: S&P 500: Apr 28 · Breadth 51% rising, avg 52% · 44% in uptrend · ▼ fading | Health Care: Breadth 68% rising, avg 54% · 65% in uptrend · ▲ upswing since Oct 9 | Consumer Staples: Breadth 67% rising, avg 36% · 61% in uptrend · ▲ upswing since Oct 7 | Energy: Breadth 67% rising, avg 55% · 57% in uptrend · ▲ upswing since Oct 6 | Information Technology: Breadth 40% rising, avg 53% · 39% in uptrend · ▼ fading since Oct 8 | Financials: Breadth 34% rising, avg 17% · 32% in uptrend · ▲ upswing since Oct 8 | Consumer Discretionary: Breadth 43% rising, avg 27% · 30% in uptrend · ▲ upswing since Sep 29 | Materials: Breadth 38% rising, avg 19% · 29% in uptrend · ▲ upswing since Oct 6 | Communication Services: Breadth 32% rising, avg 22% · 23% in uptrend · ▲ upswing since Oct 15 | Industrials: Breadth 28% rising, avg 25% · 24% in uptrend · ▲ upswing since Oct 15 · OS oversold | Utilities: Breadth 48% rising, avg 29% · 13% in uptrend · ▲ upswing since Oct 6 | Real Estate: Breadth 17% rising, avg 9% · 10% in uptrend · ▲ upswing since Oct 8 · OS oversold
+[desktop] opened CI: legend="Uptrend since 2026-10-09 · green = uptrend, red = downtrend "
+[desktop] info line: "Sector Health Care · #1 of 11 · 68% rising · ▲ upswing since Oct 9 · XLV $177.19 +1.86% todayMarket SPY $771.79 +0.28% today · SPY is moving up (5 of 5 checks) · 42% of S&P 500 stocks rising · ▲ upswing since Oct 2"
+[desktop] backtest: "Backtest, 10 years (2016-10-17 to 2026-10-15): your rules -9% · holding CI +180% · holding SPY +326%Rules vs holding CI: -190 pts · rules vs SPY: -335 pts · $1,000 became $906 on the rules, $2,802 hol"
+[desktop] daily 5Y: legend="Uptrend since 2026-10-09 · green = uptrend, red = downtrend "
+[desktop] 240: legend="Uptrend since 2026-10-08 · green = uptrend, red = downtrend "
+[desktop] W: legend="Uptrend since 2026-10-12 · green = uptrend, red = downtrend "
+[desktop] M: legend="No trend since 2025-09-01 · green = uptrend, red = downtrend"
+[desktop] tradingview iframe=1
+[desktop] errors: none
+[phone] title=Swing Screener 2026-10-15 rows=164 sectorCharts=168
+[phone] news: News for the market · open on TradingView ↗, iframes=1
+[phone] sector news: News for Health Care (XLV) · open on TradingView ↗, iframes=1
+[phone] stock news: News for MRNA · open on TradingView ↗, iframes=1
+[phone] backtests: BACKTESTS ON THIS PAGE | 10 | 4 plans, 6 research tests | PLANS THAT BEAT SPY | 1 of 4 | over 10 years: OVTLYR plan | PAPER TRIAL | Day 1 of 119 | Oct 15, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Claude's picks | +1.2% vs SPY +0.3%; plan cards=4, charts=10, research=6
+[phone] backtests, 10-year view: OVTLYR plan leads at $142,883
+[phone] paper tiles: Your system | Updated Oct 15, 5:00 PM ET | Your screener setups and option rules | $4,570.11 | ▼ -$429.89 (-8.6%) since Oct 15 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 15, 5:00 PM ET | Your rules, buying only after 2 PM Central | $4,747.75 | ▼ -$252.25 (-5.0%) since Oct 15 · SPY +0.3% | 2 open positions · 0 closed trades | Full breakdown → || Claude's picks | Updated Oct 15, 5:00 PM ET | My AI picks list, as shares | $5,061.83 | ▲ +$61.83 (+1.2%) since Oct 15 · SPY +0.3% | 2 open positions · 3 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 15, 5:00 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $4,997.51 | ▼ -$2.49 (-0.0%) since Oct 15 · SPY +0.3% | 1 open position · 0 closed trades | Full breakdown →
+[phone] paper A: Value $4,570.11 -$429.89 since the start | Return -8.6% SPY +0.3% over the same days | Cash $2,361.64 2 open positions worth $2,208.47 | Closed trades 0 None yet
+[phone] paper C: Value $4,747.75 -$252.25 since the start | Return -5.0% SPY +0.3% over the same days | Cash $2,731.75 2 open positions worth $2,016.00 | Closed trades 0 None yet
+[phone] paper B: Value $5,061.83 +$61.83 since the start | Return +1.2% SPY +0.3% over the same days | Cash $4,037.37 2 open positions worth $1,024.46 | Closed trades 3 3 won, 0 lost, +$37.22 in all
+[phone] paper D: Value $4,997.51 -$2.49 since the start | Return -0.0% SPY +0.3% over the same days | Cash $0.00 1 open position worth $4,997.51 | Closed trades 0 None yet
+[phone] top picks nu: 27 rows
+[phone] top picks bo: 10 rows
+[phone] top picks ai: 8 rows
+[phone] strongest sector list: 25 rows, 23 setups, top MRNA 64.3, ILMN 63.9, MPC 63.7, CRL 63.5, KO 63.1; problems: none
+[phone] Plan M list: Plan M stocks: 25 17 new 14 dropped
+[phone] OVTLYR screener: Ready 25 | 2 rules away or fewer 176 | All 429 | All sectors | Communication Services | Consumer Discretionary | Consumer Staples | Energy | Financials | Health Care | Industrials | Information Technology | Materials | Real Estate | Utilities, rows shown=176
+[phone] heatmap: S&P 500 42% ▲ | Health Care 68% ▲ | Staples 67% ▲ | Energy 67% ▲ | Utilities 48% ▲ | Discretionary 43% ▲ | Technology 40% ▼ | Materials 38% ▲ | Financials 34% ▲ | Communication 32% ▲ | Industrials 28% ▲ OS | Real Estate 17% ▲ OS | Jul Aug Sep Oct
+[phone] breadth line: S&P 500: Rising 42.4%5-day avg 36.5%10-day avg 32.6% | ▲ above its 5-day average since Oct 1▲ above its 10-day average since Oct 2
+[phone] breadth line: Technology: Rising 40.0%5-day avg 48.3%10-day avg 53.2% | ▼ below its 5-day average since Oct 8▼ below its 10-day average since Oct 8
+[phone] strips: S&P 500: Apr 30 · Breadth 52% rising, avg 52% · 47% in uptrend · ▲ upswing | Health Care: Breadth 68% rising, avg 54% · 65% in uptrend · ▲ upswing since Oct 9 | Consumer Staples: Breadth 67% rising, avg 36% · 61% in uptrend · ▲ upswing since Oct 7 | Energy: Breadth 67% rising, avg 55% · 57% in uptrend · ▲ upswing since Oct 6 | Information Technology: Breadth 40% rising, avg 53% · 39% in uptrend · ▼ fading since Oct 8 | Financials: Breadth 34% rising, avg 17% · 32% in uptrend · ▲ upswing since Oct 8 | Consumer Discretionary: Breadth 43% rising, avg 27% · 30% in uptrend · ▲ upswing since Sep 29 | Materials: Breadth 38% rising, avg 19% · 29% in uptrend · ▲ upswing since Oct 6 | Communication Services: Breadth 32% rising, avg 22% · 23% in uptrend · ▲ upswing since Oct 15 | Industrials: Breadth 28% rising, avg 25% · 24% in uptrend · ▲ upswing since Oct 15 · OS oversold | Utilities: Breadth 48% rising, avg 29% · 13% in uptrend · ▲ upswing since Oct 6 | Real Estate: Breadth 17% rising, avg 9% · 10% in uptrend · ▲ upswing since Oct 8 · OS oversold
+[phone] opened CI: legend="Uptrend since 2026-10-09 · green = uptrend, red = downtrend "
+[phone] info line: "Sector Health Care · #1 of 11 · 68% rising · ▲ upswing since Oct 9 · XLV $177.19 +1.86% todayMarket SPY $771.79 +0.28% today · SPY is moving up (5 of 5 checks) · 42% of S&P 500 stocks rising · ▲ upswing since Oct 2"
+[phone] backtest: "Backtest, 10 years (2016-10-17 to 2026-10-15): your rules -9% · holding CI +180% · holding SPY +326%Rules vs holding CI: -190 pts · rules vs SPY: -335 pts · $1,000 became $906 on the rules, $2,802 hol"
+[phone] daily 5Y: legend="Uptrend since 2026-10-09 · green = uptrend, red = downtrend "
+[phone] 240: legend="Uptrend since 2026-10-08 · green = uptrend, red = downtrend "
+[phone] W: legend="Uptrend since 2026-10-12 · green = uptrend, red = downtrend "
+[phone] M: legend="No trend since 2025-09-01 · green = uptrend, red = downtrend"
+[phone] tradingview iframe=1
+[phone] errors: none
