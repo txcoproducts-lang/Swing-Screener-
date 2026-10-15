@@ -42,8 +42,8 @@
    "cci": -97.0
   },
   "breadth": {
-   "pct": 54.0,
-   "ema": 74.3
+   "pct": 53.5,
+   "ema": 74.0
   }
  },
  "sectors": {
@@ -62,14 +62,14 @@
   },
   "DeFi": {
    "ok": false,
-   "n": 18,
-   "bull": 55.6,
-   "bull_ema": 79.8,
-   "rsi": 48.5,
-   "rsi_prev": 47.0,
+   "n": 17,
+   "bull": 52.9,
+   "bull_ema": 78.6,
+   "rsi": 48.4,
+   "rsi_prev": 46.9,
    "miss": [
-    "breadth 56% not above its 10-day average 80%",
-    "RSI 49 not above BTC's 52"
+    "breadth 53% not above its 10-day average 79%",
+    "RSI 48 not above BTC's 52"
    ]
   },
   "Exchange tokens": {
@@ -381,14 +381,6 @@
    0.657959,
    47.6,
    53,
-   "0101-011-"
-  ],
-  [
-   "AAVE",
-   "DeFi",
-   160.239,
-   51.0,
-   54,
    "0101-011-"
   ],
   [
