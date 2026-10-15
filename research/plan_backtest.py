@@ -210,9 +210,9 @@ def pick_call(S, v, budget):
 
 # ---------------------------------------------------------------- the account
 class Acct:
-    def __init__(self, M, F):
+    def __init__(self, M, F, options=True):
         self.M, self.F, self.cash, self.pos, self.trades = M, F, CASH, {}, []
-        self.options = M.kind == "stocks"           # coins have no options
+        self.options = options and M.kind == "stocks"   # coins have no options
         self.eq = np.full(len(M.idx), np.nan)
         self.inv = np.full(len(M.idx), np.nan)
         self.earn_cash = False
@@ -339,8 +339,8 @@ def stops(A, t, level_of):
 
 
 # ---------------------------------------------------------------- A and C: your system
-def run_system(M, F, when):
-    A = Acct(M, F)
+def run_system(M, F, when, options=True):
+    A = Acct(M, F, options)
     pend = set()                                    # exits decided last night, sold at this open
     for t in range(M.t0, len(M.idx)):
         sold = {j for j in pend if j in A.pos}
@@ -388,8 +388,8 @@ def run_system(M, F, when):
 
 
 # ---------------------------------------------------------------- B: Claude's picks
-def run_ai(M, F):
-    A = Acct(M, F)
+def run_ai(M, F, options=True):
+    A = Acct(M, F, options)
     cfg = M.cfg
     names = np.array(M.names, dtype=object)
     held, outx, sells, adds = [], set(), [], []
@@ -421,8 +421,8 @@ def run_ai(M, F):
 
 
 # ---------------------------------------------------------------- D: OVTLYR plan
-def run_ov(M, F):
-    A = Acct(M, F)
+def run_ov(M, F, options=True):
+    A = Acct(M, F, options)
     A.earn_cash = True
     ov, b = M.ov, M.bench
     secs, rise, ravg = F["secs"], F["rise"], F["ravg"]
@@ -577,13 +577,17 @@ def run_all(M):
                            + " Order block and earnings checks left out.")),
     }
     out = {}
-    for k, fn in (("A", lambda: run_system(M, F, "open")), ("C", lambda: run_system(M, F, "close")),
-                  ("B", lambda: run_ai(M, F)), ("D", lambda: run_ov(M, F))):
+    for k, fn in (("A", lambda o=True: run_system(M, F, "open", o)), ("C", lambda o=True: run_system(M, F, "close", o)),
+                  ("B", lambda o=True: run_ai(M, F, o)), ("D", lambda o=True: run_ov(M, F, o))):
         A = fn()
         out[k] = summary(M, A, desc[k])
         s = out[k]
         print(f"  {k} {s['name']}: ${s['final']:,.0f} ({s['cagr']:+.1f}%/yr, worst drop {s['maxdd']:.0f}%, {s['trades']} trades, "
               f"in the market {s['invested']}%) vs {bn} ${s['bench_final']:,.0f} ({s['bench_cagr']:+.1f}%/yr) ({time.time() - t0:.0f}s)", flush=True)
+        if s["calls"]:                              # the same plan with shares only, to show what the calls did
+            sh = summary(M, fn(False), desc[k])
+            s["shares"] = {x: sh[x] for x in ("final", "cagr", "maxdd", "trades", "win", "invested")}
+            print(f"    with shares only: ${sh['final']:,.0f} ({sh['cagr']:+.1f}%/yr, worst drop {sh['maxdd']:.0f}%)", flush=True)
     M.breadth = breadth_json(M, F)
     return dict(market=M.kind, bench=bn, cash=CASH, asof=M.idx[-1].strftime("%Y-%m-%d"), built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 universe=(f"{int(M.member[M.t0:].sum(1).mean())} S&P 500 stocks a day, as the index was each day" if unit == "stock"

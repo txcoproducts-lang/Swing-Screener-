@@ -282,7 +282,8 @@ function render(accts) {
         el('div', {}, el('div', {class: 'bx-tag', text: p ? `Backtest ${p.start.slice(0, 4)}-${p.end.slice(0, 4)}` : 'Backtest'}), el('div', {class: 'bx-bh', text: btHead}), btw),
         el('div', {}, el('div', {class: 'bx-tag', text: a ? 'Paper trial since ' + md(a.start) : 'Paper trial'}), el('div', {class: 'bx-bh', text: trHead}), trw)),
       p ? el('div', {class: 'bx-stats'}, stat('Worst drop', pct(p.maxdd, 0)), stat(`${BENCH}'s worst`, pct(p.bench_maxdd, 0)),
-        stat('Trades', p.trades.toLocaleString('en-US')), stat('In the market', p.invested + '% of the time')) : null,
+        stat('Trades', p.trades.toLocaleString('en-US')), stat('In the market', p.invested + '% of the time'),
+        p.shares ? stat('Shares only, no calls', `${money(p.shares.final)} (${pct(p.shares.cagr)} a year)`) : null) : null,
       more);
   });
 
