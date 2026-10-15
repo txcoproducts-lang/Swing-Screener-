@@ -593,13 +593,10 @@ def lvl(v, lim):
     return f"{v:.1f}" if round(v) == lim else f"{v:.0f}"
 
 def hot(r, c):
-    """Why a coin is overbought by the user's rule (RSI over 70, CCI over 100), as short phrases; empty when it isn't."""
-    out = []
-    if r is not None and r == r and r > CFG["OB_RSI"]:
-        out.append(f"RSI {lvl(r, CFG['OB_RSI'])} is over {CFG['OB_RSI']}")
-    if c is not None and c == c and c > CFG["OB_CCI"]:
-        out.append(f"CCI {lvl(c, CFG['OB_CCI'])} is over {CFG['OB_CCI']}")
-    return out
+    """Why a coin is overbought by RSI or CCI: never, since 2026-10-15. The user dropped the RSI over 70 / CCI over 100
+    part of the overbought rule everywhere; only breadth over the 75 line (breadth_hot) blocks now. RSI and CCI stay on
+    the page as information (OB / OS tags)."""
+    return []
 
 def breadth_hot(sector, br):
     """Overbought breadth, over the 75 line: the market's (sector=None) or one sector's. br: {group: Rising %}, the
@@ -1367,10 +1364,7 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_ow
               dict(k="zone", ok=x["e20"] <= x["close"] <= zone, text=f"{und} value zone: close {fp(x['close'])}, zone {fp(x['e20'])}-{fp(zone)} "
                                                                     "(20 EMA to 2 ATR above it)"),
               dict(k="ob", ok=near is None, text=f"{und} order blocks 30+ days old: " + (
-                  "none within 2%" if near is None else f"{fp(near[1]['bot'])}-{fp(near[1]['top'])} is {near[0] * 100:.1f}% away")),
-              dict(k="cci", ok=not x["cci"] > CFG["OB_CCI"], text=f"Your overbought rule: {und} CCI {lvl(x['cci'], CFG['OB_CCI'])} "
-                                                                  + ("is over" if x["cci"] > CFG["OB_CCI"] else "is not over")
-                                                                  + f" {CFG['OB_CCI']}")]
+                  "none within 2%" if near is None else f"{fp(near[1]['bot'])}-{fp(near[1]['top'])} is {near[0] * 100:.1f}% away"))]
         if hot_check:
             ch.append(hot_check)
         sell = (([f"{und}'s 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"] if x["e10"] < x["e20"] else [])
@@ -1544,8 +1538,8 @@ def picks_html(L, earn=None, calls=None):
         """The coins a list left out tonight under the user's overbought rule, with why."""
         if not hot:
             return ""
-        return ('<div class="hint obo">Left out as overbought (your rule: RSI over ' f'{CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} '
-                f'or the category\'s breadth over {CFG["OB_BREADTH"]}): '
+        return ('<div class="hint obo">Left out as overbought (your rule: '
+                f'the category\'s breadth over {CFG["OB_BREADTH"]}): '
                 + "; ".join(f'<span class="tk" data-tk="{h["ticker"]}">{h["ticker"]}</span> ({html_esc(h["why"])})' for h in hot)
                 + '</div>')
     hot_empty = (f'None tonight: the market is overbought ({html_esc(mh)}), and your rule gives nothing a buy signal then.'
@@ -1595,7 +1589,7 @@ def picks_html(L, earn=None, calls=None):
                f'I hold up to {CFG["AI_N"]}, at most {CFG["AI_CAP"]} per category. A pick stays while it ranks in the top {CFG["AI_KEEP"]}; '
                f'open spots go to the best-ranked coins in the top {CFG["AI_KEEP"]} that fit the category limit, and a spot stays empty '
                f'(cash) when none fits. Your overbought rule: a coin that is overbought on the night a spot opens '
-               f'(RSI over {CFG["OB_RSI"]}, CCI over {CFG["OB_CCI"]} or its category\'s breadth over {CFG["OB_BREADTH"]}) is passed '
+               f'(its category\'s breadth over {CFG["OB_BREADTH"]}) is passed '
                f'over for the next one, and nothing is added while the market\'s breadth is over {CFG["OB_BREADTH"]}. '
                f'Rank = today\'s rank of all liquid coins.</div>'
                + mkt + table("pk-ai", ["Coin", "Rank", "Picked", "Price then", "Now", "Since picked", f"{BENCH} since"] + VO + ["Why"],
@@ -1675,7 +1669,7 @@ def ov_html(ov):
     funnel = (f'<div class="hint">Plan M setups tonight: {f["signal"]} liquid coins ({fusd(CFG["MIN_AVG_VOL"])}+ traded a day) had a buy '
               f'signal in the last {OV["SIGNAL_DAYS"]} days; {f["rules"]} also had the 10/20/50 uptrend, price over the 10 EMA '
               f'and a rising RSI; {f["sector"]} of those were in passing categories; '
-              + (f'{f["hot"]} were overbought by your rule (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); ' if "hot" in f else "")
+              + (f'{f["hot"]} were overbought by your rule (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); ' if f.get("hot") else "")
               + f'{f["near_ob"]} were within {OV["OB_GAP"]:.0%} of an '
               f'order block, which leaves {f["setups"]}. Freshest signal first, then relative strength (RS, 1-99). No price range '
               f'or earnings check: the deck\'s $10-$350 range is for options, and coins have neither.'
@@ -1701,7 +1695,7 @@ OV_LABELS = dict(  # the screener's columns: short name, what it checks
     rsi=("RSI rising", "the heatmap stand-in warming up"),
     px=("$10-$350", "the deck's price range"),
     sec=("Category passes", "its category passes the plan's category rules"),
-    hot=("Not overbought", f"your rule: RSI {CFG['OB_RSI']} or under and CCI {CFG['OB_CCI']} or under"),
+    hot=("Not overbought", "RSI and CCI no longer count (dropped Oct 15), so every row passes"),
     ob=("Clear of order blocks", f"more than {OV['OB_GAP']:.0%} from an untouched order block"),
     earn=("No earnings soon", f"{OV['EARN_DAYS']}+ days to earnings; looked up for stocks one rule or less from a setup"))
 OV_MKT = dict(heat=f"{BENCH} heat rising", signal=f"{BENCH} buy signal", trend=f"{BENCH} uptrend", breadth="Breadth rising", hot="Not overbought")
@@ -1717,6 +1711,7 @@ def ov_screen_html(ov, unit="coin", group="Category"):
     chips = "".join(f'<span class="ovk {"y" if c["ok"] else "n"}" title="{html_esc(c["text"])}">{"✓" if c["ok"] else "✗"} '
                     f'{OV_MKT.get(c["k"], c["k"])}</span>' for c in m["checks"])
     keys = [k for k in OV_RULES if any(r[5][OV_RULES.index(k)] != "-" for r in rows) or k in ("ob",)]
+    keys = [k for k in keys if k != "hot"]       # RSI / CCI no longer count (2026-10-15): the column would always pass
     data = json.dumps(dict(rules=[[OV_RULES.index(k), *OV_LABELS[k]] for k in keys], rows=rows, unit=unit, ch=ov.get("charted") or []),
                       separators=(",", ":")).replace("</", "<\\/")
     legend = " · ".join(f"<b>{OV_LABELS[k][0]}</b>: {html_esc(OV_LABELS[k][1])}" for k in keys)
@@ -2358,7 +2353,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
-Your overbought rule: a coin with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose category's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). The same rules as the stock screener, on coins; 52-week and 12-month windows count 365 days, since coins trade every day. No option columns: coins have no options a normal brokerage account can buy. Traded / day = the 20-day average in dollars.
+Your overbought rule: a coin whose category's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}), information only: since Oct 15 RSI and CCI no longer block a setup. The same rules as the stock screener, on coins; 52-week and 12-month windows count 365 days, since coins trade every day. No option columns: coins have no options a normal brokerage account can buy. Traded / day = the 20-day average in dollars.
 Click any coin for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks (not coins), but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
 10y rules vs hold: each coin's last 10 years (less for newer coins; Yahoo's coin prices start in 2014 at the earliest) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest category, strongest coin list, as Your system buys: in your uptrend, its category in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it; sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a coin for the full numbers, {BENCH} over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
@@ -2689,7 +2684,7 @@ def main():
         bh = breadth_history(frames, sectors, sp500)
     except Exception as e:                 # extras; never block the scan
         print("  breadth history failed:", e)
-    # the user's overbought rule: nothing with RSI over 70, CCI over 100, or its category's or the market's breadth over the
+    # the user's overbought rule (RSI / CCI dropped 2026-10-15): nothing with its category's or the market's breadth over the
     # 75 line gets a setup ("Overbought" instead), a Top picks spot, a Plan M spot or a paper buy
     br = {g: round(float(b.rise.iloc[-1]), 1) for g, b in bh.items()}       # tonight's breadth, as the page shows it
     mkt_hot = breadth_hot(None, br)
@@ -2712,7 +2707,7 @@ def main():
     secb = sector_breadth(frames, df, sectors)
     picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
     print(f"{int(df.core.sum())} of {len(df)} liquid coins in uptrend; {int(picks.has_setup.sum())} setups ({(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
-    print(f"  overbought: {len(ob)} coins (RSI over {CFG['OB_RSI']}, CCI over {CFG['OB_CCI']} or category breadth over "
+    print(f"  overbought: {len(ob)} coins category breadth over "
           f"{CFG['OB_BREADTH']}); the market is {'overbought: ' + mkt_hot if mkt_hot else 'not overbought'}; "
           f"{int(df.blocked.sum())} setups left out")
 

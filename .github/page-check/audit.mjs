@@ -209,8 +209,8 @@ for (const f of ["setups", "Momentum", "Pullback", "Overbought", "all"]) {
 }
 await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="setups"]`);
 
-// ---- the user's overbought rule: no setup with RSI over 70 or CCI over 100, OB / OS tags match the numbers, every Overbought
-// row says why, nothing on New uptrends or Breakout watch is marked Overbought, and nothing at all while the market is over 75
+// ---- the user's overbought rule (RSI / CCI dropped 2026-10-15, breadth only): OB / OS tags match the numbers, every Overbought
+// row says why (sector breadth), nothing on New uptrends or Breakout watch is marked Overbought, and nothing at all while the market is over 75
 const obr = await p.evaluate(() => {
   const out = [], H = [...document.querySelectorAll("#t thead th")].map(h => h.textContent), RI = H.indexOf("RSI"), CC = H.indexOf("CCI");
   if (RI < 0 || CC < 0) return { out: ["no RSI or CCI column"], n: {} };
@@ -222,11 +222,11 @@ const obr = await p.evaluate(() => {
     if (!tag(r.cells[RI], rs, 70, 30)) out.push(`${tk}: RSI ${rs.toFixed(1)} has the wrong tag`);
     if (!tag(r.cells[CC], cc, 100, -100)) out.push(`${tk}: CCI ${cc.toFixed(0)} has the wrong tag`);
     if (rs < 30 || cc < -100) n.os++;
-    if (st === "Momentum" || st === "Pullback") { n.setups++; if (rs > 70 || cc > 100) out.push(`${tk}: ${st} with RSI ${rs.toFixed(1)}, CCI ${cc.toFixed(0)}`); }
+    if (st === "Momentum" || st === "Pullback") n.setups++;
     if (st === "Overbought") {
       n.ob++; const why = r.cells[1].querySelector(".sec")?.textContent || "";
       if (!why) out.push(`${tk}: Overbought with no reason`);
-      else if (!(rs > 70 || cc > 100) && !/breadth/.test(why)) out.push(`${tk}: Overbought (${why}) with RSI ${rs.toFixed(1)}, CCI ${cc.toFixed(0)}`);
+      else if (!/breadth/.test(why)) out.push(`${tk}: Overbought (${why}), but only breadth counts now`);
     }
   }
   for (const id of ["pk-nu", "pk-bo"]) for (const r of document.querySelectorAll(`#${id} tbody tr`)) {

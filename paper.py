@@ -97,10 +97,9 @@ def rules(aid):
             "delta (same days out, open interest and spread), the highest delta that fits, on the first setup that "
             "has one. If no call fits even that, it buys shares of the top setup.",
             "Skips a setup that has dropped below its 50-day EMA by the time it buys.",
-            f"Your overbought rule, as the paper accounts use it (from Oct 15): nothing is bought while the market's breadth or "
-            f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, "
-            "last night). RSI and CCI no longer block a buy here (your call, Oct 14), so it also buys setups the page marks "
-            "Overbought for RSI over 70 or CCI over 100.",
+            f"Your overbought rule (from Oct 15): nothing is bought while the market's breadth or the stock's sector's is over "
+            f"the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night). RSI and CCI no "
+            "longer block a buy (you dropped that part of the rule on Oct 14).",
             "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
             "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
             "Trend view's 4H bars (9:30 AM-1:30 PM and 1:30-4:00 PM New York) and only bars that close after the buy "
@@ -119,8 +118,7 @@ def rules(aid):
         f"Your overbought rule, as the paper accounts use it (from Oct 15): nothing is bought while the market's breadth or "
         f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, "
         "last night); a pick skipped for that is bought later while it's still on the list. RSI and CCI no longer block a "
-        "buy here (your call, Oct 14), though the AI picks list on the page still leaves out stocks over those lines when "
-        "it fills an open spot.",
+        "buy (you dropped that part of the rule on Oct 14).",
         f"A stock stays while it ranks in the top {SC.CFG['AI_KEEP']}, unless your 4-hour exit sells it first (from Oct "
         "14): a 4-hour bar closing with the 10 EMA under the 20 and the price under the 50 EMA, both at once, on the "
         "Trend view's 4H bars (9:30 AM-1:30 PM and 1:30-4:00 PM New York), checked every 30 minutes. A stock sold that "
@@ -172,10 +170,9 @@ def d_rules():
         f"to {ov['ZONE_ATR']:g} ATR above it) and no order block {ov['ETF_OB_AGE']}+ days old within {ov['OB_GAP']:.0%}. "
         "Sells at about 10:00 the morning after QQQ's (or SPY's) 10/20 bearish cross, a close more than "
         f"{ov['HOT_ATR']:g} ATR above its 20 EMA, or reaching a {ov['ETF_OB_AGE']}+ day old order block.",
-        f"Your overbought rule, on top of the plan, as the paper accounts use it (from Oct 15): nothing while the market's "
+        f"Your overbought rule, on top of the plan (from Oct 15): nothing while the market's "
         f"breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line. RSI and CCI no longer block a buy here "
-        "(your call, Oct 14), so it also buys Plan M stocks the page's list leaves out for those, and Plan ETF ignores "
-        "QQQ's and SPY's CCI.",
+        "(you dropped that part of the rule on Oct 14), and Plan ETF ignores QQQ's and SPY's CCI.",
         "Plan #SICADFU: cash with nothing else to do waits in SGOV (Treasury bills). It sells what a new trade needs, "
         "sells it all on the last market day of each month and buys back on the first, as the deck says.",
         f"After {P['D_LOSERS']} losing trades in one day, no new trades for {P['D_PAUSE']} days (it keeps the ones it has).",
@@ -660,7 +657,7 @@ def market_hot(day):
 def hot_now(day, items):
     """Your overbought rule at buying time, as the paper accounts use it from Oct 15: {ticker: why} for each (ticker,
     sector) in items whose sector's breadth was over the 75 line last night (the market's is market_hot). RSI and CCI
-    no longer count here (your call, Oct 14); the page's screener, lists and OVTLYR plan still use them."""
+    no longer count (the user dropped them everywhere, Oct 14)."""
     br = day.breadth()
     return {t: SC.breadth_hot(sec, br) for t, sec in items if isinstance(sec, str) and sec and SC.breadth_hot(sec, br)}
 
