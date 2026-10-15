@@ -162,6 +162,21 @@ def download_etfs():
     return {t: df[t].dropna(subset=["Close"])[["Open", "High", "Low", "Close", "Volume"]] for t in etfs if t in top}
 
 
+def download_vix():
+    """The VIX (Cboe volatility index, ^VIX): daily closes, last 2 years. An extra for the Market tab."""
+    import yfinance as yf
+    c = yf.Ticker("^VIX").history(period="2y", interval="1d", auto_adjust=False)["Close"].dropna()
+    c.index = pd.DatetimeIndex(c.index).tz_localize(None).normalize()
+    return c
+
+
+def demo_vix(days=520):
+    rng = np.random.default_rng(7); x = [16.0]
+    for _ in range(days - 1):
+        x.append(max(9.0, x[-1] + 0.08 * (16 - x[-1]) + rng.normal(0, 1.1) + (8 if rng.random() > 0.995 else 0)))
+    return pd.Series(x, index=pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=days))
+
+
 def chart_data(etf_frames):
     """Daily / weekly / monthly OHLC + EMA10/20/50 per sector ETF, as compact lists for the page."""
     out = {}
@@ -1502,6 +1517,59 @@ def card(label, value, sub, series, good=None):
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
+# The VIX's usual reading: under 15 calm, 15-20 normal, 20-30 nervous, over 30 fear (common rules of thumb).
+VIX_ZONES = [(0, 15, "Calm", "var(--up)"), (15, 20, "Normal", "var(--mut)"), (20, 30, "Nervous", "var(--warn)"),
+             (30, 1e9, "Fear", "var(--dn)")]
+
+
+def vix_html(vix):
+    """Market tab: the VIX now, its zone, where it sits in the last year, and a 1-year line over the zone bands."""
+    if vix is None or len(vix) < 30:
+        return ""
+    v = vix.iloc[-252:]
+    now, prev, wk = float(v.iloc[-1]), float(v.iloc[-2]), float(v.iloc[-6])
+    zone = next(z for z in VIX_ZONES if z[0] <= now < z[1])
+    rank = (v < now).mean() * 100                 # share of the last year's days it closed lower
+    hi, lo, avg = float(v.max()), float(v.min()), float(v.mean())
+    # the 1-year line, with the zone bands behind it
+    W, H, top = 640, 160, max(40.0, hi * 1.08)
+    y = lambda x: H - 4 - min(x, top) / top * (H - 8)
+    X = lambda i: i * W / (len(v) - 1)
+    bands = "".join(f'<rect x="0" y="{y(min(b, top)):.1f}" width="{W}" height="{y(a) - y(min(b, top)):.1f}" fill="{c}" opacity=".09"/>'
+                    for a, b, _, c in VIX_ZONES if a < top)
+    pc = lambda x: f"{y(x) / H * 100:.1f}%"      # chart text and the dot are HTML, so they keep their size on a phone
+    lines = "".join(f'<line x1="0" x2="{W}" y1="{y(k):.1f}" y2="{y(k):.1f}" stroke="var(--line)" stroke-dasharray="4 4" '
+                    f'vector-effect="non-scaling-stroke"/>' for k in (15, 20, 30))
+    labels = "".join(f'<span class="vy" style="top:{pc(k)}">{k}</span>' for k in (15, 20, 30))
+    pts = " ".join(f"{X(i):.1f},{y(x):.1f}" for i, x in enumerate(v))
+    months, last = [], None
+    for i, d in enumerate(v.index):
+        if d.month != last and 5 < i < len(v) - 8:
+            months.append(f'<span style="left:{X(i) / W * 100:.1f}%">{d.strftime("%b")}</span>')
+        last = d.month
+    svg = (f'<div class="vxw"><svg class="vxc" viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" '
+           f'aria-label="VIX over the last year">' + bands + lines
+           + f'<polyline fill="none" stroke="var(--fg)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="{pts}"/></svg>'
+           + labels + f'<i class="vxd" style="top:{pc(now)};background:{zone[3]}"></i></div>'
+           + f'<div class="vxm">{"".join(months)}</div>')
+    chg = now - prev
+    tell = {"Calm": "Traders expect small moves. Calm markets usually suit trends, and calls are cheaper.",
+            "Normal": "An ordinary amount of expected movement.",
+            "Nervous": "Traders are paying up for protection. Swings get bigger and calls cost more.",
+            "Fear": "Fear: expect big daily swings. Uptrends often break down here, and calls are expensive."}[zone[2]]
+    keys = "".join(f'<span><i style="background:{c}"></i>{n} {a:g}{"+" if b > 1e8 else f"-{b:g}"}</span>' for a, b, n, c in VIX_ZONES)
+    return ('<h2>VIX (fear gauge)</h2><div class="hint">The VIX is how much the S&amp;P 500 is expected to move over the next '
+            '30 days, from options prices. Low = calm, high = fear. It usually rises when stocks fall.</div>'
+            '<div class="vix" id="vix"><div class="vxn">'
+            f'<div class="lbl">VIX close {v.index[-1].strftime("%b %-d")}</div>'
+            f'<div class="val">{now:.2f} <span class="vxz" style="background:color-mix(in srgb,{zone[3]} 18%,transparent);color:{zone[3]}">{zone[2]}</span></div>'
+            f'<div class="sub"><span class="{"dn" if chg > 0 else "up" if chg < 0 else ""}">{chg:+.2f} ({chg / prev:+.1%})</span> vs the day before · '
+            f'{now - wk:+.2f} vs 5 days ago</div>'
+            f'<div class="sub">Higher than {rank:.0f}% of the last year\'s days · 1-year range {lo:.1f} to {hi:.1f}, average {avg:.1f}</div>'
+            f'<div class="vxt">{tell}</div></div>'
+            f'<div class="vxg">{svg}<div class="vxk">{keys}</div></div></div>')
+
+
 BT_JS = Path(__file__).resolve().parent / "backtests.js"   # the Backtests tab (every backtest, with line graphs)
 BT_PLANS = Path(__file__).resolve().parent / "history" / "plan_backtests.json"   # research/plan_backtest.py, Saturdays
 PAPER_SRC = "https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/"
@@ -2232,7 +2300,7 @@ def news_html(df, sws, etfs=None, market="stock", suf="", lbl="Strongest stocks"
             f'<script>const NEWS={json.dumps(dict(lead=lead, market=market, suf=suf, lbl=lbl), separators=(",", ":"))};</script>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -2282,6 +2350,11 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
             f'<td data-v="{s_.pct200}">{s_.pct200:.0f}% {delta(s_.pct200, s_.pct200_5d)}</td>'
             f'<td data-v="{s_.adv - s_.dec}">{s_.adv} / {s_.dec}</td>'
             f'<td data-v="{s_.nh - s_.nl}">{s_.nh} / {s_.nl}</td></tr>')
+    try:
+        vx_html = vix_html(vix)
+    except Exception as e:                 # an extra; never block the page
+        print("  VIX panel failed:", e)
+        vx_html = ""
     heat, hm_data = heat_html(bh)
     try:
         bl_data = line_data(bh)
@@ -2448,6 +2521,12 @@ main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display
 .hd .reg,.asof,.step .sp{{display:none}}.stiles{{grid-template-columns:1fr 1fr;gap:8px}}.stile{{min-height:98px}}.stile .v{{font-size:24px}}.sr,.step .sr{{grid-template-columns:18px 96px minmax(30px,1fr) 38px}}.sr .tag{{display:none}}.st{{grid-template-columns:86px minmax(0,1fr) 34px}}.st .chg{{display:none}}html{{scroll-padding-top:120px}}}}
 .reg{{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;margin-left:8px}}
 .reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--bg);color:var(--mut)}}
+.vix{{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0 18px;color:var(--mut)}}
+.vix .val{{font-size:28px}}.vxz{{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;vertical-align:middle}}.vix .sub{{font-size:12px;margin:4px 0}}.vxt{{font-size:12px;color:var(--fg);margin-top:8px;line-height:1.45}}
+.vxw{{position:relative}}.vxc{{width:100%;height:150px;display:block}}.vy{{position:absolute;left:4px;font-size:10px;transform:translateY(-110%)}}
+.vxd{{position:absolute;right:-4px;width:8px;height:8px;border-radius:50%;transform:translateY(-50%)}}.vxm{{position:relative;height:14px;font-size:10px;margin-top:3px}}.vxm span{{position:absolute;transform:translateX(-50%)}}
+.vxk{{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;margin-top:8px}}.vxk i{{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;opacity:.6}}
+@media(max-width:700px){{.vix{{grid-template-columns:minmax(0,1fr)}}}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--mut)}}.lbl{{font-size:12px}}.val{{font-size:24px;font-weight:700;color:var(--fg)}}.sub{{font-size:11px;margin-bottom:4px}}
 .up{{color:var(--up)}}.dn{{color:var(--dn)}}
@@ -2515,7 +2594,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
-<section class="tab" id="tab-market" hidden><h2>Market</h2><div class="cards">{cards}</div>{bt_html}</section>
+<section class="tab" id="tab-market" hidden><h2>Market</h2><div class="cards">{cards}</div>{vx_html}{bt_html}</section>
 <section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{sector_tiles(df, sws, bh)}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
@@ -2906,6 +2985,13 @@ def main():
         print("  breadth strips failed:", e)
     print(f"  charts for {len(charts)} of {len(SECTOR_ETF)} sectors")
 
+    vix = None
+    try:
+        vix = demo_vix() if a.demo else download_vix()
+        print(f"  VIX {vix.iloc[-1]:.2f} ({len(vix)} days)")
+    except Exception as e:                 # an extra; never block the scan on it
+        print("  VIX failed:", e)
+
     out = Path(a.out); out.mkdir(exist_ok=True)
     now = pd.Timestamp.now(tz="America/New_York")
     live_at = None if a.demo or asof != now.date().isoformat() or now.time() >= dt.time(16, 15) else now.strftime("%H:%M")
@@ -2993,7 +3079,7 @@ def main():
         ov["charted"] = [r[0] for r in ov.get("screen") or [] if (out / "data" / f"{r[0]}.json").exists()]
     for k in ("rules", "hold", "spy", "start"):
         picks[f"bt_{k}"] = picks.ticker.map({t: b[k] for t, b in bts.items()})
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"))
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)
