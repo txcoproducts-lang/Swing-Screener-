@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Paper trading trial: four accounts start with $1,000 each and trade until 2027-04-06 (six months from 2026-10-06).
+"""Paper trading trial: four accounts start with $5,000 each and trade until 2027-04-06. The trial began on 2026-10-06 with
+$1,000 each; on 2026-10-15 it restarted fresh at $5,000 (the user's call: $5,000 an account, shares or options in every
+account, and no RSI / CCI part in the overbought rule here). The first trial's accounts are kept in paper/archive/.
 
   A  "Your system": last night's screener setups (Momentum and Pullback) and your option rules
      (calls 15-30 days out, delta 0.50-0.80, open interest over 500), up to 30% of the account a trade; down to
@@ -8,9 +10,10 @@
      It sells on the same signals as A. Started 2026-10-07, at the user's request.
      A and C sell on the user's 4-hour exit (from 2026-10-14): a 4-hour bar closing with EMA10 < EMA20 and the price
      under the 4-hour EMA50, with my stops as safety nets.
-  B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), as shares; sells on the user's 4-hour exit too (from 2026-10-14).
-  D  "OVTLYR plan": OVTLYR's Plan M, Plan ETF and Plan #SICADFU from the deck the user shared, as shares, on the
-     plan screener.py builds each night (history/ovtlyr_<date>.json). Started 2026-10-07, at the user's request.
+  B  "Claude's picks": my AI picks list (relative strength momentum, research/picks_backtest.py), a call by the user's
+     rules when one fits its slot, else shares; sells on the user's 4-hour exit too (from 2026-10-14).
+  D  "OVTLYR plan": OVTLYR's Plan M, Plan ETF and Plan #SICADFU from the deck the user shared, on the plan screener.py
+     builds each night (history/ovtlyr_<date>.json). Plan M takes a call by the user's rules when one fits, else shares.
 
 GitHub Actions runs this every 30 minutes on weekdays (.github/workflows/paper.yml). On a market day the
 first run at or after 10:00 New York time sells and buys (C only sells), later runs check stops and the 4-hour exit,
@@ -29,8 +32,9 @@ import screener as SC
 
 NY = "America/New_York"
 P = dict(
-    START="2026-10-06", MONTHS=6, CASH=1000.0,
-    C_START="2026-10-07",         # C was asked for on Oct 6 after 2 PM Central, so it starts the next day; all end together
+    START="2026-10-15", END="2027-04-06", CASH=5000.0,
+    TRIAL=2,                      # 1: Oct 6-14 at $1,000 (kept in paper/archive/); 2: restarted Oct 15 at $5,000
+    C_START="2026-10-15",         # all four restarted together
     OPEN=dt.time(10, 0),          # the first run at or after this sells and buys (GitHub can start the 9:35 run late)
     CLOSE=dt.time(16, 0),         # the first run at or after this records the day's closing value
     STALE_MIN=20,                 # Yahoo's latest 1-minute bar must be this fresh to trade on it
@@ -51,7 +55,7 @@ P = dict(
     # B: my AI picks
     B_SLOTS=10,
     # D: OVTLYR's trading plans, on the plan screener.py builds each night
-    D_START="2026-10-07",         # asked for on the evening of Oct 6, so it starts the next market day
+    D_START="2026-10-15",
     D_RISK=0.05, D_SIZE_ATR=2.0,  # Plan M size: shares = account x 5% / (2 x ATR), as in the deck
     D_STOP_ATR=0.5,               # Plan M stop loss: a close half an ATR under the entry
     D_EMERGENCY_ATR=2.0,          # Plan M emergency exit: any price 2 ATR under the entry
@@ -93,9 +97,10 @@ def rules(aid):
             "delta (same days out, open interest and spread), the highest delta that fits, on the first setup that "
             "has one. If no call fits even that, it buys shares of the top setup.",
             "Skips a setup that has dropped below its 50-day EMA by the time it buys.",
-            f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
-            f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
-            f"sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
+            f"Your overbought rule, as the paper accounts use it (from Oct 15): nothing is bought while the market's breadth or "
+            f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, "
+            "last night). RSI and CCI no longer block a buy here (your call, Oct 14), so it also buys setups the page marks "
+            "Overbought for RSI over 70 or CCI over 100.",
             "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
             "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
             "Trend view's 4H bars (9:30 AM-1:30 PM and 1:30-4:00 PM New York) and only bars that close after the buy "
@@ -111,17 +116,24 @@ def rules(aid):
         "3 months, 20% each on 6, 9 and 12).",
         "Trades at about 10:00 New York time: sells stocks that left the list the night before and buys the new "
         "ones, about a tenth of the account each. Empty spots stay in cash.",
-        f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
-        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the stock's "
-        f"sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night).",
-        "A pick it skipped for being overbought is bought later, once it isn't, while it's still on the list.",
+        f"Your overbought rule, as the paper accounts use it (from Oct 15): nothing is bought while the market's breadth or "
+        f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, "
+        "last night); a pick skipped for that is bought later while it's still on the list. RSI and CCI no longer block a "
+        "buy here (your call, Oct 14), though the AI picks list on the page still leaves out stocks over those lines when "
+        "it fills an open spot.",
         f"A stock stays while it ranks in the top {SC.CFG['AI_KEEP']}, unless your 4-hour exit sells it first (from Oct "
         "14): a 4-hour bar closing with the 10 EMA under the 20 and the price under the 50 EMA, both at once, on the "
         "Trend view's 4H bars (9:30 AM-1:30 PM and 1:30-4:00 PM New York), checked every 30 minutes. A stock sold that "
         "way isn't bought back while it stays on the list. No other stop (in my 2014-2026 test, also selling below the "
         "50-day EMA cut the return from 17.4% to 9.1% a year; your 4-hour exit wasn't part of that test).",
-        "Shares, not options: the edge in my test came from holding leaders for weeks, which 15-30 day calls lose "
-        "to time decay, and a $100 slot rarely covers one contract.",
+        f"Shares or options, whichever fits (your call, Oct 14): each pick gets about a tenth of the account. It buys a "
+        f"call by your rules ({SC.CFG['PK_DTE'][0]}-{SC.CFG['PK_DTE'][1]} days out, delta "
+        f"{SC.CFG['PK_DELTA'][0]:.2f}-{SC.CFG['PK_DELTA'][1]:.2f}, open interest over {SC.CFG['PK_OI_OVER']}, a tight "
+        f"bid/ask), the one nearest {sum(SC.CFG['PK_DELTA']) / 2:.2f} delta that fits that tenth, else the highest delta "
+        f"down to {P['A_DELTA_LO']:.2f} that fits; if no call fits, shares. A call also sells at -{P['A_STOP']:.0%} (then "
+        f"it isn't bought back while the pick stays on the list) or {P['A_EXIT_DTE']} days before expiry (then it buys "
+        "again in its place). My note: the edge in my test came from holding leaders for weeks, which 15-30 day calls "
+        "lose to time decay.",
         "In the test (S&P 500 as it was each day, 2014-2026) this made +19.4% a year against +14.5% for the average "
         "stock, with long stretches behind and a worst drop of -31%. The edge is not proven.",
     ]
@@ -141,8 +153,12 @@ def d_rules():
         f"Care), no order block within {ov['OB_GAP']:.0%} and at least {ov['EARN_DAYS']} days to earnings. No new Plan M "
         "trades while SPY's last close is under its 20 EMA, one of the plan's exits.",
         f"Plan M size, the deck's formula: {P['D_RISK']:.0%} of the account at risk over a {P['D_SIZE_ATR']:g} ATR move, "
-        "as far as the cash goes. Shares, not the deck's 80-delta calls: at $1,000 that formula comes to a fraction of "
-        "one contract.",
+        "as far as the cash goes. Shares or options, whichever fits (your call, Oct 14): it buys a call by your rules "
+        f"({SC.CFG['PK_DTE'][0]}-{SC.CFG['PK_DTE'][1]} days out, delta {SC.CFG['PK_DELTA'][0]:.2f}-{SC.CFG['PK_DELTA'][1]:.2f}"
+        f" nearest {sum(SC.CFG['PK_DELTA']) / 2:.2f}, else down to {P['A_DELTA_LO']:.2f}, open interest over "
+        f"{SC.CFG['PK_OI_OVER']}) for no more than that size and {P['A_CAP']:.0%} of the account; if none fits, shares. "
+        f"A call sells on the plan's exits, judged on the stock, or at -{P['A_STOP']:.0%} or {P['A_EXIT_DTE']} days before "
+        "expiry (my safety nets). Plan ETF and SGOV stay shares, as the deck says.",
         f"Plan M exits, decided on the live price at about 3:30 PM New York time (the deck decides before the close): a "
         f"price {P['D_STOP_ATR']:g} ATR under the entry (the stop loss), the 10 EMA under the 20 (the 10/20 bearish cross, "
         "also the sell signal here), SPY under its 20 EMA, RSI at the heatmap target (entry RSI under 50: 63; 50-75: "
@@ -156,9 +172,10 @@ def d_rules():
         f"to {ov['ZONE_ATR']:g} ATR above it) and no order block {ov['ETF_OB_AGE']}+ days old within {ov['OB_GAP']:.0%}. "
         "Sells at about 10:00 the morning after QQQ's (or SPY's) 10/20 bearish cross, a close more than "
         f"{ov['HOT_ATR']:g} ATR above its 20 EMA, or reaching a {ov['ETF_OB_AGE']}+ day old order block.",
-        f"Your overbought rule, on top of the plan: no Plan M stock with RSI over {SC.CFG['OB_RSI']} or CCI over "
-        f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), no Plan ETF buy while QQQ or SPY is, and nothing "
-        f"while the market's breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line.",
+        f"Your overbought rule, on top of the plan, as the paper accounts use it (from Oct 15): nothing while the market's "
+        f"breadth or the stock's sector's is over the {SC.CFG['OB_BREADTH']} line. RSI and CCI no longer block a buy here "
+        "(your call, Oct 14), so it also buys Plan M stocks the page's list leaves out for those, and Plan ETF ignores "
+        "QQQ's and SPY's CCI.",
         "Plan #SICADFU: cash with nothing else to do waits in SGOV (Treasury bills). It sells what a new trade needs, "
         "sells it all on the last market day of each month and buys back on the first, as the deck says.",
         f"After {P['D_LOSERS']} losing trades in one day, no new trades for {P['D_PAUSE']} days (it keeps the ones it has).",
@@ -377,10 +394,19 @@ def start_day(aid):
 
 
 def new_account(aid):
-    end = (pd.Timestamp(P["START"]) + pd.DateOffset(months=P["MONTHS"])).date().isoformat()   # the same end for all
-    return dict(id=aid, name=NAMES[aid], start=start_day(aid), end=end, start_cash=P["CASH"], cash=P["CASH"],
+    return dict(id=aid, name=NAMES[aid], start=start_day(aid), end=P["END"], start_cash=P["CASH"], cash=P["CASH"],
                 rules=rules(aid), fills=FILLS, positions=[], closed=[], log=[], equity=[], mark=None,
-                days={}, next_id=1, updated=None, over=False)
+                days={}, next_id=1, updated=None, over=False, trial=P["TRIAL"])
+
+
+def restart(old):
+    """A fresh account for this trial in place of one from an earlier trial (kept in paper/archive/), noting where the
+    old one stood."""
+    a = new_account(old["id"])
+    m = old.get("mark") or {}
+    a["prior"] = dict(trial=old.get("trial", 1), start=old.get("start"), start_cash=old.get("start_cash"),
+                      value=m.get("v"), t=m.get("t"))
+    return a
 
 
 def value(a):
@@ -521,43 +547,135 @@ def fitting_calls(day, t, S, dlo=None):
     return out
 
 
+def call_cost(f):
+    return f["ask"] * 100 + P["FEE"]
+
+
+def pick_call(day, t, S, budget):
+    """The call your rules pick for one stock within budget: the nearest 0.65 delta of those at 0.50-0.80, else the
+    highest delta down to 0.15 that fits (your rule from Oct 9). (call, how many fit, lower delta?), or (None, the
+    cheapest call by your rules or None, False) when none fits."""
+    fits = fitting_calls(day, t, S, P["A_DELTA_LO"])
+    ok = [f for f in fits if call_cost(f) <= budget]
+    band = [f for f in ok if f["delta"] >= SC.CFG["PK_DELTA"][0]]
+    mid = sum(SC.CFG["PK_DELTA"]) / 2
+    if band:
+        return min(band, key=lambda f: (abs(f["delta"] - mid), -f["oi"])), len(band), False
+    if ok:
+        return max(ok, key=lambda f: (f["delta"], f["oi"])), len(ok), True
+    return None, (min(fits, key=call_cost) if fits else None), False
+
+
+def call_text(f, budget, within, n_ok, low, t):
+    """Why this call, in plain words."""
+    dlo, dhi = SC.CFG["PK_DELTA"]
+    return (f"Why this call: delta {f['delta']:.2f}, {f['dte']} days to expiry, open interest {f['oi']:,}, IV {f['iv']:.0f}%, "
+            f"bid {money(f['bid'])} / ask {money(f['ask'])}. "
+            + (f"No call at {dlo:.2f}-{dhi:.2f} delta fit {money(budget)} ({within}), so it takes a cheaper one, down to "
+               f"{P['A_DELTA_LO']:.2f} delta as you allowed: the highest delta of the {plural(n_ok, 'call')} on {t} that fit."
+               if low else
+               f"It's the only call that fits your rules and {money(budget)} ({within})." if n_ok == 1 else
+               f"It's the nearest to {(dlo + dhi) / 2:.2f} delta of the {n_ok} calls that fit your rules and {money(budget)} "
+               f"({within})."))
+
+
+def exit_day(exp):
+    """The call safety net's last day: A_EXIT_DTE days before expiry, moved to a market day."""
+    x = exp - dt.timedelta(days=P["A_EXIT_DTE"])
+    while x.weekday() >= 5:
+        x += dt.timedelta(days=1)
+    return x
+
+
+def open_call(a, now, t, S, f, qty, why, plan, **extra):
+    entry, tot = float(f["ask"]), r2(qty * call_cost(f))
+    label = opt_label(t, f["exp"], f["strike"])
+    pos = open_pos(a, ticker=t, kind="call", qty=qty, label=label,
+                   option=dict(symbol=f.get("symbol"), exp=f["exp"], strike=float(f["strike"])),
+                   buy=dict(t=tstr(now), price=r4(entry), cost=tot, why=why, under=r4(S),
+                            delta=round(float(f["delta"]), 3), iv=round(float(f["iv"]), 1), oi=int(f["oi"]), dte=int(f["dte"])),
+                   plan=plan, last=dict(t=tstr(now), price=r4((f["bid"] + f["ask"]) / 2),
+                                        value=r2((f["bid"] + f["ask"]) / 2 * 100 * qty), bid=r4(f["bid"]), ask=r4(f["ask"])),
+                   **extra)
+    note(a, now, f"Bought {plural(qty, 'contract')} of the {label} at {money(entry)} (the ask), {money(tot)} with "
+                 f"the fee, with {t} at {money(S)}. {why} Plan: {plan['text']}", "buy")
+    return pos
+
+
+def call_nets(a, p, day, stop_key="stop"):
+    """A held call on every run: settle it at expiry, mark it, and sell on its exit flag (p["exit"]), the target, the
+    -50% stop (plan[stop_key], on the mid) or A_EXIT_DTE days before expiry. Returns what sold it, or None."""
+    t, now = p["ticker"], day.now
+    exp = dt.date.fromisoformat(p["option"]["exp"])
+    if day.today >= exp:
+        if day.fresh(t):
+            settle_call(a, p, now, day.px[t][0])
+            return "expiry"
+        return None
+    q = call_quote(day, p)
+    if q is None:
+        return None
+    mark_call(p, now, q)
+    if q["bid"] <= 0:
+        return None
+    left = (exp - day.today).days
+    if p.get("exit"):
+        sell_call(a, p, now, q["bid"], p["exit"])
+        return "exit"
+    if p["plan"].get("target") and q["bid"] >= p["plan"]["target"]:
+        sell_call(a, p, now, q["bid"], f"The bid reached {money(q['bid'])}, past the +{P['A_TARGET']:.0%} target "
+                                       f"({money(p['plan']['target'])}).")
+        return "target"
+    if q["mid"] <= p["plan"][stop_key]:
+        sell_call(a, p, now, q["bid"], f"It fell to {money(q['mid'])} (mid), through the -{P['A_STOP']:.0%} stop "
+                                       f"({money(p['plan'][stop_key])}).")
+        return "stop"
+    if left <= P["A_EXIT_DTE"]:
+        sell_call(a, p, now, q["bid"], f"{plural(left, 'day')} left before expiry, and time decay speeds up in "
+                                       "the last week.")
+        return "expiry"
+    return None
+
+
+def sell_any(a, p, day, why):
+    """Sell a position now: shares at the latest price, a call at the bid. False when there's no usable quote."""
+    if p["kind"] == "call":
+        q = call_quote(day, p)
+        if not q or q["bid"] <= 0:
+            return False
+        mark_call(p, day.now, q)
+        sell_call(a, p, day.now, q["bid"], why)
+        return True
+    if not day.fresh(p["ticker"]):
+        return False
+    sell_shares(a, p, day.now, day.px[p["ticker"]][0], why)
+    return True
+
+
 def market_hot(day):
     """Your overbought rule for the whole market: last night's S&P 500 breadth over the 75 line. The reason, or ""."""
     return SC.breadth_hot(None, day.breadth())
 
 
 def hot_now(day, items):
-    """Your overbought rule at buying time: {ticker: why} for each (ticker, sector) in items that is overbought now:
-    RSI over 70 or CCI over 100 on its daily bars plus today's trading so far, or last night's breadth for its sector
-    over the 75 line (the market's is market_hot). Without today's bars it goes by last night's close; a ticker whose
-    daily bars don't load is judged on its sector alone."""
-    tks = sorted({t for t, _ in items})
-    if not tks:
-        return {}
+    """Your overbought rule at buying time, as the paper accounts use it from Oct 15: {ticker: why} for each (ticker,
+    sector) in items whose sector's breadth was over the 75 line last night (the market's is market_hot). RSI and CCI
+    no longer count here (your call, Oct 14); the page's screener, lists and OVTLYR plan still use them."""
     br = day.breadth()
-    bars = day.mkt.daily(tks, day.prev_day)
-    try:
-        sess = day.mkt.session(tks, day.today)
-    except Exception as e:                       # then it goes by last night's close
-        print(f"  today's bars didn't load for the overbought check: {e}")
-        sess = {}
-    px = day.price(tks)
-    out = {}
-    for t, sec in items:
-        why = []
-        d = bars.get(t)
-        if d is not None and len(d) > 3 * SC.CFG["CCI_N"]:
-            if t in sess and day.fresh(t):
-                try:
-                    d = with_today(d, sess[t], px[t][0], day.today)
-                except Exception as e:
-                    print(f"  today's bar failed for {t}, so it goes by last night's close: {e}")
-            why = SC.hot(float(SC.rsi(d["Close"]).iloc[-1]), float(SC.cci(d.tail(3 * SC.CFG["CCI_N"])).iloc[-1]))
-        if isinstance(sec, str) and sec and SC.breadth_hot(sec, br):
-            why.append(SC.breadth_hot(sec, br))
-        if why:
-            out[t] = " and ".join(why)
-    return out
+    return {t: SC.breadth_hot(sec, br) for t, sec in items if isinstance(sec, str) and sec and SC.breadth_hot(sec, br)}
+
+
+def paper_order(scr):
+    """Setups in buying order for the paper accounts: the strongest sector, strongest stock list (SC.ss_order) plus the
+    setups the screener marked Overbought only for RSI over 70 or CCI over 100, which the paper accounts don't use
+    (your call, Oct 14). Those keep their setup type: a Pullback needs RSI 50 or under, a Momentum setup 55 or over.
+    A sector over the 75 line still fails sec_on, and the buyers check the market's breadth themselves."""
+    if "ss_ok" not in scr or "blocked" not in scr:
+        return SC.ss_order(scr)
+    has, blk = scr.has_setup.astype(bool), scr.blocked.astype(bool)
+    s = scr[(has | blk) & scr.core.astype(bool) & scr.sec_on.astype(bool) & scr.strength.notna() & scr.rs.notna()].copy()
+    s["setup"] = s.setup.where(s.has_setup.astype(bool), (s.rsi > 50).map({True: "Momentum", False: "Pullback"}))
+    return s.sort_values("strength", ascending=False, kind="stable").reset_index(drop=True), True
 
 
 def passed_over(passed, n):
@@ -626,29 +744,7 @@ def a_exits(a, day):
                 sell_shares(a, p, now, price, f"It fell to {money(price)}, through the {P['A_SHARE_STOP']:.0%} stop "
                                               f"at {money(p['plan']['stop'])}.")
             continue
-        exp = dt.date.fromisoformat(p["option"]["exp"])
-        if day.today >= exp:
-            if day.fresh(t):
-                settle_call(a, p, now, px[t][0])
-            continue
-        q = call_quote(day, p)
-        if q is None:
-            continue
-        mark_call(p, now, q)
-        if q["bid"] <= 0:
-            continue
-        left = (exp - day.today).days
-        if p.get("exit"):
-            sell_call(a, p, now, q["bid"], p["exit"])
-        elif p["plan"].get("target") and q["bid"] >= p["plan"]["target"]:
-            sell_call(a, p, now, q["bid"], f"The bid reached {money(q['bid'])}, past the +{P['A_TARGET']:.0%} target "
-                                           f"({money(p['plan']['target'])}).")
-        elif q["mid"] <= p["plan"]["stop"]:
-            sell_call(a, p, now, q["bid"], f"It fell to {money(q['mid'])} (mid), through the -{P['A_STOP']:.0%} stop "
-                                           f"({money(p['plan']['stop'])}).")
-        elif left <= P["A_EXIT_DTE"]:
-            sell_call(a, p, now, q["bid"], f"{plural(left, 'day')} left before expiry, and time decay speeds up in "
-                                           "the last week.")
+        call_nets(a, p, day)
 
 
 def a_buys(a, day):
@@ -666,12 +762,12 @@ def a_buys(a, day):
                      + (f" (the latest is from {day_str(sd)})." if sd else "."), "day")
         return
     src = day.source(sd)
-    setups, ranked = SC.ss_order(scr)
+    setups, ranked = paper_order(scr)
     if setups.empty:
-        n_all = int(scr.has_setup.astype(bool).sum())
+        n_all = int((scr.has_setup.astype(bool) | (scr.blocked.astype(bool) if "blocked" in scr else False)).sum())
         note(a, now, f"No new buy: {src} found no setups." if not n_all else
              f"No new buy: none of the {plural(n_all, 'setup')} in {src} is on the strongest sector, strongest stock list "
-             "(in your uptrend, in a sector that is turning up and rising, not overbought).", "day")
+             "(in your uptrend, in a sector that is turning up and rising, not over the 75 line).", "day")
         return
     sold_today = {p["ticker"] for p in a["closed"] if p["sell"]["t"][:10] == day.today.isoformat()}
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]
@@ -732,12 +828,8 @@ def a_buys(a, day):
             n, r, S, f, n_ok, one = pick
             t, entry = r.ticker, float(f["ask"])
             qty = int(budget // cost(f))
-            tot = r2(qty * cost(f))
-            label = opt_label(t, f["exp"], f["strike"])
             exp = dt.date.fromisoformat(f["exp"])
-            exit_by = exp - dt.timedelta(days=P["A_EXIT_DTE"])
-            while exit_by.weekday() >= 5:              # the first market day inside the last week
-                exit_by += dt.timedelta(days=1)
+            exit_by = exit_day(exp)
             plan = dict(stop=r4(entry * (1 - P["A_STOP"])), exit_by=exit_by.isoformat(), x4h=True)
             if P["A_TARGET"]:
                 plan["target"] = r4(entry * (1 + P["A_TARGET"]))
@@ -752,14 +844,7 @@ def a_buys(a, day):
                       f"It's the nearest to {mid:.2f} delta of the {n_ok} calls that fit your rules and the "
                       f"{money(budget)} budget ({within}).")
                    + passed_over(passed, n))
-            open_pos(a, ticker=t, kind="call", qty=qty, label=label,
-                     option=dict(symbol=f.get("symbol"), exp=f["exp"], strike=float(f["strike"])),
-                     buy=dict(t=tstr(now), price=r4(entry), cost=tot, why=why, under=r4(S),
-                              delta=round(float(f["delta"]), 3), iv=round(float(f["iv"]), 1), oi=int(f["oi"]), dte=int(f["dte"])),
-                     plan=plan, last=dict(t=tstr(now), price=r4((f["bid"] + f["ask"]) / 2),
-                                          value=r2((f["bid"] + f["ask"]) / 2 * 100 * qty), bid=r4(f["bid"]), ask=r4(f["ask"])))
-            note(a, now, f"Bought {plural(qty, 'contract')} of the {label} at {money(entry)} (the ask), {money(tot)} with "
-                         f"the fee, with {t} at {money(S)}. {why} Plan: {plan['text']}", "buy")
+            open_call(a, now, t, S, f, qty, why, plan)
             continue
         if not valid:
             note(a, now, "No new buy: none of the top setups passed the checks at buying time"
@@ -784,10 +869,17 @@ def a_buys(a, day):
 
 
 # ------------------------------------------------------------------ B: my AI picks
-def b_plan_text():
-    return (f"hold while it ranks in the top {SC.CFG['AI_KEEP']} (checked each night) and sell the morning after it "
+def b_plan_text(call=None):
+    """call: (stop, exit_by, expiry) for a call."""
+    base = (f"hold while it ranks in the top {SC.CFG['AI_KEEP']} (checked each night) and sell the morning after it "
             "drops out, or sooner after a 4-hour bar closes with the 10 EMA under the 20 and the price under the 50 EMA "
-            "(your exit).")
+            "(your exit)")
+    if not call:
+        return base + "."
+    stop, exit_by, exp = call
+    return (base + f", or as safety nets at -{P['A_STOP']:.0%} ({money(stop)}) or on {day_str(exit_by)} "
+            f"({plural((exp - exit_by).days, 'day')} before expiry). If it's still on the list then, it buys a new call "
+            "(or shares) in its place.")
 
 
 def b_exits(a, day):
@@ -803,11 +895,14 @@ def b_exits(a, day):
                          "stock now sells once a 4-hour bar closes with the 10 EMA under the 20 and the price under the "
                          "50 EMA. One sold that way isn't bought back while it stays on the list.")
     flag_4h(a, day)
-    px = day.price([p["ticker"] for p in a["positions"] if p.get("exit")])
+    day.price([p["ticker"] for p in a["positions"]])
     for p in list(a["positions"]):
-        if p.get("exit") and day.fresh(p["ticker"]):
+        if p["kind"] == "call":
+            if call_nets(a, p, day) in ("exit", "stop"):   # a stopped-out call isn't bought back either
+                a.setdefault("out_4h", {})[p["ticker"]] = day.today.isoformat()
+        elif p.get("exit") and day.fresh(p["ticker"]):
             a.setdefault("out_4h", {})[p["ticker"]] = day.today.isoformat()
-            sell_shares(a, p, day.now, px[p["ticker"]][0], p["exit"] + " It isn't bought back while it stays on my list.")
+            sell_shares(a, p, day.now, day.px[p["ticker"]][0], p["exit"] + " It isn't bought back while it stays on my list.")
 
 
 def b_trade(a, day, quiet=False):
@@ -832,12 +927,11 @@ def b_trade(a, day, quiet=False):
     for t, p in held.items():
         if t in picks:
             continue
-        if not day.fresh(t):
+        g = gone.get(t)
+        if not sell_any(a, p, day, f"It left my AI picks list last night: it {g['why']}." if g and g.get("why")
+                        else "It's no longer on my AI picks list."):
             waiting.append(f"sell {t}")
             continue
-        g = gone.get(t)
-        sell_shares(a, p, now, px[t][0], f"It left my AI picks list last night: it {g['why']}." if g and g.get("why")
-                    else "It's no longer on my AI picks list.")
         acted += 1
     out = a.setdefault("out_4h", {})
     for t in [t for t in out if t not in picks]:
@@ -865,11 +959,28 @@ def b_trade(a, day, quiet=False):
         since = ("added last night" if added.get(t) == day.prev_day.isoformat() else
                  f"on the list since {day_str(dt.date.fromisoformat(added[t]))}" if added.get(t) else "on the list")
         why = (f"On my AI picks list ({since}), {rank} by relative strength among liquid S&P 500 and Nasdaq-100 stocks"
-               + (f": {inf['why']}." if inf.get("why") else ".")
-               + " Why shares, not a call: my method's edge came from holding leaders for weeks, which 15-30 day calls "
-               f"lose to time decay, and about ${budget:,.0f} a stock rarely covers one contract.")
+               + (f": {inf['why']}." if inf.get("why") else "."))
+        S, within = px[t][0], f"its tenth of the account, {money(budget)}"
+        try:
+            f, n_ok, low = pick_call(day, t, S, budget)
+        except Exception as e:
+            print(f"  option lookup failed for {t}: {e}")
+            f, n_ok, low = None, "quotes", False
+        if f is not None:
+            entry = float(f["ask"])
+            exp = dt.date.fromisoformat(f["exp"])
+            plan = dict(stop=r4(entry * (1 - P["A_STOP"])), exit_by=exit_day(exp).isoformat(), x4h=True)
+            plan["text"] = b_plan_text((plan["stop"], exit_day(exp), exp))
+            open_call(a, now, t, S, f, int(budget // call_cost(f)), why + " " + call_text(f, budget, within, n_ok, low, t), plan)
+            acted += 1
+            continue
+        reason = ("Yahoo's option quotes didn't load." if n_ok == "quotes" else
+                  f"no call by your rules fit {within} (the cheapest was the {opt_label(t, n_ok['exp'], n_ok['strike'])} "
+                  f"at {money(call_cost(n_ok))})." if n_ok else
+                  f"{t} had no call by your rules this morning (15-30 days out, delta {P['A_DELTA_LO']:.2f}-0.80, open "
+                  "interest over 500, a tight bid/ask).")
         plan = dict(text=b_plan_text(), x4h=True)
-        if buy_shares(a, now, t, px[t][0], budget, why, plan):
+        if buy_shares(a, now, t, S, budget, why + " Why shares, not a call: " + reason, plan):
             acted += 1
     if quiet:
         return
@@ -885,6 +996,8 @@ def b_trade(a, day, quiet=False):
 def b_marks(a, day):
     px = day.price([p["ticker"] for p in a["positions"]])
     for p in a["positions"]:
+        if p["kind"] == "call":
+            continue                                   # b_exits marked it
         if day.fresh(p["ticker"]):
             price = px[p["ticker"]][0]
             p["last"] = dict(t=tstr(day.now), price=r4(price), value=r2(p["qty"] * price))
@@ -997,7 +1110,8 @@ def m_exits(p, d, spy):
                        f"under that day's low of {money(lo[g])}")
             break
     hi = float(d["High"].iloc[-1])
-    hit = [b for b in SC.ov_blocks(d.iloc[:-1]) if b["fresh"] and b["bot"] > p["buy"]["price"] and hi >= b["bot"]]
+    entry = p["buy"].get("under", p["buy"]["price"])       # a call's levels are on the stock
+    hit = [b for b in SC.ov_blocks(d.iloc[:-1]) if b["fresh"] and b["bot"] > entry and hi >= b["bot"]]
     if hit:
         b = min(hit, key=lambda b: b["bot"])
         out.append(f"into the order block at {money(b['bot'])}-{money(b['top'])} from {day_str(b['start'])}: selling into strength")
@@ -1005,10 +1119,19 @@ def m_exits(p, d, spy):
 
 
 def d_watch(a, day):
-    """Every run: mark the positions to the latest prices and sell a Plan M stock at its emergency exit."""
+    """Every run: mark the positions to the latest prices and sell a Plan M stock (or its call) at its emergency exit;
+    a call also has the -50% stop and the exit before expiry."""
     px = day.price([p["ticker"] for p in a["positions"]])
     for p in list(a["positions"]):
         t = p["ticker"]
+        if p["kind"] == "call":
+            if day.fresh(t) and px[t][0] <= p["plan"]["emergency"]:
+                sell_any(a, p, day, f"{t} fell to {money(px[t][0])}, through the emergency exit at "
+                                    f"{money(p['plan']['emergency'])} ({P['D_EMERGENCY_ATR']:g} ATR under the entry), "
+                                    "where the plan says to sell without waiting for the close.")
+            else:
+                call_nets(a, p, day, "cstop")
+            continue
         if not day.fresh(t):
             continue
         price = px[t][0]
@@ -1017,6 +1140,44 @@ def d_watch(a, day):
             sell_shares(a, p, day.now, price, f"It fell to {money(price)}, through the emergency exit at "
                                               f"{money(p['plan']['emergency'])} ({P['D_EMERGENCY_ATR']:g} ATR under the "
                                               "entry), where the plan says to sell without waiting for the close.")
+
+
+def etf_ok(e):
+    """Plan ETF's checks without the CCI part of your overbought rule (the paper accounts dropped it, Oct 14)."""
+    return all(c["ok"] for c in e["checks"] if c.get("k") != "cci")
+
+
+def d_warm(day, plan, skip):
+    """Plan M setups the plan's list leaves out only for RSI over 70 or CCI over 100 (its OVTLYR screener rows pass
+    every other rule), rebuilt from last night's daily bars, since the paper accounts don't use that part of your
+    overbought rule (your call, Oct 14). Same fields as the plan's setups, plus warm = why the list left it out."""
+    rows, i = plan.get("screen") or [], SC.OV_RULES.index("hot")
+    rows = [r for r in rows if r[0] not in skip and len(r[5]) == len(SC.OV_RULES) and r[5][i] == "0"
+            and all(c == "1" for j, c in enumerate(r[5]) if j != i) and r[4] is not None]
+    if not rows:
+        return []
+    tks = [r[0] for r in rows]
+    bars = day.mkt.daily(tks, day.prev_day, period="2y")
+    try:
+        earn = day.mkt.earnings(tks)
+    except Exception as e:
+        print(f"  earnings lookup failed: {e}")
+        earn = {}
+    out = []
+    for t, sec, _, _, age, _ in rows:
+        d = bars.get(t)
+        if d is None or len(d) < 60 or d.index[-1].date().isoformat() != plan["asof"] or age >= len(d):
+            continue
+        c = d["Close"]
+        R = SC.rsi(c)
+        r0 = float(R.iloc[-1])
+        cc = float(SC.cci(d.tail(3 * SC.CFG["CCI_N"])).iloc[-1])
+        up = SC.ob_above(SC.ov_blocks(d), float(c.iloc[-1]))
+        out.append(dict(ticker=t, sector=sec, close=round(float(c.iloc[-1]), 2), e10=round(float(SC.ema(c, 10).iloc[-1]), 2),
+                        rsi=round(r0, 1), rsi_prev=round(float(R.iloc[-2]), 1), atr=round(float(SC.atr(d).iloc[-1]), 2),
+                        age=int(age), cross=d.index[-1 - int(age)].date().isoformat(), ob_up=round(up, 2) if up else None,
+                        earn=earn.get(t), rs=None, warm=" and ".join(SC.hot(r0, cc)) or "RSI or CCI over the line"))
+    return out
 
 
 def d_exits(a, day, sd, plan, bars):
@@ -1053,7 +1214,7 @@ def d_exits(a, day, sd, plan, bars):
                 why = (f"{t} closed at {money(float(d['Close'].iloc[-1]))} on {day_str(day.prev_day)}: " + "; ".join(fr)
                        + ". That showed only at the close, after the afternoon check, so it sells this morning.")
         if why:
-            sell_shares(a, p, now, px[t][0], why)
+            sell_any(a, p, day, why)
     for p in legs(a, "ETF"):
         e = (plan or {}).get("etf", {}).get(p["ticker"])
         if e and e["sell"] and day.fresh(p["ticker"]):
@@ -1086,8 +1247,10 @@ def d_buys(a, day, sd, plan, bars):
         m, spy = plan["market"], bars.get("SPY")
         s20 = float(SC.ema(spy["Close"], 20).iloc[-1]) if spy is not None and len(spy) > 60 else None
         held = {p["ticker"] for p in a["positions"]}
-        cand = [s for s in plan["setups"] if s["ticker"] not in held and s["ticker"] not in sold_today]
         mh = market_hot(day)
+        warm = [] if mh or not m["ok"] else d_warm(day, plan, held | sold_today)
+        cand = sorted([s for s in plan["setups"] if s["ticker"] not in held and s["ticker"] not in sold_today] + warm,
+                      key=lambda s: (s["age"], -(s.get("rs") or 0)))
         if mh:
             news.append(f"Plan M waits: the market is overbought ({mh}, last night), and your rule buys nothing then")
         elif not m["ok"]:
@@ -1097,7 +1260,7 @@ def d_buys(a, day, sd, plan, bars):
         elif float(spy["Close"].iloc[-1]) < s20:
             news.append(f"Plan M waits: SPY closed at {money(float(spy['Close'].iloc[-1]))}, under its 20 EMA ({money(s20)}), "
                         "one of the plan's exits")
-        elif plan["setups"] and not cand:
+        elif (plan["setups"] or warm) and not cand:
             news.append(f"Plan M: the setups in {src} are already held or were sold today")
         elif not cand:
             f = plan["funnel"]
@@ -1139,7 +1302,6 @@ def d_buys(a, day, sd, plan, bars):
                 if budget < P["D_MIN"]:
                     skipped.append(f"{t} is set up, but only {money(have)} is left to spend")
                     break
-                budget = min(budget, raise_cash(a, day, budget, f"{t} (Plan M)"))
                 sec = plan["sectors"].get(s["sector"], {})
                 cross = dt.date.fromisoformat(s["cross"])
                 rise = (f"{s['rsi_prev']:.0f} to {s['rsi']:.0f}" if round(s["rsi_prev"]) != round(s["rsi"]) else
@@ -1151,13 +1313,46 @@ def d_buys(a, day, sd, plan, bars):
                        + (f"The nearest order block above is at {money(s['ob_up'])}, {(s['ob_up'] / S - 1) * 100:.1f}% up. "
                           if s["ob_up"] else "No untouched order block above it. ")
                        + (f"Earnings: {day_str(dt.date.fromisoformat(earn))}. " if earn else "")
+                       + (f"The plan's own list leaves {t} out for the RSI / CCI part of your overbought rule ({s['warm']}), "
+                          "which the paper accounts no longer use (your call, Oct 14). " if s.get("warm") else "")
                        + f"Size: {P['D_RISK']:.0%} of the account ({money(risk)}) at risk over {P['D_SIZE_ATR']:g} ATR "
                        f"({money(P['D_SIZE_ATR'] * atr)}) is {want:.2f} shares ({money(want * fill)})"
-                       + (f", more than the {money(have)} it has, so it buys what that covers. " if want * fill > have else ". ")
-                       + "Shares, not the deck's 80-delta calls: at this size the formula comes to a fraction of one contract.")
+                       + (f", more than the {money(have)} it has, so it uses what it has. " if want * fill > have else ". "))
                 stop, emer = fill - P["D_STOP_ATR"] * atr, fill - P["D_EMERGENCY_ATR"] * atr
                 heat = heat_target(s["rsi"])
                 pl = dict(stop=r4(stop), emergency=r4(emer), atr=atr, heat=round(heat, 1), earn=earn)
+                # a call by your rules when one fits: at most the plan's share size and 30% of the account
+                cb = min(budget, P["A_CAP"] * value(a))
+                within = (f"{P['A_CAP']:.0%} of the account" if cb < budget else "the plan's size for the trade")
+                try:
+                    f, n_ok, low = pick_call(day, t, S, cb)
+                except Exception as e:
+                    print(f"  option lookup failed for {t}: {e}")
+                    f, n_ok, low = None, "quotes", False
+                qty = int(cb // call_cost(f)) if f is not None else 0
+                if qty:
+                    qty = min(qty, int(raise_cash(a, day, qty * call_cost(f), f"{t} (Plan M)") // call_cost(f)))
+                if qty:
+                    entry, exp = float(f["ask"]), dt.date.fromisoformat(f["exp"])
+                    xb = exit_day(exp)
+                    pl.update(cstop=r4(entry * (1 - P["A_STOP"])), exit_by=xb.isoformat())
+                    pl["text"] = (f"the plan's exits, judged on {t} itself: at about 3:30 PM New York time, sell on a price "
+                                  f"under {money(stop)} ({P['D_STOP_ATR']:g} ATR under the entry), the 10 EMA under the 20, "
+                                  f"SPY under its 20 EMA, RSI at {heat:.0f} (the heatmap target), a gap and crap, or reaching "
+                                  f"an order block above; sell at once under {money(emer)} ({P['D_EMERGENCY_ATR']:g} ATR "
+                                  f"under); sell the morning after the {s['sector']} sector's breadth turns bearish or the "
+                                  "market day before earnings. Safety nets for the call: -"
+                                  f"{P['A_STOP']:.0%} ({money(pl['cstop'])}) or on {day_str(xb)} at the latest "
+                                  f"({plural((exp - xb).days, 'day')} before expiry).")
+                    pos = open_call(a, now, t, S, f, qty, why + "A call by your rules instead of shares (your call, Oct 14; "
+                                    "the deck uses 80-delta calls). " + call_text(f, cb, within, n_ok, low, t), pl,
+                                    leg="M", sector=s["sector"])
+                    continue
+                budget = min(budget, raise_cash(a, day, budget, f"{t} (Plan M)"))
+                why += "Shares, not a call: " + ("Yahoo's option quotes didn't load." if n_ok == "quotes" else
+                                                 f"no call by your rules fit {money(cb)} ({within}); the cheapest was the "
+                                                 f"{opt_label(t, n_ok['exp'], n_ok['strike'])} at {money(call_cost(n_ok))}."
+                                                 if n_ok else f"{t} had no call by your rules this morning.")
                 pl["text"] = (f"at about 3:30 PM New York time, sell on a price under {money(stop)} ({P['D_STOP_ATR']:g} ATR "
                               f"under the entry), the 10 EMA under the 20, SPY under its 20 EMA, RSI at {heat:.0f} (the "
                               "heatmap target), a gap and crap, or reaching an order block above; sell at once under "
@@ -1184,17 +1379,17 @@ def d_buys(a, day, sd, plan, bars):
             if fund in sold_today or e["sell"]:
                 etf_news.append(f"{fund} has a sell signal")
                 continue
-            if not e["ok"]:
-                etf_news.append(f"{fund} isn't set up: " + ", ".join(lc(c["text"]) for c in e["checks"] if not c["ok"]))
+            if not etf_ok(e):
+                etf_news.append(f"{fund} isn't set up: " + ", ".join(lc(c["text"]) for c in e["checks"]
+                                                                    if not c["ok"] and c.get("k") != "cci"))
                 continue
             u = e["under"]
             q = day.price([u, fund])
             if not day.fresh(u) or not day.fresh(fund):
                 etf_news.append(f"{fund} had no live price")
                 continue
-            h = mh and f"the market is overbought ({mh}, last night)" or hot_now(day, [(u, "")]).get(u)
-            if h:
-                etf_news.append(f"{fund} isn't bought: " + (h if mh else f"{u} is overbought ({h})"))
+            if mh:
+                etf_news.append(f"{fund} isn't bought: the market is overbought ({mh}, last night)")
                 continue
             lo, hi = e["e20"], e["e20"] + SC.OV["ZONE_ATR"] * e["atr"]
             if not lo <= q[u][0] <= hi:
@@ -1211,7 +1406,7 @@ def d_buys(a, day, sd, plan, bars):
             u = e["under"]
             budget = min(budget, raise_cash(a, day, budget, f"{fund} (Plan ETF)"))
             why = (f"Plan ETF in {src}: there's cash with no Plan M trade to take, and {u} passes every Plan ETF check: "
-                   + "; ".join(c["text"] for c in e["checks"])
+                   + "; ".join(c["text"] for c in e["checks"] if c.get("k") != "cci")
                    + f". This morning {u} is at {money(U)}, inside the value zone ({money(lo)}-{money(hi)}). "
                    + (f"{ready[1][0]} is set up too, so each gets half. " if len(ready) == 2 and i == 0 else "")
                    + f"Shares of {fund} (3x {u}), not options, as the deck says: it's the defensive play.")
@@ -1268,7 +1463,7 @@ def d_late(a, day):
             continue
         fr = m_exits(p, with_today(d, sess[t], px[t][0], day.today), spy)
         if fr:
-            sell_shares(a, p, day.now, px[t][0], f"Near the close {t} is at {money(px[t][0])}: " + "; ".join(fr) + ".")
+            sell_any(a, p, day, f"Near the close {t} is at {money(px[t][0])}: " + "; ".join(fr) + ".")
 
 
 def d_pause(a, day):
@@ -1352,13 +1547,19 @@ def end_trial(a, day):
 
 
 def start(a, day, spy_daily):
-    """The first run of the trial: $1,000 at the previous close, so SPY is measured from the same point."""
+    """The first run of the trial: the starting cash at the previous close, so SPY is measured from the same point."""
     if a["equity"]:
         return
     prev = spy_daily[spy_daily.index.date == day.prev_day]
     a["equity"].append(dict(d=day.prev_day.isoformat(), v=a["start_cash"], spy=r2(prev["Close"].iloc[-1])))
     end = dt.date.fromisoformat(a["end"])
-    note(a, day.now, f"Trial started with {money(a['start_cash'])}. It runs to {day_str(end)}, {end.year}.", "day")
+    pr = a.get("prior") or {}
+    note(a, day.now, f"Trial started with {money(a['start_cash'])}. It runs to {day_str(end)}, {end.year}."
+         + (f" It's a fresh restart (your call, Oct 14): {money(a['start_cash'])} an account, shares or options in every "
+            "account, and RSI and CCI no longer block a buy. The first trial ran from "
+            f"{day_str(dt.date.fromisoformat(pr['start']))} with {money(pr['start_cash'])}"
+            + (f" and was at {money(pr['value'])} when it stopped" if pr.get("value") is not None else "")
+            + "; its trades are saved in paper/archive on the paper-trading branch." if pr.get("start") else ""), "day")
 
 
 def step(a, day, spy_daily):
@@ -1430,6 +1631,9 @@ def run(state_dir, mkt, now, hist, dry=False, test_quotes=False):
     """One scheduled run. Returns (what each account did, the accounts, accounts that hit an error),
     or None when there's nothing to do (before the trial, or the market hasn't traded today)."""
     accts = {aid: load(state_dir, aid) for aid in IDS}
+    old = {aid: a for aid, a in accts.items() if a.get("trial", 1) != P["TRIAL"] and (a["equity"] or a["log"])}
+    for aid in old:                                      # an account from an earlier trial: archive it and start fresh
+        accts[aid] = restart(old[aid])
     for a in accts.values():
         if not a["equity"]:
             a["start"] = start_day(a["id"])           # not started yet: follow the settings (and --start in dry runs)
@@ -1455,12 +1659,18 @@ def run(state_dir, mkt, now, hist, dry=False, test_quotes=False):
             continue
         if r:
             did[aid] = r
+    for aid in old:
+        did[aid] = f"restarted at {money(P['CASH'])}" + (f", {did[aid]}" if aid in did else "")
     for a in accts.values():
         a["mark"] = dict(t=tstr(now), v=r2(value(a)), spy=r2(spy[0]))
         a["updated"] = tstr(now)
         a["rules"], a["fills"] = rules(a["id"]), FILLS
     if not dry:
         save(state_dir, accts)
+        for aid, a in old.items():
+            arch = Path(state_dir) / "archive"
+            arch.mkdir(parents=True, exist_ok=True)
+            (arch / f"trial{a.get('trial', 1)}_{aid}.json").write_text(json.dumps(a, separators=(",", ":")), encoding="utf-8")
     return did, accts, errors
 
 

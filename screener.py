@@ -1646,7 +1646,8 @@ def bt_tab(df):
 
 
 PAPER_JS = Path(__file__).resolve().parent / "paper.js"   # the paper trading widgets (accounts traded by paper.py)
-PAPER_HINT = ("Four paper accounts with $1,000 each, trading until Apr 6, 2027. <b>Your system</b> trades your screener "
+PAPER_HINT = ("Four paper accounts with $5,000 each (restarted Oct 15), trading until Apr 6, 2027; each buys a call by your "
+              "option rules when one fits, else shares. <b>Your system</b> trades your screener "
               "setups on the strongest sector, strongest stock list with your option rules at about 10:00 AM New York time; <b>Your system, after 2 PM</b> uses the same rules but "
               "only buys after 2:00 PM Central; <b>Claude's picks</b> trades my AI picks list; <b>OVTLYR plan</b> trades the "
               "OVTLYR plan section below. They trade on their own and check every 30 minutes. Click one for every trade and "
@@ -2247,7 +2248,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
           + "".join(f'<div class="sub">{lbl}</div><div class="chips">{chips(lists[k]["rows"][:8])}</div>'
                     for k, lbl in (("nu", "New uptrends"), ("bo", "Breakout watch"), ("ai", "AI picks")))
           + '</div>') if lists else ""
-    pp = ('<div class="tcard"><h3>Paper trading <a data-go="paper">Open ›</a></h3><div class="hint">Four $1,000 accounts. Tap one for its trades.</div>'
+    pp = ('<div class="tcard"><h3>Paper trading <a data-go="paper">Open ›</a></h3><div class="hint">Four $5,000 accounts (restarted Oct 15). Tap one for its trades.</div>'
           '<div id="tdpp"><div class="hint">Loading…</div></div></div>')
     if ov:
         m, f = ov["market"], ov["funnel"]

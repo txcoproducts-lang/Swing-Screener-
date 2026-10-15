@@ -1,9 +1,10 @@
-// Paper trading widgets. paper.py trades four $1,000 paper accounts on GitHub Actions and saves them on the
+// Paper trading widgets. paper.py trades four $5,000 paper accounts on GitHub Actions and saves them on the
 // paper-trading branch; this reads them from GitHub, draws a tile per account and opens the full breakdown
 // (chart against SPY, open positions, closed trades with reasons, the daily log, the rules) on click.
 // screener.py puts this file inside the page. Text from the accounts is only ever set with textContent.
 (function () {
 const SRC = 'https://raw.githubusercontent.com/txcoproducts-lang/Swing-Screener-/paper-trading/paper/';
+const usd = v => '$' + Math.round(v).toLocaleString('en-US');   // the starting cash, whole dollars
 const REPO = 'https://github.com/txcoproducts-lang/Swing-Screener-';
 const IDS = ['A', 'C', 'B', 'D'];
 const SUB = {A: 'Your screener setups and option rules', C: 'Your rules, buying only after 2 PM Central', B: 'My AI picks list, as shares',
@@ -103,7 +104,7 @@ function stats(a) {
           real, wins: a.closed.filter(p => p.pnl > 0).length};
 }
 
-// The account's value at each close, plus "now" while the market is open; SPY scaled to the same $1,000 start.
+// The account's value at each close, plus "now" while the market is open; SPY scaled to the same start.
 function series(a) {
   const pts = a.equity.map(e => ({d: e.d, v: e.v, s: e.spy}));
   if (a.mark && pts.length && a.mark.t.slice(0, 10) > pts[pts.length - 1].d)
@@ -167,7 +168,7 @@ function drawChart(wrap, a) {
   const n = pts.length, iw = W - m.l - m.r;
   const X = i => m.l + i * iw / (n - 1), Y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
   const s = svg('svg', {class: 'pm-svg', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
-    'aria-label': `${a.name}: ${money(pts[n - 1].v)} against ${money(pts[n - 1].spy)} for SPY from the same $1,000 start`});
+    'aria-label': `${a.name}: ${money(pts[n - 1].v)} against ${money(pts[n - 1].spy)} for SPY from the same ${usd(a.start_cash)} start`});
   ticks.forEach(t => {
     s.append(svg('line', {class: 'pm-grid', x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t)}));
     s.append(svg('text', {class: 'pm-ax', x: m.l - 6, y: Y(t) + 4, 'text-anchor': 'end'}, '$' + t.toLocaleString('en-US')));
@@ -224,12 +225,12 @@ function chartBlock(a) {
     el('td', {text: money(p.v)}), el('td', {class: i ? cls(p.v - pts[i - 1].v) : '', text: i ? pct((p.v / pts[i - 1].v - 1) * 100) : ''}),
     el('td', {text: money(p.spy)})));
   const table = el('details', {class: 'pm-tbl'}, el('summary', {text: 'Show these numbers as a table'}),
-    el('div', {class: 'wrap'}, el('table', {}, el('thead', {}, el('tr', {}, ['Close', a.name, 'Day', 'SPY from $1,000'].map(h => el('th', {text: h})))),
+    el('div', {class: 'wrap'}, el('table', {}, el('thead', {}, el('tr', {}, ['Close', a.name, 'Day', 'SPY from ' + usd(a.start_cash)].map(h => el('th', {text: h})))),
       el('tbody', {}, rows.reverse()))));
   return [pts.length < 2 ? null : el('div', {class: 'pm-lg'},
             el('span', {}, el('i', {style: 'background:var(--acc)'}), a.name),
-            el('span', {}, el('i', {style: 'background:var(--mut)'}), 'SPY, if the same $1,000 had bought it'),
-            el('span', {}, el('i', {style: 'background:none;border-top:1px dashed var(--mut)'}), '$1,000 start')),
+            el('span', {}, el('i', {style: 'background:var(--mut)'}), 'SPY, if the same ' + usd(a.start_cash) + ' had bought it'),
+            el('span', {}, el('i', {style: 'background:none;border-top:1px dashed var(--mut)'}), usd(a.start_cash) + ' start')),
           wrap, pts.length > 1 ? table : null];
 }
 
@@ -293,7 +294,7 @@ function openAcct(id, from) {
     el('div', {class: 'pm-top'}, el('b', {text: a.name}), el('span', {class: 'mut', text: SUB[a.id] || ''}), el('span', {class: 'sp'}),
        el('button', {class: 'pm-x', 'aria-label': 'Close', text: '×', onclick: closeAcct})),
     el('div', {class: 'pm-body'},
-      el('div', {class: 'hint', text: `Paper trading, $1,000 to start, ${mdy(a.start)} to ${mdy(a.end)}` +
+      el('div', {class: 'hint', text: `Paper trading, ${usd(a.start_cash)} to start, ${mdy(a.start)} to ${mdy(a.end)}` +
          (a.mark ? `. Updated ${md(a.mark.t)}, ${tm(a.mark.t)} ET.` : '. Not started yet.')}),
       el('div', {class: 'pm-cards', style: 'margin-top:10px'},
         card('Value', money(st.v), started ? smoney(st.pnl) + ' since the start' : 'Starting cash'),

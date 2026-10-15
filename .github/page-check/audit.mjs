@@ -388,8 +388,10 @@ const paper = await p.evaluate(async () => {
     }
     if ((a.id === "A" || a.id === "C") && a.positions.length > 2) bad.push(`${a.positions.length} positions, more than 2`);
     if (a.id === "D") for (const q of all) {
-      if (!["M", "ETF", "SGOV"].includes(q.leg) || q.kind !== "shares") bad.push(`${q.label}: not a Plan M, Plan ETF or SGOV share trade`);
-      if (q.leg === "M" && !(q.plan.emergency < q.plan.stop && q.plan.stop < q.buy.price)) bad.push(`${q.label}: stop levels out of order`);
+      // from the Oct 15 restart Plan M may buy a call (the user's option rules); Plan ETF and SGOV stay shares
+      if (!["M", "ETF", "SGOV"].includes(q.leg) || (q.kind !== "shares" && !(q.leg === "M" && q.kind === "call"))) bad.push(`${q.label}: not a Plan M, Plan ETF or SGOV trade`);
+      const entry = q.kind === "call" ? q.buy.under : q.buy.price;   // a call's stop levels are on the stock
+      if (q.leg === "M" && !(q.plan.emergency < q.plan.stop && q.plan.stop < entry)) bad.push(`${q.label}: stop levels out of order`);
     }
     if (a.id === "C") for (const q of all) if (q.buy.t.slice(11, 16) < "15:00") bad.push(`${q.label}: bought at ${q.buy.t.slice(11, 16)} ET, before 2 PM Central`);
     if (a.equity.length && a.equity[0].v !== a.start_cash) bad.push(`chart starts at ${a.equity[0].v}`);
