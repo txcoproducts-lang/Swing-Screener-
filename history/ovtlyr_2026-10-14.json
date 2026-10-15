@@ -32,17 +32,17 @@
   "spy": {
    "date": "2026-10-14",
    "close": 769.6,
-   "high": 776.3,
+   "high": 776.35,
    "e10": 773.66,
    "e20": 771.03,
    "e50": 764.61,
    "rsi": 50.1,
    "rsi_prev": 59.8,
    "atr": 6.42,
-   "cci": 6.6
+   "cci": 6.8
   },
   "breadth": {
-   "pct": 43.4,
+   "pct": 43.3,
    "ema": 34.0
   }
  },
@@ -97,7 +97,7 @@
    "n": 76,
    "bull": 26.3,
    "bull_ema": 13.9,
-   "rsi": 44.5,
+   "rsi": 44.6,
    "rsi_prev": 46.0,
    "miss": [
     "RSI 45 not above SPY's 50",
@@ -118,13 +118,13 @@
   "Industrials": {
    "ok": false,
    "n": 81,
-   "bull": 32.1,
-   "bull_ema": 29.6,
+   "bull": 31.2,
+   "bull_ema": 29.4,
    "rsi": 47.5,
    "rsi_prev": 47.9,
    "miss": [
-    "RSI 47 not above SPY's 50",
-    "RSI 47 not rising (was 48)"
+    "RSI 48 not above SPY's 50",
+    "RSI 47.5 not rising (was 47.9)"
    ]
   },
   "Information Technology": {
@@ -269,14 +269,14 @@
    "sell": [],
    "date": "2026-10-14",
    "close": 769.6,
-   "high": 776.3,
+   "high": 776.35,
    "e10": 773.66,
    "e20": 771.03,
    "e50": 764.61,
    "rsi": 50.1,
    "rsi_prev": 59.8,
    "atr": 6.42,
-   "cci": 6.6
+   "cci": 6.8
   }
  },
  "setups": [],
@@ -3038,18 +3038,18 @@
    "00001011-"
   ],
   [
-   "PLD",
-   "Real Estate",
-   130.46,
-   43.9,
+   "PNC",
+   "Financials",
+   215.8,
+   30.5,
    null,
    "00001011-"
   ],
   [
-   "PNC",
-   "Financials",
-   215.8,
-   28.2,
+   "PLD",
+   "Real Estate",
+   130.46,
+   43.9,
    null,
    "00001011-"
   ],
@@ -3625,7 +3625,7 @@
    "MU",
    "Information Technology",
    914.13,
-   36.2,
+   36.3,
    null,
    "00000011-"
   ],
