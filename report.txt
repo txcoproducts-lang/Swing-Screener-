@@ -1,0 +1,56 @@
+[desktop] title=Crypto Screener 2026-10-14 rows=40 sectorCharts=140
+[desktop] news: News for the market · open on TradingView ↗, iframes=1
+[desktop] sector news: No coin in Layer 1 passes tonight. News for the market · open on TradingView ↗, iframes=1
+[desktop] backtests: BACKTESTS ON THIS PAGE | 6 | 4 plans, 2 research tests | PLANS THAT BEAT BTC | 0 of 4 | over 10 years | PAPER TRIAL | Day 3 of 175 | Oct 13, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Your system, after 2 PM | -0.8% vs BTC +0.7%; plan cards=4, charts=9, research=2
+[desktop] backtests, 10-year view: Claude's picks leads at $53,218
+[desktop] paper tiles: Your system | Updated Oct 15, 4:59 PM ET | Your screener setups, as coins (no options) | $989.68 | ▼ -$10.32 (-1.0%) since Oct 13 · BTC +0.2% | 0 open positions · 2 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 15, 4:59 PM ET | Your rules, buying only after 2 PM Central | $992.02 | ▼ -$7.98 (-0.8%) since Oct 13 · BTC +0.2% | 0 open positions · 2 closed trades | Full breakdown → || Claude's picks | Updated Oct 15, 4:59 PM ET | My AI picks list, as coins | $983.50 | ▼ -$16.50 (-1.6%) since Oct 13 · BTC +0.2% | 2 open positions · 9 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 15, 4:59 PM ET | OVTLYR's Plan M and Plan ETF, as coins | $978.56 | ▼ -$21.44 (-2.1%) since Oct 13 · BTC +0.2% | 1 open position · 0 closed trades | Full breakdown →
+[desktop] paper A: Value $989.68 -$10.32 since the start | Return -1.0% BTC +0.2% over the same days | Cash $989.68 0 open positions | Closed trades 2 0 won, 2 lost, -$10.32 in all
+[desktop] paper C: Value $992.02 -$7.98 since the start | Return -0.8% BTC +0.2% over the same days | Cash $992.02 0 open positions | Closed trades 2 0 won, 2 lost, -$7.98 in all
+[desktop] paper B: Value $983.50 -$16.50 since the start | Return -1.6% BTC +0.2% over the same days | Cash $781.25 2 open positions worth $202.25 | Closed trades 9 0 won, 9 lost, -$20.51 in all
+[desktop] paper D: Value $978.56 -$21.44 since the start | Return -2.1% BTC +0.2% over the same days | Cash $0.00 1 open position worth $978.56 | Closed trades 0 None yet
+[desktop] top picks nu: 1 rows
+[desktop] top picks bo: 0 rows
+[desktop] top picks ai: 10 rows
+[desktop] strongest sector list: 0 rows, 0 setups, top ; problems: none
+[desktop] Plan M list: Plan M coins: none tonight
+[desktop] OVTLYR screener: Ready 0 | 2 rules away or fewer 3 | All 86 | All categories | AI & data | DeFi | Exchange tokens | Gaming | Infrastructure | Layer 1 | Layer 2 | Memes | Payments, rows shown=3
+[desktop] heatmap: Crypto market 40% ▼ | Layer 1 60% ▼ | Gaming 57% ▼ | Layer 2 57% ▼ | AI & data 50% ▼ | Infrastructure 38% ▼ | DeFi 28% ▼ OS | Exchange tokens 25% ▼ OS | Memes 12% ▼ OS | Payments 11% ▼ OS | Jul Aug Sep Oct
+[desktop] breadth line: Crypto market: Rising 40.0%5-day avg 55.6%10-day avg 66.1% | ▼ below its 5-day average since Oct 6▼ below its 10-day average since Oct 6
+[desktop] strips: Crypto market: May 2 · Breadth 49% rising, avg 48% · 18% in uptrend · ▲ upswing | Layer 1: Breadth 60% rising, avg 76% · 60% in uptrend · ▼ fading since Oct 7 | Layer 2: Breadth 57% rising, avg 69% · 57% in uptrend · ▼ fading since Oct 6 | Gaming: Breadth 57% rising, avg 85% · 57% in uptrend · ▼ fading since Oct 12 | AI & data: Breadth 50% rising, avg 86% · 50% in uptrend · ▼ fading since Oct 12 | Infrastructure: Breadth 38% rising, avg 69% · 38% in uptrend · ▼ fading since Oct 8 | DeFi: Breadth 28% rising, avg 67% · 28% in uptrend · ▼ fading since Oct 8 · OS oversold | Exchange tokens: Breadth 25% rising, avg 52% · 25% in uptrend · ▼ fading since Oct 8 · OS oversold | Memes: Breadth 13% rising, avg 34% · 13% in uptrend · ▼ fading since Oct 7 · OS oversold | Payments: Breadth 11% rising, avg 38% · 11% in uptrend · ▼ fading since Oct 7 · OS oversold
+[desktop] opened PYTH: legend="Uptrend since 2026-08-21 · green = uptrend, red = downtrend "
+[desktop] info line: "Category Infrastructure · #5 of 9 · 38% rising · ▼ fading since Oct 8Market BTC $81,562.49 -1.84% today · BTC is not moving up (3 of 5 checks) · 40% of coins rising · ▼ fading since Oct 6"
+[desktop] backtest: "Backtest, 2.4 years (2024-06-06 to 2026-10-14): your rules -28% · holding PYTH -82% · holding BTC +15%Rules vs holding PYTH: +54 pts · rules vs BTC: -43 pts · $1,000 became $718 on the rules, $183 hol"
+[desktop] daily 5Y: legend="Uptrend since 2026-08-21 · green = uptrend, red = downtrend "
+[desktop] 240: legend="Uptrend since 2026-10-14 · green = uptrend, red = downtrend "
+[desktop] W: legend="No trend since 2023-11-20 · green = uptrend, red = downtrend"
+[desktop] M: legend="No trend since 2023-11-01 · green = uptrend, red = downtrend"
+[desktop] tradingview iframe=1
+[desktop] errors: none
+[phone] title=Crypto Screener 2026-10-14 rows=40 sectorCharts=140
+[phone] news: News for the market · open on TradingView ↗, iframes=1
+[phone] sector news: No coin in Layer 1 passes tonight. News for the market · open on TradingView ↗, iframes=1
+[phone] backtests: BACKTESTS ON THIS PAGE | 6 | 4 plans, 2 research tests | PLANS THAT BEAT BTC | 0 of 4 | over 10 years | PAPER TRIAL | Day 3 of 175 | Oct 13, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Your system, after 2 PM | -0.8% vs BTC +0.7%; plan cards=4, charts=9, research=2
+[phone] backtests, 10-year view: Claude's picks leads at $53,218
+[phone] paper tiles: Your system | Updated Oct 15, 4:59 PM ET | Your screener setups, as coins (no options) | $989.68 | ▼ -$10.32 (-1.0%) since Oct 13 · BTC +0.2% | 0 open positions · 2 closed trades | Full breakdown → || Your system, after 2 PM | Updated Oct 15, 4:59 PM ET | Your rules, buying only after 2 PM Central | $992.02 | ▼ -$7.98 (-0.8%) since Oct 13 · BTC +0.2% | 0 open positions · 2 closed trades | Full breakdown → || Claude's picks | Updated Oct 15, 4:59 PM ET | My AI picks list, as coins | $983.50 | ▼ -$16.50 (-1.6%) since Oct 13 · BTC +0.2% | 2 open positions · 9 closed trades | Full breakdown → || OVTLYR plan | Updated Oct 15, 4:59 PM ET | OVTLYR's Plan M and Plan ETF, as coins | $978.56 | ▼ -$21.44 (-2.1%) since Oct 13 · BTC +0.2% | 1 open position · 0 closed trades | Full breakdown →
+[phone] paper A: Value $989.68 -$10.32 since the start | Return -1.0% BTC +0.2% over the same days | Cash $989.68 0 open positions | Closed trades 2 0 won, 2 lost, -$10.32 in all
+[phone] paper C: Value $992.02 -$7.98 since the start | Return -0.8% BTC +0.2% over the same days | Cash $992.02 0 open positions | Closed trades 2 0 won, 2 lost, -$7.98 in all
+[phone] paper B: Value $983.50 -$16.50 since the start | Return -1.6% BTC +0.2% over the same days | Cash $781.25 2 open positions worth $202.25 | Closed trades 9 0 won, 9 lost, -$20.51 in all
+[phone] paper D: Value $978.56 -$21.44 since the start | Return -2.1% BTC +0.2% over the same days | Cash $0.00 1 open position worth $978.56 | Closed trades 0 None yet
+[phone] top picks nu: 1 rows
+[phone] top picks bo: 0 rows
+[phone] top picks ai: 10 rows
+[phone] strongest sector list: 0 rows, 0 setups, top ; problems: none
+[phone] Plan M list: Plan M coins: none tonight
+[phone] OVTLYR screener: Ready 0 | 2 rules away or fewer 3 | All 86 | All categories | AI & data | DeFi | Exchange tokens | Gaming | Infrastructure | Layer 1 | Layer 2 | Memes | Payments, rows shown=3
+[phone] heatmap: Crypto market 40% ▼ | Layer 1 60% ▼ | Gaming 57% ▼ | Layer 2 57% ▼ | AI & data 50% ▼ | Infrastructure 38% ▼ | DeFi 28% ▼ OS | Exchange tokens 25% ▼ OS | Memes 12% ▼ OS | Payments 11% ▼ OS | Jul Aug Sep Oct
+[phone] breadth line: Crypto market: Rising 40.0%5-day avg 55.6%10-day avg 66.1% | ▼ below its 5-day average since Oct 6▼ below its 10-day average since Oct 6
+[phone] strips: Crypto market: May 5 · Breadth 71% rising, avg 53% · 25% in uptrend · ▲ upswing | Layer 1: Breadth 60% rising, avg 76% · 60% in uptrend · ▼ fading since Oct 7 | Layer 2: Breadth 57% rising, avg 69% · 57% in uptrend · ▼ fading since Oct 6 | Gaming: Breadth 57% rising, avg 85% · 57% in uptrend · ▼ fading since Oct 12 | AI & data: Breadth 50% rising, avg 86% · 50% in uptrend · ▼ fading since Oct 12 | Infrastructure: Breadth 38% rising, avg 69% · 38% in uptrend · ▼ fading since Oct 8 | DeFi: Breadth 28% rising, avg 67% · 28% in uptrend · ▼ fading since Oct 8 · OS oversold | Exchange tokens: Breadth 25% rising, avg 52% · 25% in uptrend · ▼ fading since Oct 8 · OS oversold | Memes: Breadth 13% rising, avg 34% · 13% in uptrend · ▼ fading since Oct 7 · OS oversold | Payments: Breadth 11% rising, avg 38% · 11% in uptrend · ▼ fading since Oct 7 · OS oversold
+[phone] opened PYTH: legend="Uptrend since 2026-08-21 · green = uptrend, red = downtrend "
+[phone] info line: "Category Infrastructure · #5 of 9 · 38% rising · ▼ fading since Oct 8Market BTC $81,562.49 -1.84% today · BTC is not moving up (3 of 5 checks) · 40% of coins rising · ▼ fading since Oct 6"
+[phone] backtest: "Backtest, 2.4 years (2024-06-06 to 2026-10-14): your rules -28% · holding PYTH -82% · holding BTC +15%Rules vs holding PYTH: +54 pts · rules vs BTC: -43 pts · $1,000 became $718 on the rules, $183 hol"
+[phone] daily 5Y: legend="Uptrend since 2026-08-21 · green = uptrend, red = downtrend "
+[phone] 240: legend="Uptrend since 2026-10-14 · green = uptrend, red = downtrend "
+[phone] W: legend="No trend since 2023-11-20 · green = uptrend, red = downtrend"
+[phone] M: legend="No trend since 2023-11-01 · green = uptrend, red = downtrend"
+[phone] tradingview iframe=1
+[phone] errors: none
