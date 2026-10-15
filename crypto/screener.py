@@ -1929,6 +1929,29 @@ def spy_checks(spy, w, mkt_hot=""):
     return out
 
 
+def popup_info(df, sws, spy=None, mkt_hot=""):
+    """The coin pop-up's info line: each coin's category, that category's rating (its rank by Rising, Rising tonight and
+    its state) and the market's rating (Bitcoin against your rules, as on Today, and the whole market's Rising). Returns
+    the JSON the page uses: m = the market's line, s = each category's line, t = each coin's category."""
+    w = sws.get(MARKET)
+    if not w:
+        return "null"
+    def state(x):
+        return ('<span class="obt">overbought</span> over the ' + str(CFG["OB_BREADTH"]) + ' line' if x["z"] == 2 else
+                f'<span class="{"up" if x["on"] else "dn"}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
+    checks = spy_checks(spy, w, mkt_hot)
+    n_ok = sum(ok for _, ok, _ in checks)
+    mkt = (f'<span class="lb">Market</span> <b class="{"up" if n_ok == len(checks) else "dn"}">{BENCH} '
+           f'{"is moving up" if n_ok == len(checks) else "is not moving up"}</b> ({n_ok} of {len(checks)} checks) · '
+           f'{w["rise"]:.0f}% of coins rising · {state(w)}')
+    secs = sorted((n for n in sws if n != MARKET), key=lambda n: -sws[n]["rise"])
+    sec = {n: (f'<span class="lb">Category</span> <b>{html_esc(SHORT_SECTOR.get(n, n))}</b> · #{i + 1} of {len(secs)} · '
+               f'<b>{sws[n]["rise"]:.0f}%</b> rising · {state(sws[n])}') for i, n in enumerate(secs)}
+    tks = {r.ticker: r.sector for r in df[["ticker", "sector"]].itertuples() if r.sector in sec}
+    tks.update({e: n for n, e in SECTOR_ETF.items() if n in sec})
+    return json.dumps(dict(m=mkt, s=sec, t=tks), separators=(",", ":")).replace("</", "<\\/")
+
+
 def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     w = sws.get(MARKET)
     checks = spy_checks(spy, w, mkt_hot)
@@ -2225,6 +2248,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof} (daily bars close at midnight UTC) · "
             + f"""{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out""")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
+    pinfo = popup_info(df, sws, spy, mkt_hot)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Categories"), ("stocks", "Coins")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
@@ -2336,6 +2360,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm{{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center}}#cm[hidden]{{display:none}}
 #cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
 #cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
+#cmi{{padding:6px 12px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}}#cmi[hidden]{{display:none}}#cmi .lb{{display:inline-block;min-width:68px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}}
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
 #cmbt{{padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;max-height:45%;overflow:auto}}#cmbt .btl b{{white-space:nowrap}}#cmbt details summary{{cursor:pointer;color:var(--acc)}}
 #cmbt .btt{{overflow:auto;max-height:180px;margin-top:4px}}#cmbt table{{border-collapse:collapse;font-size:12px}}#cmbt th,#cmbt td{{padding:2px 8px 2px 0;text-align:left;white-space:nowrap}}
@@ -2372,7 +2397,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
@@ -2417,6 +2442,7 @@ showTab(location.hash.slice(1)||'today');
 </script>
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
+const PINFO={pinfo};      // the pop-up's info line: m = the market, s = each category, t = each coin's category
 const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};
 // coin prices run from $100,000 to $0.00001: decimals by size, for labels and the chart's price axis
 const PREC=v=>{{const a=Math.abs(v);return a>=1||!a?2:Math.min(10,Math.max(2,3-Math.floor(Math.log10(a))))}};
@@ -2579,7 +2605,9 @@ function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 const ix=/-IDX$/.test(t);if(ix){{cmSrc='trend';setOn('.bar.src','trend','src')}}      // a category index: our own chart only
 document.querySelector('.bar.src').hidden=ix;document.getElementById('cml').hidden=ix;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
-cm.hidden=false;document.body.style.overflow='hidden';draw();btDraw(t)}}
+cm.hidden=false;document.body.style.overflow='hidden';cmInfo(t);draw();btDraw(t)}}
+function cmInfo(t){{const el=document.getElementById('cmi');if(!PINFO){{el.hidden=true;return}}const sec=PINFO.t[t];
+el.innerHTML=(sec?'<div>'+PINFO.s[sec]+'</div>':'')+'<div>'+PINFO.m+'</div>';el.hidden=false}}
 function loadData(sym){{return dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))}}
 // ---- 10-year backtest strip: your rules on this stock vs holding it vs holding BTC, and every trade
 function btDraw(sym){{const el=document.getElementById('cmbt');el.hidden=true;el.innerHTML='';
