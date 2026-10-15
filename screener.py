@@ -338,13 +338,16 @@ def order_blocks(b, n_show, times):
 BT = dict(YEARS=10, STOP=0.08)   # each stock's last 10 years on the user's rules, against holding it and holding SPY
 
 
-def backtest(d, spy, years=None):
+def backtest(d, spy, years=None, br=None, group=None):
     """The user's rules on one stock's daily bars, against buy-and-hold of the stock and of SPY over the same days.
     Buy at the next open after a close with one of the page's setups (Momentum or Pullback, as analyze() finds them)
-    that isn't overbought (RSI over 70 or CCI over 100). Sell at the next open after a close with EMA10 under EMA20
+    that is on the strongest sector, strongest stock list that night, as Your system buys: the stock in your uptrend, its
+    sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 75 line, the market not over 75,
+    and the stock not overbought (RSI over 70 or CCI over 100). Sell at the next open after a close with EMA10 under EMA20
     and the price under EMA50 (the user's 4-hour exit, on daily bars: Yahoo keeps only ~2 years of intraday bars), or
     on an 8% drop from the entry (the paper accounts' share stop). Cash earns nothing while out; no costs.
-    Breadth (the market's or sector's over 75) isn't checked: it needs every stock's history that far back."""
+    br: {group: daily Rising / avg} (bt_breadth); days without breadth skip those checks, and a ticker with no group
+    (the funds) checks the market only."""
     years = years or BT["YEARS"]
     o, h, l, c = (d[k].to_numpy(float) for k in ("Open", "High", "Low", "Close"))
     if len(c) < 260:
@@ -363,7 +366,18 @@ def backtest(d, spy, years=None):
     x50150 = e50 > m150
     depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
     pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
-    buy = ((mom | pull) & (r <= CFG["OB_RSI"]) & ~(cc > CFG["OB_CCI"])).to_numpy()
+    buy = (mom | pull) & core & (r <= CFG["OB_RSI"]) & ~(cc > CFG["OB_CCI"])
+    lim, checked = CFG["OB_BREADTH"], 0
+    for g, own in (("S&P 500", False), (group, True)):
+        b = (br or {}).get(g) if g else None
+        if b is None:
+            continue
+        b = b.reindex(d.index)
+        known = b.rise.notna()
+        on = (b.rise.round(1) > b.avg.round(1)) if own else True      # the sector in an upswing, as on the list
+        buy &= ~known | (on & ~(b.rise > lim))
+        checked = max(checked, int(known.sum()))
+    buy = buy.to_numpy()
     sell = ((e10 < e20) & (C < e50)).to_numpy()
     ok = hi252.notna().to_numpy() & m150.notna().to_numpy()
     first = d.index[-1] - pd.DateOffset(years=years)
@@ -400,10 +414,30 @@ def backtest(d, spy, years=None):
         spy=round((float(sp.iloc[-1]) / float(sp.iloc[0]) - 1) * 100, 1) if sp is not None and len(sp) > 1 else None,
         n=len(trades), win=round(wins / len(trades) * 100) if trades else None,
         inmkt=round(days_in / max(1, last + 1 - s) * 100), holding=pos is not None,
+        breadth=round(min(1.0, checked / max(1, last + 1 - s)) * 100),       # % of the days with breadth checked
         trades=[[ds(t[0]), ds(t[1]), round(t[2], 2), round(t[3], 2), t[4]] for t in trades])
 
 
-def write_stock_charts(tickers, out, demo=False, known=None):
+def bt_breadth(bh):
+    """Breadth for the backtests, {group: daily rise / avg}: the 10 years research/plan_backtest.py saves on Saturdays
+    (history/breadth_10y.json), with tonight's breadth history (bh, about 2 years) on top for the latest days."""
+    out = {}
+    f = Path(__file__).resolve().parent / "history" / "breadth_10y.json"
+    try:
+        j = json.loads(f.read_text(encoding="utf-8"))
+        idx = pd.DatetimeIndex(j["dates"])
+        out = {g: pd.DataFrame(dict(rise=v["rise"], avg=v["avg"]), index=idx, dtype=float) for g, v in j["groups"].items()}
+    except FileNotFoundError:
+        pass
+    except Exception as e:                  # extras; never lose the backtests over it
+        print("  10-year breadth unreadable:", e)
+    for g, b in (bh or {}).items():
+        new = b[["rise", "avg"]]
+        out[g] = new if g not in out else pd.concat([out[g][out[g].index < new.index[0]], new])
+    return out
+
+
+def write_stock_charts(tickers, out, demo=False, known=None, br=None, groups=None):
     """One JSON per ticker (4H / D / W / M), loaded by the chart pop-up on click."""
     if demo:
         fr = demo_frames(n=len(tickers), days=2600)
@@ -438,7 +472,7 @@ def write_stock_charts(tickers, out, demo=False, known=None):
             continue
         rec = {"D": trend_series(d, STOCK_BARS["D"], blocks=True), "W": trend_series(to_period(d, "W"), STOCK_BARS["W"])}
         try:
-            bt = backtest(d, spy)
+            bt = backtest(d, spy, br=br, group=(groups or {}).get(t))
         except Exception as e:              # extras; never lose the chart over it
             print("  backtest failed", t, e)
             bt = None
@@ -1515,8 +1549,8 @@ def bt_research(df):
         med = lambda c: round(float(b[c].median()))
         out.append(dict(name="10-year rules vs hold", scope=f"Each of tonight's {n} liquid stocks", unit="%", sign=True,
                         verdict=f"Holding won on {n - won} of {n}",
-                        text=f"Each stock's last 10 years traded on your rules (buy a setup that isn't overbought, sell on your exit or "
-                             f"an 8% stop) against just holding it. Your rules beat holding on {won} of {n}: in long rising markets they "
+                        text=f"Each stock's last 10 years traded on your rules (buy a setup on the strongest sector, "
+                             f"strongest stock list that isn't overbought, sell on your exit or an 8% stop) against just holding it. Your rules beat holding on {won} of {n}: in long rising markets they "
                              "sit in cash much of the time. Medians below; click any ticker in the Stocks tab for its own numbers.",
                         bars=[["Your rules (median)", med("bt_rules"), blue], ["Holding the stock", med("bt_hold"), grey]]
                              + ([["Holding SPY", med("bt_spy"), grey]] if "bt_spy" in b else [])))
@@ -2492,7 +2526,7 @@ Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]
 Your overbought rule: a stock with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
-10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup that isn't overbought (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data; breadth isn't checked that far back. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
+10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest sector, strongest stock list, as Your system buys: in your uptrend, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it, and not overbought (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
@@ -2947,7 +2981,8 @@ def main():
     print(f"Building trend charts and 10-year backtests for {len(chart_tks)} tickers...")
     bts = {}
     try:
-        n, bts = write_stock_charts(chart_tks, out, a.demo, frames)
+        groups = {**{f: g for g, f in SECTOR_ETF.items()}, **{t: g for t, g in sectors.items() if isinstance(g, str) and g}}
+        n, bts = write_stock_charts(chart_tks, out, a.demo, frames, bt_breadth(bh), groups)
         print(f"  wrote {n} chart files, {len(bts)} backtests")
         if bts:
             e = [b["rules"] - b["hold"] for b in bts.values()]

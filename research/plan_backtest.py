@@ -24,9 +24,11 @@ they were in it; ones that no longer trade on Yahoo are missing). Coins: today's
 has, so coins that died are missing and the results are flattered.
 
 Runs on GitHub Actions ("Plan backtests" in the Actions tab), where Yahoo and Wikipedia work:
-    python research/plan_backtest.py --market stocks --out history/plan_backtests.json
-    python research/plan_backtest.py --market crypto --out crypto/history/plan_backtests.json
+    python research/plan_backtest.py --market stocks --out history/plan_backtests.json --breadth history/breadth_10y.json
+    python research/plan_backtest.py --market crypto --out crypto/history/plan_backtests.json --breadth crypto/history/breadth_10y.json
     python research/plan_backtest.py --demo --out /tmp/pb.json        # random walks, to test the code
+--breadth also saves the 10 years of market and sector breadth, so the nightly per-stock backtest (screener.py
+backtest()) can check the same strongest-sector list and overbought breadth that Your system buys on.
 """
 import argparse, datetime as dt, importlib.util, json, sys, time
 from pathlib import Path
@@ -411,6 +413,14 @@ def summary(M, A, desc):
         last_trades=[dict(x, ret=round(x["ret"] * 100, 1)) for x in tr[-12:]])
 
 
+def breadth_json(M, F):
+    """The 10 years of breadth these backtests used: each day's Rising and its 10-day EMA, the market and each sector."""
+    mkt = "Crypto market" if M.kind == "crypto" else "S&P 500"
+    r1 = lambda a: [None if x != x else round(float(x), 1) for x in a[M.t0:]]
+    return dict(asof=M.idx[-1].strftime("%Y-%m-%d"), dates=[d.strftime("%Y-%m-%d") for d in M.idx[M.t0:]],
+                groups={(mkt if g == "_mkt" else g): dict(rise=r1(F["rise"][g]), avg=r1(F["ravg"][g])) for g in F["rise"]})
+
+
 def run_all(M):
     t0 = time.time()
     F = feats(M)
@@ -436,6 +446,7 @@ def run_all(M):
         s = out[k]
         print(f"  {k} {s['name']}: ${s['final']:,.0f} ({s['cagr']:+.1f}%/yr, worst drop {s['maxdd']:.0f}%, {s['trades']} trades, "
               f"in the market {s['invested']}%) vs {bn} ${s['bench_final']:,.0f} ({s['bench_cagr']:+.1f}%/yr) ({time.time() - t0:.0f}s)", flush=True)
+    M.breadth = breadth_json(M, F)
     return dict(market=M.kind, bench=bn, asof=M.idx[-1].strftime("%Y-%m-%d"), built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 universe=(f"{int(M.member[M.t0:].sum(1).mean())} S&P 500 stocks a day, as the index was each day" if unit == "stock"
                           else f"{len(M.names)} of today's largest coins, each from its first day on Yahoo"),
@@ -513,6 +524,7 @@ def main():
     ap.add_argument("--market", default="stocks", choices=("stocks", "crypto"))
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--breadth", help="also save the 10 years of breadth here, for the nightly per-stock backtest")
     a = ap.parse_args()
     t0 = time.time()
     print(f"Prices ({a.market})...", flush=True)
@@ -522,6 +534,8 @@ def main():
     res["demo"] = a.demo
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(res, separators=(",", ":")), encoding="utf-8")
+    if a.breadth:
+        Path(a.breadth).write_text(json.dumps(M.breadth, separators=(",", ":")), encoding="utf-8")
     print(f"Done in {time.time() - t0:.0f}s -> {a.out}")
 
 

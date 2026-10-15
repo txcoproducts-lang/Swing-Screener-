@@ -2,6 +2,7 @@ name: Plan backtests
 
 # Ten-year backtests of the four paper trading plans, stocks and coins, for the page's Backtests tab.
 # Saves history/plan_backtests.json and crypto/history/plan_backtests.json on main; the next nightly run shows them.
+# Also saves 10 years of breadth (history/breadth_10y.json) for the nightly per-stock backtests' sector and market checks.
 on:
   workflow_dispatch: {}      # run from the Actions tab; takes about 15 minutes
   schedule:
@@ -25,16 +26,16 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Backtest the plans on stocks
-        run: python research/plan_backtest.py --market stocks --out history/plan_backtests.json
+        run: python research/plan_backtest.py --market stocks --out history/plan_backtests.json --breadth history/breadth_10y.json
 
       - name: Backtest the plans on coins
-        run: python research/plan_backtest.py --market crypto --out crypto/history/plan_backtests.json
+        run: python research/plan_backtest.py --market crypto --out crypto/history/plan_backtests.json --breadth crypto/history/breadth_10y.json
 
       - name: Save the results on main
         run: |
           git config user.name "screener-bot"
           git config user.email "screener-bot@users.noreply.github.com"
-          git add history/plan_backtests.json crypto/history/plan_backtests.json
+          git add history/plan_backtests.json crypto/history/plan_backtests.json history/breadth_10y.json crypto/history/breadth_10y.json
           git commit -qm "Plan backtests $(date -u +%F)" || exit 0
           for i in 1 2 3 4; do
             git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
