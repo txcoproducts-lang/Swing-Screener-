@@ -42,8 +42,8 @@
    "cci": -97.0
   },
   "breadth": {
-   "pct": 53.5,
-   "ema": 74.0
+   "pct": 54.0,
+   "ema": 74.3
   }
  },
  "sectors": {
@@ -62,14 +62,14 @@
   },
   "DeFi": {
    "ok": false,
-   "n": 17,
-   "bull": 52.9,
-   "bull_ema": 78.6,
-   "rsi": 48.4,
-   "rsi_prev": 46.9,
+   "n": 18,
+   "bull": 55.6,
+   "bull_ema": 79.8,
+   "rsi": 48.5,
+   "rsi_prev": 47.0,
    "miss": [
-    "breadth 53% not above its 10-day average 79%",
-    "RSI 48 not above BTC's 52"
+    "breadth 56% not above its 10-day average 80%",
+    "RSI 49 not above BTC's 52"
    ]
   },
   "Exchange tokens": {
@@ -188,11 +188,6 @@
      "text": "BTC order blocks 30+ days old: none within 2%"
     },
     {
-     "k": "cci",
-     "ok": true,
-     "text": "Your overbought rule: BTC CCI -97 is not over 100"
-    },
-    {
      "k": "hot",
      "ok": true,
      "text": "Your overbought rule: 54% of coins rising, not over the 75 line"
@@ -240,11 +235,6 @@
      "text": "ETH order blocks 30+ days old: none within 2%"
     },
     {
-     "k": "cci",
-     "ok": true,
-     "text": "Your overbought rule: ETH CCI -120 is not over 100"
-    },
-    {
      "k": "hot",
      "ok": true,
      "text": "Your overbought rule: 54% of coins rising, not over the 75 line"
@@ -280,6 +270,22 @@
  "prev_asof": "2026-10-12",
  "screen": [
   [
+   "STRK",
+   "Layer 2",
+   0.085591,
+   62.1,
+   52,
+   "0111-011-"
+  ],
+  [
+   "STX",
+   "Layer 2",
+   0.43443,
+   74.0,
+   53,
+   "0111-011-"
+  ],
+  [
    "INJ",
    "Layer 1",
    8.10835,
@@ -288,11 +294,35 @@
    "0111-011-"
   ],
   [
+   "BEAM",
+   "Gaming",
+   0.002964,
+   79.7,
+   52,
+   "0111-011-"
+  ],
+  [
+   "TIA",
+   "Layer 1",
+   0.572889,
+   62.1,
+   25,
+   "0111-011-"
+  ],
+  [
    "FIL",
    "AI & data",
    1.15892,
    58.2,
    42,
+   "0111-011-"
+  ],
+  [
+   "OP",
+   "Layer 2",
+   0.158805,
+   64.0,
+   26,
    "0111-011-"
   ],
   [
@@ -310,22 +340,6 @@
    55.4,
    25,
    "0111-011-"
-  ],
-  [
-   "STRK",
-   "Layer 2",
-   0.085591,
-   62.1,
-   52,
-   "0111-001-"
-  ],
-  [
-   "STX",
-   "Layer 2",
-   0.43443,
-   74.0,
-   53,
-   "0111-001-"
   ],
   [
    "ENA",
@@ -368,19 +382,19 @@
    "1001-011-"
   ],
   [
-   "BEAM",
-   "Gaming",
-   0.002964,
-   79.7,
-   52,
-   "0111-001-"
-  ],
-  [
    "RUNE",
    "DeFi",
    0.657959,
    47.6,
    53,
+   "0101-011-"
+  ],
+  [
+   "AAVE",
+   "DeFi",
+   160.239,
+   51.0,
+   54,
    "0101-011-"
   ],
   [
@@ -390,14 +404,6 @@
    51.0,
    106,
    "0101-011-"
-  ],
-  [
-   "TIA",
-   "Layer 1",
-   0.572889,
-   62.1,
-   25,
-   "0111-001-"
   ],
   [
    "WLD",
@@ -416,14 +422,6 @@
    "0101-011-"
   ],
   [
-   "OP",
-   "Layer 2",
-   0.158805,
-   64.0,
-   26,
-   "0111-001-"
-  ],
-  [
    "AVAX",
    "Layer 1",
    10.2225,
@@ -438,6 +436,14 @@
    51.9,
    55,
    "0101-011-"
+  ],
+  [
+   "RENDER",
+   "AI & data",
+   2.00555,
+   57.1,
+   25,
+   "0110-011-"
   ],
   [
    "GRT",
@@ -670,14 +676,6 @@
    40.9,
    null,
    "0001-011-"
-  ],
-  [
-   "RENDER",
-   "AI & data",
-   2.00555,
-   57.1,
-   25,
-   "0110-001-"
   ],
   [
    "COMP",
