@@ -1628,9 +1628,10 @@ def bt_tab(df):
     plans = json.loads(BT_PLANS.read_text(encoding="utf-8")) if BT_PLANS.exists() else None
     data = dict(bench="SPY", unit="stock", paperSrc=PAPER_SRC, plans=plans, research=bt_research(df),
                 note=("Plan backtests: 10 years of daily bars on the S&P 500 as it was each day (" + (plans or {}).get("universe", "")
-                      + "), $1,000 each, every fill 0.05% worse than the price. A daily test can't copy everything the paper accounts do: "
-                      "Your system buys shares (there's no free history of option prices), your 4-hour exit is checked on daily "
-                      "closes, the after-2 PM plan buys at the next day's close, and OVTLYR's order block and earnings checks are "
+                      + "), $5,000 each as in the paper accounts, shares filled 0.05% worse than the price. A daily test can't copy "
+                      "everything the paper accounts do: there's no free history of option prices, so the calls Your system, Claude's "
+                      "picks and Plan M buy are priced with a model (Black-Scholes on the stock's own 30-day volatility, 30 days out, "
+                      "3% worse each way plus $0.65 a contract), your 4-hour exit is checked on daily closes, the after-2 PM plan buys at the next day's close, and OVTLYR's order block and earnings checks are "
                       "left out. Stocks that left the index and stopped trading are missing. Rebuilt every Saturday"
                       + (f" (last: {plans['asof']})" if plans else "") + ". Past results don't promise future ones. Not financial advice."))
     html = ('<h2>Backtests</h2><div class="hint">Every test we\'ve run: your four plans side by side, each plan\'s own 10-year '

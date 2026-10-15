@@ -152,7 +152,7 @@ function lineChart(wrap, dates, lines, o) {
         dots[k].setAttribute('visibility', v == null ? 'hidden' : 'visible');
         if (v == null) return;
         dots[k].setAttribute('cx', x); dots[k].setAttribute('cy', Y(v));
-        tip.append(el('div', {}, el('i', {style: 'background:' + l.color}), l.name + ' ' + (o.money ? money(v) + ' (' + pct((v / 1000 - 1) * 100) + ')' : pct(v, 0))));
+        tip.append(el('div', {}, el('i', {style: 'background:' + l.color}), l.name + ' ' + (o.money ? money(v) + (o.base ? ' (' + pct((v / o.base - 1) * 100) + ')' : '') : pct(v, 0))));
       });
       tip.hidden = false;
       const tw = tip.offsetWidth;
@@ -176,7 +176,9 @@ new MutationObserver(() => { if (!box.closest('section').hidden) charts.forEach(
 
 // ---------------------------------------------------------------- data
 const plans = (B.plans && B.plans.plans) || {};
-function trialSeries(a) {        // the paper account's closes (plus now), and the benchmark from the same $1,000
+const BT_CASH = (B.plans && B.plans.cash) || 1000;   // each plan backtest's start: $5,000 stocks, $1,000 coins
+const cash$ = v => '$' + Math.round(v).toLocaleString('en-US');
+function trialSeries(a) {        // the paper account's closes (plus now), and the benchmark from the same start
   const pts = a.equity.map(e => ({d: e.d, v: e.v, s: e.spy}));
   if (a.mark && pts.length && a.mark.t.slice(0, 10) > pts[pts.length - 1].d) pts.push({d: a.mark.t.slice(0, 10), v: a.mark.v, s: a.mark.spy});
   const s0 = pts.length ? pts[0].s : 1;
@@ -224,7 +226,7 @@ function render(accts) {
     kp(`Plans that beat ${BENCH}`, tested.length ? `${beat.length} of ${tested.length}` : 'Not run yet',
        tested.length ? `over ${plans[tested[0]].years} years` + (beat.length ? ': ' + beat.map(id => NAME[id]).join(', ') : '') : 'The 10-year backtests are on their way'),
     kp('Paper trial', anyA ? `Day ${dayN} of ${days}` : '…', anyA ? `${mdy(anyA.start)} to ${mdy(anyA.end)}` : 'Loading the accounts'),
-    kp('Leading the trial', lead ? NAME[lead] : '…', lead ? `${pct((trialVal(accts[lead]) / 1000 - 1) * 100)} vs ${BENCH} ${pct(benchRet(accts[lead]))}` : ''));
+    kp('Leading the trial', lead ? NAME[lead] : '…', lead ? `${pct((trialVal(accts[lead]) / accts[lead].start_cash - 1) * 100)} vs ${BENCH} ${pct(benchRet(accts[lead]))}` : ''));
 
   // all four plans on one graph, paper trial or backtest
   const head = el('div', {class: 'bx-num'});
@@ -237,15 +239,15 @@ function render(accts) {
     const {dates, lines} = mode === 'trial' ? trialLines(accts) : btLines(IDS);
     const ends = lines.filter(l => l.id).map(l => [l, [...l.vals].reverse().find(v => v != null)]).sort((a, b) => b[1] - a[1]);
     head.textContent = ends.length ? `${ends[0][0].name} leads at ${money(ends[0][1])}` : mode === 'trial' ? 'Loading the paper accounts…' : 'The 10-year backtests are on their way';
-    sub.textContent = mode === 'trial' ? `The paper accounts, $1,000 each, against ${BENCH} from the same start` :
-      tested.length ? `$1,000 in each plan from ${mdy(plans[tested[0]].start)} to ${mdy(plans[tested[0]].end)}, against holding ${BENCH}` : '';
+    sub.textContent = mode === 'trial' ? `The paper accounts, ${anyA ? cash$(anyA.start_cash) : ''} each, against ${BENCH} from the same start` :
+      tested.length ? `${cash$(BT_CASH)} in each plan from ${mdy(plans[tested[0]].start)} to ${mdy(plans[tested[0]].end)}, against holding ${BENCH}` : '';
     lg.replaceChildren(legend(lines));
-    lineChart(wrap, dates, lines, {h: 260, label: mode === 'trial' ? md : yr, empty: mode === 'trial' ? 'The chart starts after the first trading day.' : 'Not run yet.'});
+    lineChart(wrap, dates, lines, {h: 260, base: mode === 'trial' ? (anyA ? anyA.start_cash : 1000) : BT_CASH, label: mode === 'trial' ? md : yr, empty: mode === 'trial' ? 'The chart starts after the first trading day.' : 'Not run yet.'});
     cards.forEach(f => f());
   };
   seg.append(el('button', {'data-m': 'trial', text: 'Paper trial', onclick: () => show('trial')}),
              el('button', {'data-m': 'bt', text: '10-year backtest', onclick: () => show('bt')}));
-  const board = el('div', {class: 'bx-card'}, el('div', {class: 'bx-tb'}, el('div', {}, el('div', {class: 'bx-tag', text: 'All four plans, $1,000 each'}), head, sub), seg), lg, wrap);
+  const board = el('div', {class: 'bx-card'}, el('div', {class: 'bx-tb'}, el('div', {}, el('div', {class: 'bx-tag', text: 'All four plans'}), head, sub), seg), lg, wrap);
 
   // a card per plan: its backtest and its paper trial, best trial first
   const cards = [];
@@ -259,10 +261,10 @@ function render(accts) {
     const trHead = a ? `${money(tv)} ${pct((tv / a.start_cash - 1) * 100)} vs ${BENCH} ${pct(benchRet(a))}` : 'Loading…';
     cards.push(() => {
       if (p) lineChart(btw, p.curve.map(c => c[0]), [{name: NAME[id], color: COL[id], vals: p.curve.map(c => c[1])},
-        {name: BENCH, color: COL.bench, dash: true, vals: p.curve.map(c => c[2])}], {h: 180, label: yr});
+        {name: BENCH, color: COL.bench, dash: true, vals: p.curve.map(c => c[2])}], {h: 180, base: BT_CASH, label: yr});
       else btw.replaceChildren(el('div', {class: 'bx-none', text: 'The 10-year backtest is on its way.'}));
       if (a) { const t = trialSeries(a); lineChart(trw, t.map(x => x.d), [{name: NAME[id], color: COL[id], vals: t.map(x => x.v)},
-        {name: BENCH, color: COL.bench, dash: true, vals: t.map(x => x.b)}], {h: 180}); }
+        {name: BENCH, color: COL.bench, dash: true, vals: t.map(x => x.b)}], {h: 180, base: a.start_cash}); }
     });
     const stat = (l, v) => el('div', {}, l, el('b', {text: v}));
     const more = p ? el('details', {class: 'bx-more'}, el('summary', {text: 'Full backtest'}),
@@ -270,8 +272,9 @@ function render(accts) {
       el('table', {}, el('thead', {}, el('tr', {}, ['Year', NAME[id], BENCH].map(h => el('th', {text: h})))),
         el('tbody', {}, Object.entries(p.by_year).map(([y, v]) => el('tr', {}, el('td', {text: y === p.start.slice(0, 4) ? y + ' (from ' + md(p.start) + ')' : y === p.end.slice(0, 4) ? y + ' (to ' + md(p.end) + ')' : y}),
           el('td', {class: v[0] > v[1] ? 'up' : 'dn', text: pct(v[0])}), el('td', {text: pct(v[1])}))))),
-      el('p', {text: `${p.trades} trades, ${p.win}% winners, average trade ${pct(p.avg_trade)} (median ${pct(p.median_trade)}). ` +
-        `Green years beat ${BENCH}. Every fill 0.05% worse than the price; no other costs. Past results don't promise future ones.`})) : null;
+      el('p', {text: `${p.trades} trades` + (p.calls ? ` (${p.calls} of them calls)` : '') + `, ${p.win}% winners, average trade ${pct(p.avg_trade)} (median ${pct(p.median_trade)}). ` +
+        `Green years beat ${BENCH}. Shares fill 0.05% worse than the price` + (p.calls ? '; calls are priced with a model, 3% worse each way plus $0.65 a contract' : '') +
+        `. Past results don't promise future ones.`})) : null;
     return el('div', {class: 'bx-card'},
       el('div', {class: 'bx-ph'}, el('span', {class: 'bx-dot', style: 'background:' + COL[id]}), el('b', {text: NAME[id]}), pill),
       el('div', {class: 'bx-rules', text: (p ? p.rules : a && a.rules ? a.rules[0] : '').split('. ')[0].replace(/\.$/, '') + '.'}),
