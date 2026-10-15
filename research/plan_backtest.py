@@ -20,7 +20,8 @@ Your overbought rule applies to every plan: no buy while the market's or the sto
 share of S&P 500 stocks with the 10 EMA over the 20) is over 75. RSI and CCI no longer count (the user, 2026-10-15).
 
 What a daily backtest can't copy from the paper accounts, and what it does instead:
-  - Calls: there's no free history of option prices, so each call is priced with Black-Scholes on the stock's own
+  - Calls: there's no free history of option prices, so the plan lines use shares (the paper accounts' fallback). Each
+    plan is also run with calls (saved as with_calls, shown on its card as a rough guide): each call is priced with Black-Scholes on the stock's own
     30-day volatility x 1.1 (at least 15%), 30 days out, strikes on the usual grid, bought 3% over and sold 3% under the
     model price, plus $0.65 a contract each way. Real quotes differ; read the call plans' results as a rough guide.
     Coins have no options, so the crypto plans buy coins.
@@ -561,19 +562,17 @@ def run_all(M):
     unit, bn = ("coin", "BTC") if M.kind == "crypto" else ("stock", "SPY")
     desc = {
         "A": (NAMES["A"], f"Last night's setups on the strongest sector, strongest {unit} list, highest score first; 2 at a time, "
-                          f"each at most 30% of the account" + (": a call by your rules when one fits (nearest 0.65 delta, else down to 0.15), "
-                          "else shares; sells on your exit (10 EMA under the 20 and price under the 50), a call also at -50% or 5 days "
-                          "before expiry, shares on an 8% stop. Calls priced with a model (no free history of option prices). "
-                          if unit == "stock" else "; sells on your exit (10 EMA under the 20 and price under the 50) or an 8% stop. ")
-                          + "Buys at the next open."),
+                          f"each at most 30% of the account; sells on your exit (10 EMA under the 20 and price under the 50) or an 8% stop. "
+                          + "Buys at the next open." + (" Tested with shares: there's no history of option prices to test the "
+                          "paper account's calls on; the card also shows the calls on a pricing model." if unit == "stock" else "")),
         "C": (NAMES["C"], "The same rules as Your system, but it buys at the next day's close, standing in for after 2 PM."),
         "B": (NAMES["B"], f"AI picks list: top relative strength, hold 10, keep while in the top 20, max 3 per "
                           f"{'category' if unit == 'coin' else 'sector'}, a tenth of the account each"
-                          + (" (a call by your rules when one fits, else shares)" if unit == "stock" else "") + "; also sold on your exit."),
+                          + "; also sold on your exit." + (" Tested with shares (the paper account may buy calls)." if unit == "stock" else "")),
         "D": (NAMES["D"], ("Plan M on the page's stand-ins for OVTLYR's signals, else Plan ETF (" +
                            ("BTC / ETH on their own signals), spare cash as cash." if unit == "coin" else
                             "TQQQ / SPXL on QQQ's / SPY's signals), spare cash in T-bills (BIL for SGOV).") +
-                           (" Plan M takes a call by your rules when one fits the plan's size and 30% of the account." if unit == "stock" else "")
+                           (" Plan M tested with shares (the paper account may buy calls)." if unit == "stock" else "")
                            + " Order block and earnings checks left out.")),
     }
     out = {}
@@ -584,10 +583,15 @@ def run_all(M):
         s = out[k]
         print(f"  {k} {s['name']}: ${s['final']:,.0f} ({s['cagr']:+.1f}%/yr, worst drop {s['maxdd']:.0f}%, {s['trades']} trades, "
               f"in the market {s['invested']}%) vs {bn} ${s['bench_final']:,.0f} ({s['bench_cagr']:+.1f}%/yr) ({time.time() - t0:.0f}s)", flush=True)
-        if s["calls"]:                              # the same plan with shares only, to show what the calls did
+        if s["calls"]:
+            # Calls can't be backtested on real prices (no free option history), and modeled calls at 30% a trade with a
+            # -50% stop swing from 20x to nearly zero. So the plan's line is the same rules with shares, as before, and the
+            # modeled-calls result rides along for the card.
             sh = summary(M, fn(False), desc[k])
-            s["shares"] = {x: sh[x] for x in ("final", "cagr", "maxdd", "trades", "win", "invested")}
-            print(f"    with shares only: ${sh['final']:,.0f} ({sh['cagr']:+.1f}%/yr, worst drop {sh['maxdd']:.0f}%)", flush=True)
+            sh["with_calls"] = {x: s[x] for x in ("final", "cagr", "maxdd", "trades", "calls", "win")}
+            sh["with_calls"]["peak"] = round(max(c[1] for c in s["curve"]), 2)
+            out[k] = sh
+            print(f"    shown with shares: ${sh['final']:,.0f} ({sh['cagr']:+.1f}%/yr, worst drop {sh['maxdd']:.0f}%)", flush=True)
     M.breadth = breadth_json(M, F)
     return dict(market=M.kind, bench=bn, cash=CASH, asof=M.idx[-1].strftime("%Y-%m-%d"), built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 universe=(f"{int(M.member[M.t0:].sum(1).mean())} S&P 500 stocks a day, as the index was each day" if unit == "stock"

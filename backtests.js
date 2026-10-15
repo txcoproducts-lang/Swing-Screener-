@@ -277,8 +277,9 @@ function render(accts) {
         el('tbody', {}, Object.entries(p.by_year).map(([y, v]) => el('tr', {}, el('td', {text: y === p.start.slice(0, 4) ? y + ' (from ' + md(p.start) + ')' : y === p.end.slice(0, 4) ? y + ' (to ' + md(p.end) + ')' : y}),
           el('td', {class: v[0] > v[1] ? 'up' : 'dn', text: pct(v[0])}), el('td', {text: pct(v[1])}))))),
       el('p', {text: `${p.trades} trades` + (p.calls ? ` (${p.calls} of them calls)` : '') + `, ${p.win}% winners, average trade ${pct(p.avg_trade)} (median ${pct(p.median_trade)}). ` +
-        `Green years beat ${BENCH}. Shares fill 0.05% worse than the price` + (p.calls ? '; calls are priced with a model, 3% worse each way plus $0.65 a contract' : '') +
-        `. Past results don't promise future ones.`})) : null;
+        `Green years beat ${BENCH}. Shares fill 0.05% worse than the price. ` +
+        (p.with_calls ? `With calls instead (your call rules, priced with a model since there's no option price history, 30% of the account a trade, sold at -50% or 5 days before expiry): ${money(p.with_calls.final)}, worst drop ${pct(p.with_calls.maxdd, 0)}, ${p.with_calls.calls} calls, ${p.with_calls.win}% winners. ` : '') +
+        `Past results don't promise future ones.`})) : null;
     return el('div', {class: 'bx-card'},
       el('div', {class: 'bx-ph'}, el('span', {class: 'bx-dot', style: 'background:' + COL[id]}), el('b', {text: NAME[id]}), pill),
       el('div', {class: 'bx-rules', text: (p ? p.rules : a && a.rules ? a.rules[0] : '').split('. ')[0].replace(/\.$/, '') + '.'}),
@@ -287,7 +288,7 @@ function render(accts) {
         el('div', {}, el('div', {class: 'bx-tag', text: a ? 'Paper trial since ' + md(a.start) : 'Paper trial'}), el('div', {class: 'bx-bh', text: trHead}), trw)),
       p ? el('div', {class: 'bx-stats'}, stat('Worst drop', pct(p.maxdd, 0)), stat(`${BENCH}'s worst`, pct(p.bench_maxdd, 0)),
         stat('Trades', p.trades.toLocaleString('en-US')), stat('In the market', p.invested + '% of the time'),
-        p.shares ? stat('Shares only, no calls', `${money(p.shares.final)} (${pct(p.shares.cagr)} a year)`) : null) : null,
+        p.with_calls ? stat('With calls (modeled)', `${money(p.with_calls.final)} (${pct(p.with_calls.cagr)} a year), peak ${money(p.with_calls.peak)}`) : null) : null,
       more);
   });
 
