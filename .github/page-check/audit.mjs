@@ -201,10 +201,10 @@ await p.click('.bar.pk button[data-pk="nu"]');
 
 // ---- 2. controls
 const vis = () => p.$$eval("#t tbody tr", r => r.filter(x => x.style.display !== "none").length);
-for (const f of ["setups", "Momentum", "Pullback", "Overbought", "all"]) {
+for (const f of ["setups", "Super", "Regular", "Momentum", "Pullback", "Overbought", "all"]) {
   if (!await p.$(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="${f}"]`)) { log(`filter ${f}: no button`); continue; }
   await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="${f}"]`);
-  const n = await vis(); const bad = await p.$$eval("#t tbody tr", (r, f) => r.filter(x => x.style.display !== "none" && !(f === "all" || (f === "setups" ? ["Momentum", "Pullback"].includes(x.dataset.setup) : x.dataset.setup === f))).length, f);
+  const n = await vis(); const bad = await p.$$eval("#t tbody tr", (r, f) => r.filter(x => x.style.display !== "none" && !(f === "all" || (f === "setups" ? ["Momentum", "Pullback"].includes(x.dataset.setup) : f === "Super" || f === "Regular" ? ["Momentum", "Pullback"].includes(x.dataset.setup) && x.dataset.tier === f : x.dataset.setup === f))).length, f);
   log(`filter ${f}: ${n} rows, ${bad} wrong`);
 }
 await p.click(`.bar:not(.tf):not(.iv):not(.pk) button[data-f="setups"]`);

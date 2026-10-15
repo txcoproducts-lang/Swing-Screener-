@@ -584,9 +584,10 @@ def analyze(t, d):
 
     trend = (20 * p_e50 + 20 * x1020 + 10 * x2050 + 10 * p150 + 10 * p200 + 5 * x50150 + 5 * crossed)
 
-    # ---- momentum breakout
+    # ---- momentum breakout. The user's tiers (2026-10-15): a setup with the price over the 150 line is a Super setup, one
+    # without it a Regular setup. Only Super setups are bought (the paper accounts and backtests need the full uptrend).
     setup, pts = None, 0
-    if core and 55 <= r.iloc[-1] <= 80 and ext <= 3.0:
+    if p_e50 and x1020 and 55 <= r.iloc[-1] <= 80 and ext <= 3.0:
         near_hi = px >= 0.97 * hi252
         brk = px > prior20hi
         if brk or near_hi:
@@ -594,7 +595,7 @@ def analyze(t, d):
             pts = 12 * brk + 6 * near_hi + (8 if relv >= 1.5 else 4 if relv >= 1.2 else 0) \
                 + (5 if r.iloc[-1] <= 75 else 0) + (5 if ext <= 2 else 0)
     # ---- oversold pullback inside an uptrend (10>20 may dip, so not required)
-    if setup is None and p_e50 and x2050 and (p150 or x50150):
+    if setup is None and p_e50 and x2050:
         dist20 = (px - e20.iloc[-1]) / e20.iloc[-1]
         dist50 = (px - e50.iloc[-1]) / e50.iloc[-1]
         recent_hi = c.iloc[-15:].max()
@@ -607,7 +608,7 @@ def analyze(t, d):
     score = trend * 0.7 + min(pts, 30) if setup else trend * 0.7
 
     return dict(
-        ticker=t, setup=setup, score=round(score, 1), close=px,
+        ticker=t, setup=setup, tier=("Super" if p150 else "Regular") if setup else "", score=round(score, 1), close=px,
         open=d["Open"].iloc[-1], chg1d=(px / c.iloc[-2] - 1) * 100,
         chg5d=(px / c.iloc[-6] - 1) * 100, chg1m=(px / c.iloc[-22] - 1) * 100, rsi=r.iloc[-1],
         cci=float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), atr_pct=atr_pct, relvol=relv,
@@ -2036,7 +2037,7 @@ def ss_html(df, sw, mkt_hot=""):
                      f'<td data-v="{int(w["on"] and w["z"] != 2)}">{swing_tag(w)}</td><td data-v="{len(top)}" class="why">{best}</td></tr>')
     rows = []
     for i, r in enumerate(ok.head(SS["N"]).itertuples()):
-        st = (f'<b class="{"up" if r.setup == "Momentum" else ""}">{r.setup}</b>' if r.has_setup else '<span class="mut">no setup</span>')
+        st = (f'<b class="{"up" if r.setup == "Momentum" else ""}">{r.tier} {r.setup}</b>' if r.has_setup else '<span class="mut">no setup</span>')
         rows.append("<tr>" + "".join(f'<td data-v="{v}">{c}</td>' for c, v in [
             (i + 1, i + 1), (f'{tk(r.ticker)}<div class="sec">{html_esc(r.sector)}</div>', r.ticker),
             (f"<b>{r.strength:.1f}</b>", r.strength), (f"{r.ss_mkt:.1f}", r.ss_mkt), (f"{r.ss_sec:.1f}", r.ss_sec),
@@ -2217,14 +2218,14 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     def strow(r):
         return (f'<div class="st"><span>{tk(r.ticker)}<div class="sub">{sh(r.sector)}</div></span>'
                 f'<span><span class="score"><b style="width:{r.ss_mkt:.1f}%;background:var(--sc1)"></b><b style="width:{r.ss_sec:.1f}%;background:var(--acc)"></b>'
-                f'<b style="width:{r.ss_stk:.1f}%;background:var(--up)"></b></span><span class="sub">{r.setup if r.has_setup else "no setup"} · RSI {r.rsi:.0f}</span></span>'
+                f'<b style="width:{r.ss_stk:.1f}%;background:var(--up)"></b></span><span class="sub">{r.tier + " " + r.setup if r.has_setup else "no setup"} · RSI {r.rsi:.0f}</span></span>'
                 f'<span class="chg"><span>${r.close:,.2f}</span><span class="{"up" if r.chg1d >= 0 else "dn"}">{r.chg1d:+.2f}%</span></span>'
                 f'<span class="sc">{r.strength:.0f}</span></div>')
     if len(ss):
         b = ss.iloc[0]
         s3 = (f'<div class="step"><div class="n">Step 3 · Strongest stock</div><div class="big">{tk(b.ticker)} '
               f'<span class="pill p-up">score {b.strength:.0f}</span></div><div class="sub">#1 in {sh(b.sector)} · '
-              f'{b.setup if b.has_setup else "no setup"} · ${b.close:,.2f}</div>'
+              f'{b.tier + " " + b.setup if b.has_setup else "no setup"} · ${b.close:,.2f}</div>'
               '<div class="mini">' + "".join(strow(r) for r in ss.iloc[1:5].itertuples()) + '</div></div>')
     else:
         s3 = ('<div class="step"><div class="n">Step 3 · Strongest stock</div><div class="big">None tonight</div>'
@@ -2440,20 +2441,22 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         cross = f'new ({int(dsc)}d ago)' if r.cross else ("above" if dsc == dsc and dsc is not None else "")
         pct = lambda v: f'<span class="{"up" if v > 0 else "dn"}">{v:+.1f}</span>'
         why_ob = r.get("ob") or (mkt_hot if r.get("blocked") else "")
-        st = (f'<span class="obl">Overbought</span><div class="sec">{html_esc(why_ob)}</div>' if r.setup == "Overbought" else r.setup)
+        st = (f'<span class="obl">Overbought</span><div class="sec">{html_esc(why_ob)}</div>' if r.setup == "Overbought" else
+              f'<span class="{"tsup" if r.get("tier") == "Super" else "treg"}">{r.get("tier")}</span> {r.setup}' if r.has_setup else r.setup)
         cells = [f'<b class="tk" data-tk="{r.ticker}">{r.ticker}</b><div class="sec">{r.sector}</div>', st, f"{r.score:.0f}", btc(r), f"{r.close:.2f}",
                  f"{r.open:.2f}", pct(r.chg1d), pct(r.chg5d), pct(r.chg1m), zone(r.rsi, CFG["OB_RSI"], CFG["OS_RSI"]),
                  zone(r.get("cci"), CFG["OB_CCI"], CFG["OS_CCI"]), num(r.atr_pct), num(r.relvol, "{:.1f}x"), num(r.from_hi, "{:+.1f}%"),
                  num(r.vs10, "{:+.1f}%"), num(r.vs20, "{:+.1f}%"), num(r.vs50, "{:+.1f}%"),
                  flag(r.p150), flag(r.p200), cross] + oc
         bte = r.get("bt_rules") - r.get("bt_hold") if r.get("bt_rules") == r.get("bt_rules") and r.get("bt_rules") is not None else ""
-        raw = [r.ticker, r.setup, r.score, bte, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
+        raw = [r.ticker, (f'{r.get("tier")} ' if r.has_setup else '') + r.setup, r.score, bte, r.close, r.open, r.chg1d, r.chg5d, r.chg1m, r.rsi, r.get("cci"), r.atr_pct, r.relvol, r.from_hi, r.vs10,
                r.vs20, r.vs50] + [""] * 11
         tds = "".join(f'<td data-v="{raw[i]}">{c}</td>' for i, c in enumerate(cells))
-        rows.append(f'<tr data-setup="{r.setup}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
+        rows.append(f'<tr data-setup="{r.setup}" data-tier="{r.get("tier") or ""}" data-sector="{r.sector or "Other"}" class="{"stack" if r.stack else ""}">{tds}</tr>')
     th = "".join(f"<th>{h}</th>" for h in head)
     banner = '<div class="demo">DEMO DATA, not real stocks</div>' if demo else ""
     n_m = int((picks.setup == "Momentum").sum()); n_p = int((picks.setup == "Pullback").sum())
+    n_sup = int((picks.has_setup & (picks.tier == "Super")).sum()); n_reg = int((picks.has_setup & (picks.tier == "Regular")).sum())
     n_ob = int(picks.blocked.sum()) if "blocked" in picks else 0
     ob_html = ('<div class="hint warn obn">' + (f'The market is overbought tonight ({html_esc(mkt_hot)}), so by your rule no stock '
                'gets a setup: the ones that would have are marked Overbought.' if mkt_hot else
@@ -2461,7 +2464,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
     bt_sec, bt_js = bt_tab(picks)
-    meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
+    meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     news = news_html(df, sws)
@@ -2534,7 +2537,7 @@ main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display
 th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--card);cursor:pointer;color:var(--mut);font-weight:600}}
 td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(19),td:nth-child(20){{text-align:left}}
 .obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--warn) 45%,transparent)}}
-.ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
+.ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.tsup,.treg{{font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;margin-right:3px}}.tsup{{background:color-mix(in srgb,var(--up) 25%,transparent)}}.treg{{background:color-mix(in srgb,var(--mut) 20%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
 #t td:nth-child(2) .sec{{white-space:normal;min-width:150px;max-width:220px}}
 td:first-child,th:first-child{{position:sticky;left:0;background:var(--card);z-index:1}}th:first-child{{z-index:2}}
 .sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
@@ -2597,10 +2600,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{sector_tiles(df, sws, bh)}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
-{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
+{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Super">Super</button><button data-f="Regular">Regular</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
-Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires an uptrend, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
+Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires EMA10 &gt; EMA20, price &gt; EMA50, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
+Your tiers: a <b>Super</b> setup also has the price over the {CFG["LONG_MA_TYPE"]}150; a <b>Regular</b> setup doesn't. Super setups are listed first and are the only ones the paper accounts buy.
 Your overbought rule: a stock whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}), information only: since Oct 15 RSI and CCI no longer block a setup. Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
@@ -2788,7 +2792,7 @@ if(j>=0){{g=j;sel.value=String(j)}}if(s&&btns.some(b=>+b.dataset.r===s.span))set
 show()}})();
 const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
 const chip=document.getElementById('secf');
-function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const okS=fSet==='all'||(fSet==='setups'?st==='Momentum'||st==='Pullback':st===fSet);
+function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const isS=st==='Momentum'||st==='Pullback';const okS=fSet==='all'||(fSet==='setups'?isS:fSet==='Super'||fSet==='Regular'?isS&&r.dataset.tier===fSet:st===fSet);
 r.style.display=okS&&(!fSec||r.dataset.sector===fSec)?'':'none'}});chip.hidden=!fSec;chip.textContent=(fSec||'')+'  ✕';
 document.querySelectorAll('#s tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.sector===fSec))}}
 document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar:not(.tf):not(.iv):not(.pk):not(.blr) button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fSet=b.dataset.f;apply()}});
@@ -2945,8 +2949,9 @@ def main():
         traceback.print_exc()
         print("  strength score failed:", e)
     secb = sector_breadth(frames, df, sectors)
-    picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "score"], ascending=False).reset_index(drop=True)
-    print(f"{int(df.core.sum())} of {len(df)} liquid stocks in uptrend; {int(picks.has_setup.sum())} setups ({(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
+    df["super"] = df.has_setup & (df.tier == "Super")
+    picks = df[df.has_setup | df.core | df.blocked].sort_values(["has_setup", "super", "score"], ascending=False).reset_index(drop=True)
+    print(f"{int(df.core.sum())} of {len(df)} liquid stocks in uptrend; {int(picks.has_setup.sum())} setups ({int(picks.super.sum())} super, {int((picks.has_setup & ~picks.super).sum())} regular; {(picks.setup == 'Momentum').sum()} momentum, {(picks.setup == 'Pullback').sum()} pullback)")
     print(f"  overbought: {len(ob)} stocks sector breadth over "
           f"{CFG['OB_BREADTH']}); the market is {'overbought: ' + mkt_hot if mkt_hot else 'not overbought'}; "
           f"{int(df.blocked.sum())} setups left out")
