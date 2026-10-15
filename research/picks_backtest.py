@@ -13,8 +13,8 @@ volume >= 1M shares). Today's S&P 400 and S&P 600 members are a second check; th
 have survivorship bias.
 
 Every rule is chosen on 2014-2021 data and then checked on 2022-2026 data it never saw.
-Your overbought rule applies as on the page: no list spot and no new AI pick with RSI over 70, CCI over 100 or the
-stock's sector's breadth over 75, and nothing new while the S&P 500's breadth is over 75.
+Your overbought rule applies as on the page: no list spot and no new AI pick while the stock's sector's breadth is
+over 75, and nothing new while the S&P 500's breadth is over 75 (RSI / CCI dropped from the rule on 2026-10-15).
 Entries are at the next day's open (the page updates after the close), and returns are
 measured against the average liquid stock over the same days.
 
@@ -279,16 +279,12 @@ def perf(r):
 
 
 def overbought(P, member, sector):
-    """Your overbought rule as dates x tickers: hot = RSI over 70, CCI over 100 or the stock's sector's breadth over 75;
+    """Your overbought rule as dates x tickers: hot = the stock's sector's breadth over 75;
     mkt_hot = the S&P 500's breadth over 75 (by day). Breadth = Rising, the share of the index's stocks that day with the
     10 EMA over the 20, as the page's breadth view counts it."""
-    H, L, C = P["High"], P["Low"], P["Close"]
+    C = P["Close"]
     alive = C.notna()
     bull = (C.ewm(span=10, adjust=False).mean() > C.ewm(span=20, adjust=False).mean()).where(alive)
-    tp = (H + L + C) / 3
-    n = S.CFG["CCI_N"]
-    sma = tp.rolling(n).mean()
-    cc = (tp - sma) / (0.015 * sum((tp.shift(k) - sma).abs() for k in range(n)) / n)
     mem = member & alive.to_numpy(bool)
 
     def rising(cols):
@@ -301,7 +297,7 @@ def overbought(P, member, sector):
     for g in set(secs) - {""}:
         cols = secs == g
         sec_hot[:, cols] = (rising(cols) > lim)[:, None]
-    hot = (S.rsi(C) > S.CFG["OB_RSI"]) | (cc > S.CFG["OB_CCI"]) | pd.DataFrame(sec_hot, index=C.index, columns=C.columns)
+    hot = pd.DataFrame(sec_hot, index=C.index, columns=C.columns)
     mkt_hot = pd.Series(rising(np.ones(C.shape[1], bool)) > lim, index=C.index)
     return hot.fillna(False).astype(bool), mkt_hot
 
@@ -452,8 +448,8 @@ def main():
           f"Data {idx[0].date()} to {idx[-1].date()}, {len(cols)} tickers. Signals from {TEST_FROM[:7]}; "
           f"every choice was made on {TEST_FROM[:4]}-2021 S&P 500 data and then checked on 2022-{idx[-1].year}. "
           "Entry at the next open; returns are compared with the average liquid stock in the same universe over the same days. "
-          "Your overbought rule is on, as on the page: no list spot or new AI pick with RSI over 70, CCI over 100 or sector "
-          "breadth over 75, and nothing new while the S&P 500's breadth is over 75.", ""]
+          "Your overbought rule is on, as on the page: no list spot or new AI pick while its sector's "
+          "breadth is over 75, and nothing new while the S&P 500's breadth is over 75.", ""]
     chosen, top_md, body = {}, [], []
 
     for u in U:

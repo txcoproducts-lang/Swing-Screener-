@@ -12,8 +12,8 @@ Ten-year backtests of the four paper trading plans, for the page's Backtests tab
   D  OVTLYR plan               Plan M with the page's stand-ins for OVTLYR's signals, else Plan ETF (TQQQ / SPXL on
                                QQQ's / SPY's signals), spare cash in T-bills (BIL, standing in for SGOV).
 
-Your overbought rule applies to every plan: no buy with RSI over 70 or CCI over 100, or while the market's or the
-stock's sector's breadth (Rising: the share of S&P 500 stocks with the 10 EMA over the 20) is over 75.
+Your overbought rule applies to every plan: no buy while the market's or the stock's sector's breadth (Rising: the
+share of S&P 500 stocks with the 10 EMA over the 20) is over 75. RSI and CCI no longer count (the user, 2026-10-15).
 
 What a daily backtest can't copy from the paper accounts, and what it does instead:
   - Calls: there's no free history of option prices, so A and C buy shares (the paper accounts' fallback).
@@ -109,8 +109,7 @@ def feats(M):
     x50150 = e50 > m150
     depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
     pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
-    hot = (r > cfg["OB_RSI"]) | (cc > cfg["OB_CCI"])
-    setup = (mom | pull) & ~hot & hiY.notna() & m150.notna()
+    setup = (mom | pull) & hiY.notna() & m150.notna()      # RSI / CCI overbought checks dropped by the user, 2026-10-15
     exit_ = (e10 < e20) & (C < e50)
     av = V.rolling(20).mean()
     liquid = (C >= cfg["MIN_PRICE"]) & (av >= cfg["MIN_AVG_VOL"]) & m200.notna()
@@ -122,7 +121,7 @@ def feats(M):
     f = lambda x: x.where(alive).to_numpy(float) if x.dtypes.iloc[0] != bool else (x & alive).to_numpy(bool)
     F = dict(O=O.to_numpy(float), H=H.to_numpy(float), L=L.to_numpy(float), C=C.to_numpy(float),
              Cf=C.ffill().to_numpy(float), e10=f(e10), e20=f(e20), e50=f(e50), rsi=f(r), cci=f(cc), atr=f(a),
-             core=f(core), setup=f(setup), exit=f(exit_), hot=f(hot), liquid=f(liquid), rs=f(rs), age=age.to_numpy(float))
+             core=f(core), setup=f(setup), exit=f(exit_), liquid=f(liquid), rs=f(rs), age=age.to_numpy(float))
     F["last"] = np.array([C[c].last_valid_index() for c in C.columns], dtype=object)
     F["lastpos"] = np.array([M.idx.get_loc(x) if x is not None else -1 for x in F["last"]])
     # breadth: Rising = the share of member stocks (all coins) with the 10 EMA over the 20, market and each sector
@@ -155,7 +154,7 @@ def feats(M):
         j = np.flatnonzero(cols)
         pct[:, j] = rsd.iloc[:, j].rank(axis=1, pct=True, method="max").to_numpy() * 100
     F["strength"] = 0.4 * rise["_mkt"][:, None] + 0.4 * sr + 0.2 * pct
-    F["ss_ok"] = ok & F["core"] & F["sec_on"] & ~F["sec_hot"] & ~F["hot"] & np.isfinite(F["strength"])
+    F["ss_ok"] = ok & F["core"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])
     F["rs_pct"] = rsd.rank(axis=1, pct=True).to_numpy()
     return F
 
@@ -286,7 +285,7 @@ def run_ai(M, F):
         outx &= top                                 # sold on your exit: not bought back while it stays on the list
         sell = {k for k in held if F["exit"][t, col[k]]}
         outx |= sell
-        skip = set(names[F["hot"][t] | F["sec_hot"][t]]) | outx
+        skip = set(names[F["sec_hot"][t]]) | outx
         kept, added, dropped = S.ai_step(held, row, M.sector, n=cfg["AI_N"], keep=cfg["AI_KEEP"], cap=cfg["AI_CAP"],
                                          allow_new=not F["mkt_hot"][t], sell=sell, skip=skip)
         held, sells, adds = kept + added, dropped, added
@@ -312,10 +311,10 @@ def run_ov(M, F):
         sec_avg_rsi[g] = np.where(m.sum(1) >= 5, np.nansum(np.where(m, R, 0), 1) / np.maximum(m.sum(1), 1), np.nan)
 
     def idx_ok(j, t):
-        """Plan ETF's checks on an index (or coin): heat, signal, uptrend, value zone, CCI, market breadth."""
+        """Plan ETF's checks on an index (or coin): heat, signal, uptrend, value zone, market breadth."""
         c, x10, x20 = C[t, j], e10[t, j], e20[t, j]
         return (R[t, j] < ov["HEAT_MAX"] and x10 > x20 and c > e50[t, j] and x20 <= c <= x20 + ov["ZONE_ATR"] * atr[t, j]
-                and not F["cci"][t, j] > M.cfg["OB_CCI"] and not F["mkt_hot"][t])
+                and not F["mkt_hot"][t])
 
     pause_until, morning, etf_sell = -1, set(), set()
     for t in range(M.t0, len(M.idx)):
@@ -335,7 +334,7 @@ def run_ov(M, F):
                 sec_ok[g] = (g not in ov["EXCLUDE"] and rise[g][n] > ravg[g][n] and ra[n] > R[n, b] and ra[n] < ov["HEAT_MAX"]
                              and ra[n] > ra[n - 1] and not rise[g][n] > M.cfg["OB_BREADTH"])
             cand = (F["ok"][n] & (C[n] >= lo) & (C[n] <= hi) & (F["age"][n] <= ov["SIGNAL_DAYS"] - 1) & (e10[n] > e20[n])
-                    & (C[n] > e50[n]) & (C[n] > e10[n]) & (R[n] > R[n - 1]) & ~F["hot"][n])
+                    & (C[n] > e50[n]) & (C[n] > e10[n]) & (R[n] > R[n - 1]))
             c = [j for j in np.flatnonzero(cand) if sec_ok.get(secs[j]) and j not in A.pos]
             c.sort(key=lambda j: (F["age"][n, j], -(F["rs"][n, j] if F["rs"][n, j] == F["rs"][n, j] else -9)))
             for j in c:

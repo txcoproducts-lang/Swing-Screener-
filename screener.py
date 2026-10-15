@@ -357,8 +357,8 @@ def backtest(d, spy, years=None, br=None, group=None):
     """The user's rules on one stock's daily bars, against buy-and-hold of the stock and of SPY over the same days.
     Buy at the next open after a close with one of the page's setups (Momentum or Pullback, as analyze() finds them)
     that is on the strongest sector, strongest stock list that night, as Your system buys: the stock in your uptrend, its
-    sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 75 line, the market not over 75,
-    and the stock not overbought (RSI over 70 or CCI over 100). Sell at the next open after a close with EMA10 under EMA20
+    sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 75 line, and the market not over
+    75 (RSI and CCI aren't checked: the user dropped that part of the overbought rule on 2026-10-15). Sell at the next open after a close with EMA10 under EMA20
     and the price under EMA50 (the user's 4-hour exit, on daily bars: Yahoo keeps only ~2 years of intraday bars), or
     on an 8% drop from the entry (the paper accounts' share stop). Cash earns nothing while out; no costs.
     br: {group: daily Rising / avg} (bt_breadth); days without breadth skip those checks, and a ticker with no group
@@ -372,7 +372,6 @@ def backtest(d, spy, years=None, br=None, group=None):
     lm = (lambda n: ema(C, n)) if CFG["LONG_MA_TYPE"] == "EMA" else (lambda n: C.rolling(n).mean())
     m150 = lm(150)
     r, a = rsi(C), atr(d)
-    cc = cci(d)
     hi252 = C.rolling(252, min_periods=200).max()
     prior20 = C.shift().rolling(20).max()
     core = (e10 > e20) & (C > e50) & (C > m150)
@@ -381,7 +380,7 @@ def backtest(d, spy, years=None, br=None, group=None):
     x50150 = e50 > m150
     depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
     pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
-    buy = (mom | pull) & core & (r <= CFG["OB_RSI"]) & ~(cc > CFG["OB_CCI"])
+    buy = (mom | pull) & core
     lim, checked = CFG["OB_BREADTH"], 0
     for g, own in (("S&P 500", False), (group, True)):
         b = (br or {}).get(g) if g else None
@@ -1618,7 +1617,7 @@ def bt_research(df):
         out.append(dict(name="10-year rules vs hold", scope=f"Each of tonight's {n} liquid stocks", unit="%", sign=True,
                         verdict=f"Holding won on {n - won} of {n}",
                         text=f"Each stock's last 10 years traded on your rules (buy a setup on the strongest sector, "
-                             f"strongest stock list that isn't overbought, sell on your exit or an 8% stop) against just holding it. Your rules beat holding on {won} of {n}: in long rising markets they "
+                             f"strongest stock list, sell on your exit or an 8% stop) against just holding it. Your rules beat holding on {won} of {n}: in long rising markets they "
                              "sit in cash much of the time. Medians below; click any ticker in the Stocks tab for its own numbers.",
                         bars=[["Your rules (median)", med("bt_rules"), blue], ["Holding the stock", med("bt_hold"), grey]]
                              + ([["Holding SPY", med("bt_spy"), grey]] if "bt_spy" in b else [])))
@@ -2605,7 +2604,7 @@ Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]
 Your overbought rule: a stock with RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]} (20-day), or whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}). Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
-10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest sector, strongest stock list, as Your system buys: in your uptrend, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it, and not overbought (RSI over {CFG["OB_RSI"]} or CCI over {CFG["OB_CCI"]}); sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
+10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest sector, strongest stock list, as Your system buys: in your uptrend, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it; sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
