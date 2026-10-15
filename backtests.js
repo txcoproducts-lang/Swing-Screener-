@@ -256,7 +256,11 @@ function render(accts) {
     const pill = !p ? el('span', {class: 'bx-pill', text: 'Not run yet'}) :
       el('span', {class: 'bx-pill ' + (p.final > p.bench_final ? 'up' : 'dn'), text: p.final > p.bench_final ? `Beat ${BENCH}` : `Trailed ${BENCH}`});
     const btw = el('div', {class: 'bx-chart'}), trw = el('div', {class: 'bx-chart'});
-    const btHead = p ? `${money(p.final)} · ${pct(p.cagr)} a year vs ${BENCH} ${pct(p.bench_cagr)}` : 'Not run yet';
+    // an account that lost nearly everything can't afford another trade, so its line goes flat: say so on the card
+    const lastSell = p && p.last_trades.length ? p.last_trades[p.last_trades.length - 1].sell : null;
+    const broke = p && lastSell && p.final < 0.05 * BT_CASH && day(p.end) - day(lastSell) > 365 * 864e5 ? lastSell : null;
+    const btHead = p ? `${money(p.final)} · ${pct(p.cagr)} a year vs ${BENCH} ${pct(p.bench_cagr)}` +
+      (broke ? ` · lost almost all of it by ${mdy(broke)}, too little left to trade, so the line goes flat` : '') : 'Not run yet';
     const tv = a ? trialVal(a) : null;
     const trHead = a ? `${money(tv)} ${pct((tv / a.start_cash - 1) * 100)} vs ${BENCH} ${pct(benchRet(a))}` : 'Loading…';
     cards.push(() => {
