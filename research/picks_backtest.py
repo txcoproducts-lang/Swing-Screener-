@@ -13,6 +13,8 @@ volume >= 1M shares). Today's S&P 400 and S&P 600 members are a second check; th
 have survivorship bias.
 
 Every rule is chosen on 2014-2021 data and then checked on 2022-2026 data it never saw.
+Your overbought rule applies as on the page: no list spot and no new AI pick with RSI over 70, CCI over 100 or the
+stock's sector's breadth over 75, and nothing new while the S&P 500's breadth is over 75.
 Entries are at the next day's open (the page updates after the close), and returns are
 measured against the average liquid stock over the same days.
 
@@ -276,7 +278,35 @@ def perf(r):
                 maxdd=float((eq / eq.cummax() - 1).min()))
 
 
-def manage(score, elig, sector, oo, n=10, keep=30, cap=3, sell=None, allow=None):
+def overbought(P, member, sector):
+    """Your overbought rule as dates x tickers: hot = RSI over 70, CCI over 100 or the stock's sector's breadth over 75;
+    mkt_hot = the S&P 500's breadth over 75 (by day). Breadth = Rising, the share of the index's stocks that day with the
+    10 EMA over the 20, as the page's breadth view counts it."""
+    H, L, C = P["High"], P["Low"], P["Close"]
+    alive = C.notna()
+    bull = (C.ewm(span=10, adjust=False).mean() > C.ewm(span=20, adjust=False).mean()).where(alive)
+    tp = (H + L + C) / 3
+    n = S.CFG["CCI_N"]
+    sma = tp.rolling(n).mean()
+    cc = (tp - sma) / (0.015 * sum((tp.shift(k) - sma).abs() for k in range(n)) / n)
+    mem = member & alive.to_numpy(bool)
+
+    def rising(cols):
+        m = mem & cols[None, :]
+        cnt = m.sum(1)
+        return np.where(cnt >= 5, np.nansum(np.where(m, bull.to_numpy(float), 0), 1) / np.maximum(cnt, 1) * 100, np.nan)
+    lim = S.CFG["OB_BREADTH"]
+    secs = np.array([sector.get(t, "") for t in C.columns], dtype=object)
+    sec_hot = np.zeros(C.shape, bool)
+    for g in set(secs) - {""}:
+        cols = secs == g
+        sec_hot[:, cols] = (rising(cols) > lim)[:, None]
+    hot = (S.rsi(C) > S.CFG["OB_RSI"]) | (cc > S.CFG["OB_CCI"]) | pd.DataFrame(sec_hot, index=C.index, columns=C.columns)
+    mkt_hot = pd.Series(rising(np.ones(C.shape[1], bool)) > lim, index=C.index)
+    return hot.fillna(False).astype(bool), mkt_hot
+
+
+def manage(score, elig, sector, oo, n=10, keep=30, cap=3, sell=None, allow=None, skip=None):
     """Run the AI picks list day by day with the same step the page uses (screener.ai_step).
     Decisions at the close trade at the next open. Returns daily returns and the trade log."""
     cols = np.array(score.columns)
@@ -288,7 +318,8 @@ def manage(score, elig, sector, oo, n=10, keep=30, cap=3, sell=None, allow=None)
         row = sc.iloc[t].dropna()
         kept, added, dropped = S.ai_step(held, row, sector, n=n, keep=keep, cap=cap,
                                          allow_new=True if allow is None else bool(allow.iloc[t]),
-                                         sell=set() if sell is None else set(cols[sell.iloc[t].to_numpy(bool)]))
+                                         sell=set() if sell is None else set(cols[sell.iloc[t].to_numpy(bool)]),
+                                         skip=set() if skip is None else set(cols[skip.iloc[t].to_numpy(bool)]))
         for k in dropped:
             trades.append((entry.pop(k), t, k))
         for k in added:
@@ -406,6 +437,8 @@ def main():
     for u, m in U.items():
         print(f"  {names_u[u]}: {m.sum(axis=1).loc[TEST_FROM:].mean():.0f} liquid stocks a day on average", flush=True)
 
+    hot, mkt_hot = overbought(P, m500 & stock, sector)
+    print(f"  overbought rule: {mkt_hot.loc[TEST_FROM:].mean():.0%} of days the market's breadth is over 75", flush=True)
     valid = (idx >= TEST_FROM) & (idx <= idx[-22])
     PIS, POS, PALL = "2014-2021 (chosen here)", "2022-2026 (unseen)", "2014-2026 (all)"
     per = {PIS: valid & (idx < SPLIT), POS: valid & (idx >= SPLIT), PALL: valid}
@@ -418,11 +451,14 @@ def main():
     md = [f"# Pick lists backtest{' (DEMO: random walks)' if a.demo else ''}", "",
           f"Data {idx[0].date()} to {idx[-1].date()}, {len(cols)} tickers. Signals from {TEST_FROM[:7]}; "
           f"every choice was made on {TEST_FROM[:4]}-2021 S&P 500 data and then checked on 2022-{idx[-1].year}. "
-          "Entry at the next open; returns are compared with the average liquid stock in the same universe over the same days.", ""]
+          "Entry at the next open; returns are compared with the average liquid stock in the same universe over the same days. "
+          "Your overbought rule is on, as on the page: no list spot or new AI pick with RSI over 70, CCI over 100 or sector "
+          "breadth over 75, and nothing new while the S&P 500's breadth is over 75.", ""]
     chosen, top_md, body = {}, [], []
 
     for u in U:
         ok = U[u]
+        cool = ok & ~hot & ~pd.DataFrame(np.repeat(mkt_hot.to_numpy()[:, None], len(cols), 1), index=idx, columns=cols)
         B = Book(P, F, ok)
         main_u = u == "sp500"                                    # choices are made here; the other universe only checks them
         print(f"== {names_u[u]} ==", flush=True)
@@ -474,7 +510,8 @@ def main():
         res_ai["bench"] = bench_rows
 
         def run(sc, **kw):
-            r, trades = manage(sc, ok, sector, oo, **kw)
+            kw["allow"] = ~mkt_hot & (kw["allow"] if "allow" in kw else True)
+            r, trades = manage(sc, ok, sector, oo, skip=hot, **kw)
             row = {}
             for pname, d in per.items():
                 xs = (r[d] - ew[d]).dropna()
@@ -487,11 +524,14 @@ def main():
         for k, (desc, sc) in A.items():
             sims[k] = run(sc)
             print(f"  managed {k} ({time.time() - t0:.0f}s)", flush=True)
+        e10, e20 = (F["close"].ewm(span=k, adjust=False).mean() for k in (10, 20))
+        your_exit = (e10 < e20) & (F["close"] < F["e50"])          # paper account B also sells on this (its 4-hour version)
         rules = {
             "base": ("Hold 10, keep while in the top 30, max 3 per sector", {}),
             "keep20": ("Keep only while in the top 20", dict(keep=20)),
             "keep50": ("Keep while in the top 50", dict(keep=50)),
             "trend": ("Also sell on a close below EMA50", dict(sell=F["close"] < F["e50"])),
+            "exit": ("Also sell on your exit (10 EMA under the 20 and price under the 50, daily)", dict(sell=your_exit)),
             "market": ("No new picks while SPY is below its 200-day average", dict(allow=mkt_up)),
             "trend_market": ("Both of the above", dict(sell=F["close"] < F["e50"], allow=mkt_up)),
         }
@@ -541,6 +581,7 @@ def main():
         NU = S.new_up_lists(F, ok, A[best][1])
         rows = []
         for k, (desc, cand, sc) in NU.items():
+            cand = cand & cool
             sel = cand if sc is None else top_k(sc, cand, 5)
             for pname, d in per.items():
                 rows.append((k, pname, B.stats(sel, d)))
@@ -562,6 +603,7 @@ def main():
         BL = S.breakout_lists(F, ok)
         rows = []
         for k, (desc, cand, sc) in BL.items():
+            cand = cand & cool
             sel = cand if sc is None else top_k(sc, cand)
             for pname, d in per.items():
                 rows.append((k, pname, B.stats(sel, d)))
