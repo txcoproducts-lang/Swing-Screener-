@@ -55,7 +55,7 @@ CFG = dict(
     OB_RSI=70, OS_RSI=30,    # 14-day RSI
     CCI_N=20,                # 20-day CCI; it swings around 0 (most days between -100 and +100), so its levels are +-100
     OB_CCI=100, OS_CCI=-100,
-    OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of stocks with the 10 EMA over the 20), market or sector
+    OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of stocks with the 10 EMA over the 20 and price over the 50 EMA), market or sector
 )
 
 # ----------------------------------------------------------------- universe
@@ -672,7 +672,7 @@ def regime(b):
 
 
 # Breadth over time for the S&P 500 and each sector, on S&P 500 stocks only so each sector matches its SPDR ETF.
-# Rising = the share of stocks with the 10 EMA above the 20 (the fast half of the uptrend rule); uptrend = the share
+# Rising = the share of stocks with the 10 EMA above the 20 and the close above the 50 EMA (your rule); uptrend = the share
 # passing the full rule; an upswing = Rising above its own 10-day EMA (the same test as the OVTLYR section's breadth).
 def breadth_history(frames, sectors, members):
     tks = [t for t in frames if t in members]
@@ -680,7 +680,7 @@ def breadth_history(frames, sectors, members):
     C = per(lambda c: c)
     e10, e20, e50 = (per(lambda c, n=n: ema(c, n)) for n in (10, 20, 50))
     m150 = per(lambda c: ema(c, 150) if CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean())
-    rise = (e10 > e20).astype(float).where(C.notna())
+    rise = ((e10 > e20) & (C > e50)).astype(float).where(C.notna())     # your rule (2026-10-15): 10 EMA over the 20, price over the 50 EMA
     up = ((e10 > e20) & (C > e50) & (C > m150)).astype(float).where(C.notna() & m150.notna())
     groups = {"S&P 500": tks}
     for t in tks:
@@ -742,7 +742,7 @@ def chart_breadth(charts, bh):
 # ------------------------------------------------- strongest sector, strongest stock
 # The user's rule (2026-10-14): find the strongest sector, then the strongest stock inside it, and only buy when the
 # sector is turning around and rising; a move is 40% the market, 40% the sector and 20% the stock. Each part is 0-100:
-#   market = the S&P 500's Rising (the breadth view: the share of its stocks with the 10 EMA over the 20)
+#   market = the S&P 500's Rising (the breadth view: the share of its stocks with the 10 EMA over the 20 and price over the 50 EMA)
 #   sector = the stock's sector's Rising
 #   stock  = its relative strength (IBD-style, as the AI picks use) ranked among the liquid stocks in its sector, 100 = strongest
 # On the list: a stock in the user's uptrend, in a sector in an upswing (Rising above its 10-day average) that isn't over
@@ -1852,7 +1852,7 @@ def ov_html(ov):
                     + (f' · {html_esc(v["miss"][0])}' if v["miss"] else "") + '</span></li>' for k, v in secs)
           + '</ul><div class="mut">Breadth above its 10-day average, average RSI above SPY\'s, under 70 and rising. '
             'Health Care is excluded in the plan. Your overbought rule: no sector whose breadth on the breadth view (its '
-            f'S&amp;P 500 stocks with the 10 EMA over the 20) is over the {CFG["OB_BREADTH"]} line.</div></div>')
+            f'S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA) is over the {CFG["OB_BREADTH"]} line.</div></div>')
     et = ('<div class="ovb"><div class="ovh">Plan ETF <span class="mut">spare cash</span></div>'
           + "".join(f'<div><b>{k}</b> {ok(e["ok"])} <span class="mut">on {e["under"]}\'s signals</span></div><ul>'
                     + "".join(li(c) for c in e["checks"]) + "</ul>"
@@ -2055,7 +2055,7 @@ def ss_html(df, sw, mkt_hot=""):
     return ('<h2 id="ssh">Strongest sector, strongest stock</h2>'
             '<div class="hint">Your rule: find the strongest sector, then the strongest stock inside it. A move is 40% the '
             'market, 40% the sector and 20% the stock, so the score adds up those three parts (100 at most). '
-            '<b>Market</b> = 40% of the S&amp;P 500\'s Rising, the share of its stocks with the 10 EMA over the 20 (the breadth '
+            '<b>Market</b> = 40% of the S&amp;P 500\'s Rising, the share of its stocks with the 10 EMA over the 20 and price over the 50 EMA (the breadth '
             'view). <b>Sector</b> = 40% of the stock\'s sector\'s Rising. <b>Stock</b> = 20% of how it ranks on relative '
             'strength (IBD-style: 40% on the last 3 months, 20% each on 6, 9 and 12) among the liquid stocks in its sector, '
             '20 for the strongest. On the list: stocks in your uptrend, in a sector that is turning up and rising (Rising '
@@ -2085,7 +2085,7 @@ def md(day):
 
 def heat_html(bh, days=63):
     """Breadth heatmap: a row for the S&P 500, then one per sector (most stocks rising tonight first), a column per
-    trading day for the last 3 months, colored by the share of stocks with the 10 EMA above the 20.
+    trading day for the last 3 months, colored by the share of stocks with the 10 EMA above the 20 and price above the 50 EMA.
     Returns the HTML and the numbers behind it (for the tap / hover tooltip)."""
     if not bh or "S&P 500" not in bh:
         return "", None
@@ -2263,7 +2263,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
               '<div class="sub">No stock passes every check.</div></div>')
 
     secs_card = ('<div class="tcard"><h3>All sectors, strongest first <a data-go="sectors">Sector charts ›</a></h3>'
-                 '<div class="hint">Share of each sector\'s S&amp;P 500 stocks with the 10 EMA over the 20 · tick = its 10-day '
+                 '<div class="hint">Share of each sector\'s S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA · tick = its 10-day '
                  f'average · dashed = your {CFG["OB_BREADTH"]} line. Tap a sector to see its stocks.</div>'
                  + "".join(srow(i, n) for i, n in enumerate(secs))
                  + '<div class="lgd"><span><i style="background:var(--up)"></i>Rising (upswing)</span><span><i style="background:var(--dn)"></i>Fading</span>'
@@ -2312,7 +2312,7 @@ def sector_tiles(df, sws, bh, etfs=None, unit="stock"):
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Colored by the share of stocks rising (10 EMA over 20), strongest first · line = the last 5 days. '
+    return ('<div class="hint">Colored by the share of stocks rising (10 EMA over 20, price over the 50 EMA), strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2347,7 +2347,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     up_pct = up_n / liq_n * 100 if liq_n else 0
     sws = {n: swing_state(b) for n, b in (bh or {}).items()}
     w = sws.get("S&P 500")
-    rise_card = card("S&amp;P 500 stocks rising (EMA10 &gt; 20)", f"{w['rise']:.0f}%",
+    rise_card = card("S&amp;P 500 stocks rising (EMA10 &gt; 20, price &gt; EMA50)", f"{w['rise']:.0f}%",
                      (f"overbought (over {CFG['OB_BREADTH']}) since {md(w['zsince'])}" if w["z"] == 2 else
                       f"{'▲ upswing' if w['on'] else '▼ fading'} since {md(w['since'])}"
                       + (f", oversold (under {CFG['OS_BREADTH']})" if w["z"] == -1 else ""))
@@ -2403,8 +2403,8 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                  + "".join(f'<button data-r="{k}"' + (' class="on"' if k == 63 else '') + f'>{lbl}</button>'
                            for lbl, k in (("3M", 63), ("6M", 126), ("1Y", 252), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
-    bt_html = ('<h2>Breadth over time</h2><div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 (the fast half of '
-                      'your uptrend rule), by day for the last 3 months; greener = more stocks rising. ▲ = an upswing (Rising '
+    bt_html = ('<h2>Breadth over time</h2><div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 and the close above the 50 EMA '
+                      '(your rule), by day for the last 3 months; greener = more stocks rising. ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2413,7 +2413,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                    + ('Rising counts S&amp;P 500 stocks only, so each sector matches its SPDR ETF; the other columns count '
                       'every stock in the scan.' if heat else '')
                    + '</div><div class="wrap"><table id="s"><thead><tr>'
-                   '<th>Sector</th><th>In uptrend</th>' + ('<th>Rising (10 &gt; 20)</th>' if "S&P 500" in sws else '') + '<th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
+                   '<th>Sector</th><th>In uptrend</th>' + ('<th>Rising (10 &gt; 20, &gt; 50)</th>' if "S&P 500" in sws else '') + '<th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
                    '<th>% &gt; 50d</th><th>% &gt; 200d</th><th>Adv / Dec</th><th>52w Hi / Lo</th></tr></thead>'
                    f'<tbody>{"".join(srows)}</tbody></table></div>')
 
@@ -2425,7 +2425,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         chart_html = ('<h2>Sector charts</h2><div class="hint">Sector SPDR ETFs with EMA 10 (orange), 20 (blue) and 50 (purple). '
                       'Daily shows ~6 months, weekly ~2 years, monthly ~10 years.'
                       + (' The strip under each chart is its breadth: the solid line is Rising (the share of the S&amp;P 500 '
-                         'stocks in it with the 10 EMA above the 20), the dotted line the share in your full uptrend. Green '
+                         'stocks in it with the 10 EMA above the 20 and price above the 50 EMA), the dotted line the share in your full uptrend. Green '
                          'shading = an upswing (Rising above its 10-day average), red = fading, amber = overbought (Rising over '
                          f'your {CFG["OB_BREADTH"]} line, where there is no upswing). Daily and weekly only: the '
                          'stock prices go back 2 years.' if strip else '') + '</div>'
@@ -2768,7 +2768,7 @@ const off=()=>{{tip.hidden=true;hm.querySelectorAll('i.cur').forEach(x=>x.classL
 function show(e){{const c=e.currentTarget,R=HM.rows[+c.dataset.i],r=c.getBoundingClientRect();
 const i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left)/r.width*n))),v=R.r[i];off();if(v==null)return;
 const a=R.a[i],u=R.u[i],d=new Date(HM.t[i]+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
-tip.innerHTML='<b>'+R.n+'</b> · '+d+'<br>'+v.toFixed(0)+'% rising (10 EMA over the 20), avg '+a.toFixed(0)+'%'
+tip.innerHTML='<b>'+R.n+'</b> · '+d+'<br>'+v.toFixed(0)+'% rising (10 EMA over the 20, price over the 50), avg '+a.toFixed(0)+'%'
 +(u==null?'':'<br>'+u.toFixed(0)+'% in your uptrend')+'<br>'+(v>OBL?'<span class="obt">OB</span> overbought (over '+OBL+')':
 '<span class="'+(R.s[i]?'up':'dn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>'+(v<OSL?' · <span class="ost">OS</span> oversold (under '+OSL+')':''));
 c.children[i].classList.add('cur');tip.hidden=false;const h=hm.getBoundingClientRect();

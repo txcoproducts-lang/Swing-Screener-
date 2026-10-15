@@ -86,7 +86,7 @@ def rules(aid):
             "has dropped below its 50-day EMA by then.",
             f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
             f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the coin's "
-            f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20, last night).",
+            f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20 and price over the 50 EMA, last night).",
             "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
             "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
             "Trend view's 4H bars (4 hours each from midnight UTC) and only bars that close after the buy count. It "
@@ -100,7 +100,7 @@ def rules(aid):
         "ones, about a tenth of the account each. Empty spots stay in cash.",
         f"Your overbought rule: it doesn't buy anything with RSI over {SC.CFG['OB_RSI']} or CCI over "
         f"{SC.CFG['OB_CCI']} (checked on the live price when it buys), or while the market's breadth or the coin's "
-        f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20, last night).",
+        f"category's is over the {SC.CFG['OB_BREADTH']} line (the share of its coins with the 10 EMA over the 20 and price over the 50 EMA, last night).",
         "A pick it skipped for being overbought is bought later, once it isn't, while it's still on the list.",
         f"A coin stays while it ranks in the top {SC.CFG['AI_KEEP']}, unless your 4-hour exit sells it first (from Oct 14): "
         "a 4-hour bar closing with the 10 EMA under the 20 and the price under the 50 EMA, both at once, on the Trend "

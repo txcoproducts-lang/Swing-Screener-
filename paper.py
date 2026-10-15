@@ -98,7 +98,7 @@ def rules(aid):
             "has one. If no call fits even that, it buys shares of the top setup.",
             "Skips a setup that has dropped below its 50-day EMA by the time it buys.",
             f"Your overbought rule (from Oct 15): nothing is bought while the market's breadth or the stock's sector's is over "
-            f"the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, last night). RSI and CCI no "
+            f"the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20 and price over the 50 EMA, last night). RSI and CCI no "
             "longer block a buy (you dropped that part of the rule on Oct 14).",
             "Your exit (from Oct 14): it enters on the daily chart and sells on the 4-hour chart, once a 4-hour bar "
             "closes with the 10 EMA under the 20 EMA and the price under the 50 EMA, both at once. The bars are the "
@@ -116,7 +116,7 @@ def rules(aid):
         "Trades at about 10:00 New York time: sells stocks that left the list the night before and buys the new "
         "ones, about a tenth of the account each. Empty spots stay in cash.",
         f"Your overbought rule, as the paper accounts use it (from Oct 15): nothing is bought while the market's breadth or "
-        f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20, "
+        f"the stock's sector's is over the {SC.CFG['OB_BREADTH']} line (the share of its stocks with the 10 EMA over the 20 and price over the 50 EMA, "
         "last night); a pick skipped for that is bought later while it's still on the list. RSI and CCI no longer block a "
         "buy (you dropped that part of the rule on Oct 14).",
         f"A stock stays while it ranks in the top {SC.CFG['AI_KEEP']}, unless your 4-hour exit sells it first (from Oct "
@@ -363,7 +363,7 @@ class Day:
 
     def breadth(self):
         """Last night's breadth from the screener (the page's Rising: the share of each group's S&P 500 stocks with the
-        10 EMA over the 20): {"S&P 500" or a sector: %}, or {} when the file is missing or too old."""
+        10 EMA over the 20 and price over the 50 EMA): {"S&P 500" or a sector: %}, or {} when the file is missing or too old."""
         files = sorted(f for f in self.hist.glob("breadth_*.csv") if f.stem[8:] < self.today.isoformat())
         d = dt.date.fromisoformat(files[-1].stem[8:]) if files else None
         if not self.recent(d):
