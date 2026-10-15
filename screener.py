@@ -2160,6 +2160,29 @@ def spy_checks(spy, w, mkt_hot=""):
     return out
 
 
+def popup_info(df, sws, spy=None, mkt_hot=""):
+    """The ticker pop-up's info line: each stock's sector, that sector's rating (its rank by Rising, Rising tonight and
+    its state) and the market's rating (SPY against your rules, as on Today, and the S&P 500's Rising). Returns the
+    JSON the page uses: m = the market's line, s = each sector's line, t = each ticker's sector."""
+    w = sws.get("S&P 500")
+    if not w:
+        return "null"
+    def state(x):
+        return ('<span class="obt">overbought</span> over the ' + str(CFG["OB_BREADTH"]) + ' line' if x["z"] == 2 else
+                f'<span class="{"up" if x["on"] else "dn"}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
+    checks = spy_checks(spy, w, mkt_hot)
+    n_ok = sum(ok for _, ok, _ in checks)
+    mkt = (f'<span class="lb">Market</span> <b class="{"up" if n_ok == len(checks) else "dn"}">SPY '
+           f'{"is moving up" if n_ok == len(checks) else "is not moving up"}</b> ({n_ok} of {len(checks)} checks) · '
+           f'{w["rise"]:.0f}% of S&amp;P 500 stocks rising · {state(w)}')
+    secs = sorted((n for n in sws if n != "S&P 500"), key=lambda n: -sws[n]["rise"])
+    sec = {n: (f'<span class="lb">Sector</span> <b>{html_esc(SHORT_SECTOR.get(n, n))}</b> · #{i + 1} of {len(secs)} · '
+               f'<b>{sws[n]["rise"]:.0f}%</b> rising · {state(sws[n])}') for i, n in enumerate(secs)}
+    tks = {r.ticker: r.sector for r in df[["ticker", "sector"]].itertuples() if r.sector in sec}
+    tks.update({e: n for n, e in SECTOR_ETF.items() if n in sec})
+    return json.dumps(dict(m=mkt, s=sec, t=tks), separators=(",", ":")).replace("</", "<\\/")
+
+
 def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     w = sws.get("S&P 500")
     checks = spy_checks(spy, w, mkt_hot)
@@ -2467,6 +2490,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
+    pinfo = popup_info(df, sws, spy, mkt_hot)
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
@@ -2584,6 +2608,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cm{{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center}}#cm[hidden]{{display:none}}
 #cm .box{{background:var(--bg);border-radius:12px;width:min(1200px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden}}
 #cm .top{{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}}#cm .top b{{font-size:16px}}
+#cmi{{padding:6px 12px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}}#cmi[hidden]{{display:none}}#cmi .lb{{display:inline-block;min-width:52px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}}
 #cm .top .sp{{flex:1}}#cm .top a{{color:var(--acc);font-size:12px}}#cm .x{{background:none;border:0;color:var(--fg);font-size:22px;cursor:pointer;padding:0 4px}}
 #cmbt{{padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;max-height:45%;overflow:auto}}#cmbt .btl b{{white-space:nowrap}}#cmbt details summary{{cursor:pointer;color:var(--acc)}}
 #cmbt .btt{{overflow:auto;max-height:180px;margin-top:4px}}#cmbt table{{border-collapse:collapse;font-size:12px}}#cmbt th,#cmbt td{{padding:2px 8px 2px 0;text-align:left;white-space:nowrap}}
@@ -2620,7 +2645,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
@@ -2665,6 +2690,7 @@ showTab(location.hash.slice(1)||'today');
 </script>
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
+const PINFO={pinfo};      // the pop-up's info line: m = the market, s = each sector, t = each ticker's sector
 const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};      // your breadth lines: over 75 overbought (no upswing), under 30 oversold
 const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric'}});
 (function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
@@ -2821,7 +2847,9 @@ studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
 function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
-cm.hidden=false;document.body.style.overflow='hidden';draw();btDraw(t)}}
+cm.hidden=false;document.body.style.overflow='hidden';cmInfo(t);draw();btDraw(t)}}
+function cmInfo(t){{const el=document.getElementById('cmi');if(!PINFO){{el.hidden=true;return}}const sec=PINFO.t[t];
+el.innerHTML=(sec?'<div>'+PINFO.s[sec]+'</div>':'')+'<div>'+PINFO.m+'</div>';el.hidden=false}}
 function loadData(sym){{return dataCache[sym]||(dataCache[sym]=fetch('data/'+encodeURIComponent(sym)+'.json').then(r=>{{if(!r.ok)throw 0;return r.json()}}))}}
 // ---- 10-year backtest strip: your rules on this stock vs holding it vs holding SPY, and every trade
 function btDraw(sym){{const el=document.getElementById('cmbt');el.hidden=true;el.innerHTML='';
