@@ -1,0 +1,13 @@
+group,date,rise,avg5,avg10,upswing,overbought,oversold
+S&P 500,2026-10-16,48.6,40.5,35.5,1,0,0
+Health Care,2026-10-16,76.7,65.0,57.7,1,1,0
+Information Technology,2026-10-16,34.7,43.8,49.8,0,0,0
+Consumer Discretionary,2026-10-16,48.9,37.4,30.9,1,0,0
+Financials,2026-10-16,43.4,29.9,22.0,1,0,0
+Consumer Staples,2026-10-16,72.7,56.4,42.9,1,0,0
+Industrials,2026-10-16,35.8,29.5,27.0,1,0,0
+Utilities,2026-10-16,67.7,49.3,36.3,1,0,0
+Materials,2026-10-16,50.0,33.1,24.7,1,0,0
+Real Estate,2026-10-16,23.3,16.3,11.9,1,0,1
+Energy,2026-10-16,76.2,68.0,58.8,1,1,0
+Communication Services,2026-10-16,27.3,25.1,22.6,1,0,1
