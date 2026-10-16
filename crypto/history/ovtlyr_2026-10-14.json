@@ -64,12 +64,12 @@
    "n": 18,
    "bull": 33.3,
    "bull_ema": 71.3,
-   "rsi": 44.5,
-   "rsi_prev": 48.4,
+   "rsi": 44.6,
+   "rsi_prev": 48.5,
    "miss": [
     "breadth 33% not above its 10-day average 71%",
-    "RSI 44 not above BTC's 47",
-    "RSI 44 not rising (was 48)"
+    "RSI 45 not above BTC's 47",
+    "RSI 45 not rising (was 49)"
    ]
   },
   "Exchange tokens": {
