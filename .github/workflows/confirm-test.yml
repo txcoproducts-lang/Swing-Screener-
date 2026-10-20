@@ -1,0 +1,44 @@
+name: 2-day confirm test
+
+# One-off research run (2026-10-20): reruns your-rules backtests today vs with a 2-day confirm and saves both sets
+# of numbers on this test branch only. Nothing on main, the page or the paper accounts changes.
+on:
+  push:
+    branches: [claude/two-day-confirm-test-92dj5c]
+    paths: [research/confirm_test.py, .github/workflows/confirm-test.yml]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Stocks
+        run: python research/confirm_test.py --market stocks --out research/confirm_stocks.json
+
+      - name: Coins
+        run: python research/confirm_test.py --market crypto --out research/confirm_crypto.json
+
+      - name: Save the results on this branch
+        run: |
+          git config user.name "screener-bot"
+          git config user.email "screener-bot@users.noreply.github.com"
+          git add research/confirm_stocks.json research/confirm_crypto.json
+          git commit -qm "2-day confirm test results $(date -u +%F)" || exit 0
+          for i in 1 2 3 4; do
+            git pull -q --rebase origin "$GITHUB_REF_NAME" && git push -q origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep $((i * 10))
+          done
+          exit 1

@@ -168,6 +168,7 @@ def feats(M):
         pct[:, j] = rsd.iloc[:, j].rank(axis=1, pct=True, method="max").to_numpy() * 100
     F["strength"] = 0.4 * rise["_mkt"][:, None] + 0.4 * sr + 0.2 * pct
     F["ss_ok"] = ok & F["core"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])
+    F["buy"] = F["setup"] & F["ss_ok"]          # a setup on the strongest sector, strongest stock list tonight
     F["rs_pct"] = rsd.rank(axis=1, pct=True).to_numpy()
     return F
 
@@ -340,7 +341,16 @@ def stops(A, t, level_of):
 
 
 # ---------------------------------------------------------------- A and C: your system
-def run_system(M, F, when, options=True):
+def confirmed(F, night, confirm):
+    """Tonight's buyable setups (F["buy"]) that were also buyable on each of the confirm - 1 nights before: confirm=2 is
+    the 2-day confirm being tested (the setup has to hold two closes in a row before the buy). confirm=1: today's rules."""
+    ok = F["buy"][night].copy()
+    for k in range(1, confirm):
+        ok &= F["buy"][night - k]
+    return ok
+
+
+def run_system(M, F, when, options=True, confirm=1):
     A = Acct(M, F, options)
     pend = set()                                    # exits decided last night, sold at this open
     for t in range(M.t0, len(M.idx)):
@@ -356,7 +366,7 @@ def run_system(M, F, when, options=True):
             the account; else the first with a cheaper call down to 0.15; else shares of the top setup."""
             if F["mkt_hot"][night]:
                 return
-            c = np.flatnonzero(F["setup"][night] & F["ss_ok"][night])
+            c = np.flatnonzero(confirmed(F, night, confirm))
             c = [j for j in c[np.argsort(-F["strength"][night, c], kind="stable")] if j not in sold]
             while len(A.pos) < A_SLOTS:
                 c = [j for j in c if j not in A.pos]
@@ -389,8 +399,10 @@ def run_system(M, F, when, options=True):
 
 
 # ---------------------------------------------------------------- B: Claude's picks
-def run_ai(M, F, options=True):
+def run_ai(M, F, options=True, confirm=1):
+    """confirm=2: a new pick is bought only after it has been on the list two nights in a row (the 2-day confirm test)."""
     A = Acct(M, F, options)
+    since = {}
     cfg = M.cfg
     names = np.array(M.names, dtype=object)
     held, outx, sells, adds = [], set(), [], []
@@ -416,7 +428,9 @@ def run_ai(M, F, options=True):
         skip = set(names[F["sec_hot"][t]]) | outx
         kept, added, dropped = S.ai_step(held, row, M.sector, n=cfg["AI_N"], keep=cfg["AI_KEEP"], cap=cfg["AI_CAP"],
                                          allow_new=not F["mkt_hot"][t], sell=sell, skip=skip)
-        held, sells, adds = kept + added, dropped, added
+        held, sells = kept + added, dropped
+        since = {k: since.get(k, t) for k in held}
+        adds = [k for k in held if t - since[k] == confirm - 1]
         A.close_day(t)
     return A
 

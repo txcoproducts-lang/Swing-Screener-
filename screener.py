@@ -350,7 +350,7 @@ def order_blocks(b, n_show, times):
 
 
 # ----------------------------------------------------------- 10-year backtest
-BT = dict(YEARS=10, STOP=0.08)   # each stock's last 10 years on the user's rules, against holding it and holding SPY
+BT = dict(YEARS=10, STOP=0.08, CONFIRM=1)   # each stock's last 10 years on the user's rules, against holding it and holding SPY
 
 
 def backtest(d, spy, years=None, br=None, group=None):
@@ -391,6 +391,9 @@ def backtest(d, spy, years=None, br=None, group=None):
         on = (b.rise.round(1) > b.avg.round(1)) if own else True      # the sector in an upswing, as on the list
         buy &= ~known | (on & ~(b.rise > lim))
         checked = max(checked, int(known.sum()))
+    n = BT["CONFIRM"]              # n > 1: the buy has to hold n closes in a row (research/confirm_test.py)
+    if n > 1:
+        buy = buy.astype(float).rolling(n).min().fillna(0).astype(bool)
     buy = buy.to_numpy()
     sell = ((e10 < e20) & (C < e50)).to_numpy()
     ok = hi252.notna().to_numpy() & m150.notna().to_numpy()
