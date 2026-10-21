@@ -22,6 +22,18 @@ def cagr(eq, idx, t0):
     return round(float((e.iloc[-1] / e.iloc[0]) ** (1 / yrs) - 1) * 100, 1) if yrs > 0.2 else None
 
 
+def maxdd(eq, t0):
+    e = pd.Series(eq[t0:]).ffill()
+    return round(float((e / e.cummax() - 1).min()) * 100, 1)
+
+
+def yearly(eq, idx, t0):
+    e = pd.Series(eq[t0:], index=idx[t0:]).ffill()
+    last = e.groupby(e.index.year).last()
+    prev = last.shift().fillna(e.iloc[0])
+    return {str(y): round(float(v) * 100, 1) for y, v in (last / prev - 1).items()}
+
+
 def run(M, F, when, **kw):
     """One A / C run with module settings or signal tables swapped for the run."""
     saved = {k: getattr(PBT, k) for k in ("STOP", "A_SLOTS", "A_CAP")}
@@ -90,9 +102,10 @@ def main():
     t23 = int(np.searchsorted(idx, pd.Timestamp("2023-01-01")))
     bench = F["Cf"][:, M.bench]
     res = dict(asof=idx[-1].strftime("%Y-%m-%d"), demo=a.demo,
-               spy=dict(all=cagr(bench, idx, M.t0), since23=cagr(bench, idx, t23)), plans={})
+               spy=dict(all=cagr(bench, idx, M.t0), since23=cagr(bench, idx, t23), maxdd=maxdd(bench, M.t0), years=yearly(bench, idx, M.t0)), plans={})
     core_buy = F["setup"] & F["ok"] & F["core"]                     # any setup, not just the strongest-sector list
     no_hot = np.zeros_like(F["mkt_hot"])
+    cool = F["setup"] & F["ok"] & F["core"] & F["sec_on"] & np.isfinite(F["strength"])   # the list without the sector 75 check
     up = F["ok"] & F["core"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])   # the list, uptrend only
     variants = [
         ("As it is", {}),
@@ -103,13 +116,19 @@ def main():
         ("Any setup, not just the strongest-sector list", dict(swap=dict(buy=core_buy))),
         ("Strongest list, any stock in your uptrend (no setup needed)", dict(swap=dict(buy=up))),
         ("Breadth over 75 doesn't block buys", dict(swap=dict(mkt_hot=no_hot))),
+        # 2026-10-21, the user: "yes run test" on full investment + no 75 block together
+        ("Half each + no market 75 block", dict(A_SLOTS=2, A_CAP=0.5, swap=dict(mkt_hot=no_hot))),
+        ("A third each + no market 75 block", dict(A_SLOTS=3, A_CAP=0.34, swap=dict(mkt_hot=no_hot))),
+        ("Half each + no 75 block at all (market or sector)", dict(A_SLOTS=2, A_CAP=0.5, swap=dict(mkt_hot=no_hot, buy=cool))),
+        ("A third each + no 75 block at all (market or sector)", dict(A_SLOTS=3, A_CAP=0.34, swap=dict(mkt_hot=no_hot, buy=cool))),
     ]
     for k, when in (("A", "open"), ("C", "close")):
         rows = []
         for name, kw in variants:
             A = run(M, F, when, **kw)
             rows.append(dict(name=name, all=cagr(A.eq, idx, M.t0), since23=cagr(A.eq, idx, t23), trades=len(A.trades),
-                             invested=round(float(np.nanmean(A.inv[M.t0:])) * 100)))
+                             invested=round(float(np.nanmean(A.inv[M.t0:])) * 100), maxdd=maxdd(A.eq, M.t0),
+                             final=round(float(pd.Series(A.eq).ffill().iloc[-1])), years=yearly(A.eq, idx, M.t0)))
             print(f"  {k} {name}: {rows[-1]} ({time.time() - t0:.0f}s)", flush=True)
             if not kw:
                 base = A
