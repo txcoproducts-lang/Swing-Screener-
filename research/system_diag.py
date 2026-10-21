@@ -121,6 +121,11 @@ def main():
         ("A third each + no market 75 block", dict(A_SLOTS=3, A_CAP=0.34, swap=dict(mkt_hot=no_hot))),
         ("Half each + no 75 block at all (market or sector)", dict(A_SLOTS=2, A_CAP=0.5, swap=dict(mkt_hot=no_hot, buy=cool))),
         ("A third each + no 75 block at all (market or sector)", dict(A_SLOTS=3, A_CAP=0.34, swap=dict(mkt_hot=no_hot, buy=cool))),
+        # 2026-10-21, the user: fully invested when the market lights up, about 10% a trade (20% at most)
+        ("10 at a time, 10% each", dict(A_SLOTS=10, A_CAP=0.10)),
+        ("5 at a time, 20% each", dict(A_SLOTS=5, A_CAP=0.20)),
+        ("10 at a time, 10% each + no market 75 block", dict(A_SLOTS=10, A_CAP=0.10, swap=dict(mkt_hot=no_hot))),
+        ("5 at a time, 20% each + no market 75 block", dict(A_SLOTS=5, A_CAP=0.20, swap=dict(mkt_hot=no_hot))),
     ]
     for k, when in (("A", "open"), ("C", "close")):
         rows = []
