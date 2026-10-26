@@ -1,0 +1,3939 @@
+{
+ "asof": "2026-10-26",
+ "market": {
+  "ok": false,
+  "checks": [
+   {
+    "k": "heat",
+    "ok": true,
+    "text": "SPY heatmap (RSI) 48, up from 42 (needs under 70 and rising)"
+   },
+   {
+    "k": "signal",
+    "ok": false,
+    "text": "SPY buy signal: 10 EMA 767.37 below the 20 EMA 768.37"
+   },
+   {
+    "k": "trend",
+    "ok": false,
+    "text": "SPY 10/20/50 uptrend: close 765.37 above the 50 EMA 765.12, 10 EMA under the 20"
+   },
+   {
+    "k": "breadth",
+    "ok": true,
+    "text": "Market breadth: 68% of stocks have the 10 EMA above the 20, above its 10-day average of 56%"
+   },
+   {
+    "k": "hot",
+    "ok": true,
+    "text": "Your overbought rule: 61% of S&P 500 stocks rising, not over the 75 line"
+   }
+  ],
+  "spy": {
+   "date": "2026-10-26",
+   "close": 765.37,
+   "high": 767.73,
+   "e10": 767.37,
+   "e20": 768.37,
+   "e50": 765.12,
+   "rsi": 47.6,
+   "rsi_prev": 42.3,
+   "atr": 7.25,
+   "cci": -72.2
+  },
+  "breadth": {
+   "pct": 67.5,
+   "ema": 56.4
+  }
+ },
+ "sectors": {
+  "Communication Services": {
+   "ok": false,
+   "n": 22,
+   "bull": 36.4,
+   "bull_ema": 34.4,
+   "rsi": 42.8,
+   "rsi_prev": 46.4,
+   "miss": [
+    "RSI 43 not above SPY's 48",
+    "RSI 43 not rising (was 46)"
+   ]
+  },
+  "Consumer Discretionary": {
+   "ok": true,
+   "n": 47,
+   "bull": 70.2,
+   "bull_ema": 58.0,
+   "rsi": 52.6,
+   "rsi_prev": 51.9,
+   "miss": []
+  },
+  "Consumer Staples": {
+   "ok": false,
+   "n": 33,
+   "bull": 90.9,
+   "bull_ema": 72.4,
+   "rsi": 58.6,
+   "rsi_prev": 60.2,
+   "miss": [
+    "overbought by your rule: 79% of its S&P 500 stocks rising, over the 75 line",
+    "RSI 59 not rising (was 60)"
+   ]
+  },
+  "Energy": {
+   "ok": false,
+   "n": 21,
+   "bull": 90.5,
+   "bull_ema": 77.2,
+   "rsi": 63.3,
+   "rsi_prev": 62.9,
+   "miss": [
+    "overbought by your rule: 90% of its S&P 500 stocks rising, over the 75 line"
+   ]
+  },
+  "Financials": {
+   "ok": true,
+   "n": 76,
+   "bull": 60.5,
+   "bull_ema": 46.6,
+   "rsi": 54.7,
+   "rsi_prev": 54.6,
+   "miss": []
+  },
+  "Health Care": {
+   "ok": false,
+   "n": 60,
+   "bull": 91.7,
+   "bull_ema": 79.3,
+   "rsi": 59.9,
+   "rsi_prev": 60.5,
+   "miss": [
+    "excluded in the plan",
+    "overbought by your rule: 88% of its S&P 500 stocks rising, over the 75 line",
+    "RSI 60 not rising (was 61)"
+   ]
+  },
+  "Industrials": {
+   "ok": true,
+   "n": 81,
+   "bull": 61.7,
+   "bull_ema": 49.3,
+   "rsi": 54.2,
+   "rsi_prev": 52.1,
+   "miss": []
+  },
+  "Information Technology": {
+   "ok": false,
+   "n": 74,
+   "bull": 43.2,
+   "bull_ema": 48.2,
+   "rsi": 51.1,
+   "rsi_prev": 48.8,
+   "miss": [
+    "breadth 43% not above its 10-day average 48%"
+   ]
+  },
+  "Materials": {
+   "ok": true,
+   "n": 24,
+   "bull": 70.8,
+   "bull_ema": 54.0,
+   "rsi": 56.6,
+   "rsi_prev": 56.5,
+   "miss": []
+  },
+  "Real Estate": {
+   "ok": true,
+   "n": 30,
+   "bull": 66.7,
+   "bull_ema": 40.5,
+   "rsi": 56.2,
+   "rsi_prev": 55.4,
+   "miss": []
+  },
+  "Utilities": {
+   "ok": false,
+   "n": 31,
+   "bull": 87.1,
+   "bull_ema": 73.8,
+   "rsi": 61.1,
+   "rsi_prev": 61.1,
+   "miss": [
+    "overbought by your rule: 84% of its S&P 500 stocks rising, over the 75 line",
+    "RSI 61.1 not rising (was 61.1)"
+   ]
+  }
+ },
+ "etf": {
+  "TQQQ": {
+   "under": "QQQ",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "QQQ heatmap (RSI) 42 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "QQQ buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "QQQ uptrend: close 712.20 below the 50 EMA 724.55"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "QQQ value zone: close 712.20, zone 725.63-748.61 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "QQQ order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 61% of S&P 500 stocks rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "QQQ's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-26",
+   "close": 712.2,
+   "high": 715.25,
+   "e10": 719.14,
+   "e20": 725.63,
+   "e50": 724.55,
+   "rsi": 41.8,
+   "rsi_prev": 36.6,
+   "atr": 11.49,
+   "cci": -101.0
+  },
+  "SPXL": {
+   "under": "SPY",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "SPY heatmap (RSI) 48 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "SPY buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "SPY uptrend: close 765.37 above the 50 EMA 765.12"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "SPY value zone: close 765.37, zone 768.37-782.87 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "SPY order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 61% of S&P 500 stocks rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "SPY's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-26",
+   "close": 765.37,
+   "high": 767.73,
+   "e10": 767.37,
+   "e20": 768.37,
+   "e50": 765.12,
+   "rsi": 47.6,
+   "rsi_prev": 42.3,
+   "atr": 7.25,
+   "cci": -72.2
+  }
+ },
+ "setups": [
+  {
+   "ticker": "LUV",
+   "sector": "Industrials",
+   "close": 42.85,
+   "e10": 41.12,
+   "e20": 41.01,
+   "e50": 41.49,
+   "rsi": 58.9,
+   "rsi_prev": 54.2,
+   "atr": 1.55,
+   "age": 0,
+   "cross": "2026-10-26",
+   "ob_up": 48.39,
+   "earn": null,
+   "rs": 60,
+   "vol": 6580277,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "PHM",
+   "sector": "Consumer Discretionary",
+   "close": 121.31,
+   "e10": 116.52,
+   "e20": 116.07,
+   "e50": 118.67,
+   "rsi": 58.9,
+   "rsi_prev": 58.8,
+   "atr": 3.71,
+   "age": 0,
+   "cross": "2026-10-26",
+   "ob_up": null,
+   "earn": null,
+   "rs": 25,
+   "vol": 2154945,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "CPRT",
+   "sector": "Industrials",
+   "close": 29.15,
+   "e10": 28.18,
+   "e20": 28.1,
+   "e50": 28.9,
+   "rsi": 57.2,
+   "rsi_prev": 56.2,
+   "atr": 0.89,
+   "age": 0,
+   "cross": "2026-10-26",
+   "ob_up": 33.01,
+   "earn": "2026-11-19",
+   "rs": 10,
+   "vol": 11375420,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "RF",
+   "sector": "Financials",
+   "close": 28.61,
+   "e10": 27.93,
+   "e20": 27.81,
+   "e50": 28.36,
+   "rsi": 60.6,
+   "rsi_prev": 58.9,
+   "atr": 0.56,
+   "age": 1,
+   "cross": "2026-10-23",
+   "ob_up": null,
+   "earn": null,
+   "rs": 47,
+   "vol": 11821146,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "TFC",
+   "sector": "Financials",
+   "close": 48.91,
+   "e10": 47.62,
+   "e20": 47.42,
+   "e50": 48.22,
+   "rsi": 60.3,
+   "rsi_prev": 57.4,
+   "atr": 0.93,
+   "age": 1,
+   "cross": "2026-10-23",
+   "ob_up": null,
+   "earn": null,
+   "rs": 40,
+   "vol": 8451979,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "USB",
+   "sector": "Financials",
+   "close": 59.7,
+   "e10": 58.81,
+   "e20": 58.58,
+   "e50": 59.27,
+   "rsi": 56.2,
+   "rsi_prev": 55.5,
+   "atr": 1.13,
+   "age": 2,
+   "cross": "2026-10-22",
+   "ob_up": 64.33,
+   "earn": null,
+   "rs": 58,
+   "vol": 8295262,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "FITB",
+   "sector": "Financials",
+   "close": 53.1,
+   "e10": 52.06,
+   "e20": 51.76,
+   "e50": 52.44,
+   "rsi": 60.1,
+   "rsi_prev": 59.4,
+   "atr": 1.09,
+   "age": 2,
+   "cross": "2026-10-22",
+   "ob_up": 57.3,
+   "earn": "2027-01-19",
+   "rs": 56,
+   "vol": 7764578,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "KEY",
+   "sector": "Financials",
+   "close": 21.21,
+   "e10": 20.7,
+   "e20": 20.57,
+   "e50": 20.93,
+   "rsi": 61.3,
+   "rsi_prev": 59.4,
+   "atr": 0.41,
+   "age": 2,
+   "cross": "2026-10-22",
+   "ob_up": 21.74,
+   "earn": "2027-01-20",
+   "rs": 47,
+   "vol": 17647558,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "RTX",
+   "sector": "Industrials",
+   "close": 197.48,
+   "e10": 191.82,
+   "e20": 190.88,
+   "e50": 194.0,
+   "rsi": 59.0,
+   "rsi_prev": 49.9,
+   "atr": 4.73,
+   "age": 2,
+   "cross": "2026-10-22",
+   "ob_up": 222.3,
+   "earn": null,
+   "rs": 43,
+   "vol": 5009306,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "SYF",
+   "sector": "Financials",
+   "close": 74.83,
+   "e10": 73.92,
+   "e20": 73.73,
+   "e50": 74.38,
+   "rsi": 53.9,
+   "rsi_prev": 49.4,
+   "atr": 1.94,
+   "age": 2,
+   "cross": "2026-10-22",
+   "ob_up": 85.56,
+   "earn": null,
+   "rs": 36,
+   "vol": 3328024,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "SPG",
+   "sector": "Real Estate",
+   "close": 212.69,
+   "e10": 207.35,
+   "e20": 205.62,
+   "e50": 207.18,
+   "rsi": 63.7,
+   "rsi_prev": 62.2,
+   "atr": 3.45,
+   "age": 3,
+   "cross": "2026-10-21",
+   "ob_up": null,
+   "earn": "2026-11-05",
+   "rs": 57,
+   "vol": 1279159,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "MCD",
+   "sector": "Consumer Discretionary",
+   "close": 250.83,
+   "e10": 245.54,
+   "e20": 243.53,
+   "e50": 248.55,
+   "rsi": 60.9,
+   "rsi_prev": 57.9,
+   "atr": 4.61,
+   "age": 3,
+   "cross": "2026-10-21",
+   "ob_up": 297.77,
+   "earn": "2026-11-04",
+   "rs": 15,
+   "vol": 5685942,
+   "since": "2026-10-26",
+   "new": true
+  },
+  {
+   "ticker": "LDOS",
+   "sector": "Industrials",
+   "close": 139.86,
+   "e10": 130.25,
+   "e20": 127.37,
+   "e50": 126.63,
+   "rsi": 72.2,
+   "rsi_prev": 68.4,
+   "atr": 3.76,
+   "age": 4,
+   "cross": "2026-10-20",
+   "ob_up": 147.49,
+   "earn": "2026-11-03",
+   "rs": 30,
+   "vol": 1051560,
+   "since": "2026-10-26",
+   "new": true
+  }
+ ],
+ "funnel": {
+  "signal": 76,
+  "rules": 29,
+  "sector": 18,
+  "hot": 0,
+  "near_ob": 0,
+  "earnings": 5,
+  "setups": 13,
+  "earn_checked": true
+ },
+ "dropped": [],
+ "prev_asof": "2026-10-23",
+ "screen": [
+  [
+   "LUV",
+   "Industrials",
+   42.85,
+   58.9,
+   0,
+   "111111111"
+  ],
+  [
+   "USB",
+   "Financials",
+   59.7,
+   56.2,
+   2,
+   "111111111"
+  ],
+  [
+   "SPG",
+   "Real Estate",
+   212.69,
+   63.7,
+   3,
+   "111111111"
+  ],
+  [
+   "FITB",
+   "Financials",
+   53.1,
+   60.1,
+   2,
+   "111111111"
+  ],
+  [
+   "RF",
+   "Financials",
+   28.61,
+   60.6,
+   1,
+   "111111111"
+  ],
+  [
+   "KEY",
+   "Financials",
+   21.21,
+   61.3,
+   2,
+   "111111111"
+  ],
+  [
+   "RTX",
+   "Industrials",
+   197.48,
+   59.0,
+   2,
+   "111111111"
+  ],
+  [
+   "TFC",
+   "Financials",
+   48.91,
+   60.3,
+   1,
+   "111111111"
+  ],
+  [
+   "SYF",
+   "Financials",
+   74.83,
+   53.9,
+   2,
+   "111111111"
+  ],
+  [
+   "LDOS",
+   "Industrials",
+   139.86,
+   72.2,
+   4,
+   "111111111"
+  ],
+  [
+   "PHM",
+   "Consumer Discretionary",
+   121.31,
+   58.9,
+   0,
+   "111111111"
+  ],
+  [
+   "MCD",
+   "Consumer Discretionary",
+   250.83,
+   60.9,
+   3,
+   "111111111"
+  ],
+  [
+   "CPRT",
+   "Industrials",
+   29.15,
+   57.2,
+   0,
+   "111111111"
+  ],
+  [
+   "HPQ",
+   "Information Technology",
+   34.09,
+   63.3,
+   2,
+   "111110111"
+  ],
+  [
+   "HAS",
+   "Consumer Discretionary",
+   117.96,
+   87.9,
+   13,
+   "011111111"
+  ],
+  [
+   "EXPD",
+   "Industrials",
+   196.43,
+   57.8,
+   16,
+   "011111111"
+  ],
+  [
+   "HST",
+   "Real Estate",
+   25.06,
+   74.1,
+   18,
+   "011111111"
+  ],
+  [
+   "SWK",
+   "Industrials",
+   99.37,
+   69.6,
+   6,
+   "011111111"
+  ],
+  [
+   "DGX",
+   "Health Care",
+   242.95,
+   60.8,
+   4,
+   "111110111"
+  ],
+  [
+   "CSX",
+   "Industrials",
+   51.31,
+   67.7,
+   7,
+   "011111111"
+  ],
+  [
+   "DOW",
+   "Materials",
+   33.99,
+   78.3,
+   7,
+   "011111111"
+  ],
+  [
+   "JNJ",
+   "Health Care",
+   266.3,
+   55.4,
+   0,
+   "111110111"
+  ],
+  [
+   "UNP",
+   "Industrials",
+   296.97,
+   65.9,
+   8,
+   "011111111"
+  ],
+  [
+   "FAST",
+   "Industrials",
+   52.47,
+   60.3,
+   23,
+   "011111111"
+  ],
+  [
+   "CME",
+   "Financials",
+   308.06,
+   79.2,
+   11,
+   "011111111"
+  ],
+  [
+   "CTAS",
+   "Industrials",
+   225.93,
+   79.7,
+   11,
+   "011111111"
+  ],
+  [
+   "ALL",
+   "Financials",
+   255.95,
+   65.0,
+   6,
+   "011111111"
+  ],
+  [
+   "SLB",
+   "Energy",
+   53.08,
+   60.3,
+   0,
+   "111110111"
+  ],
+  [
+   "ROST",
+   "Consumer Discretionary",
+   234.11,
+   52.8,
+   6,
+   "011111111"
+  ],
+  [
+   "NDAQ",
+   "Financials",
+   104.72,
+   74.3,
+   6,
+   "011111111"
+  ],
+  [
+   "EMR",
+   "Industrials",
+   161.7,
+   56.1,
+   22,
+   "011111111"
+  ],
+  [
+   "HAL",
+   "Energy",
+   35.44,
+   64.0,
+   3,
+   "111110111"
+  ],
+  [
+   "EW",
+   "Health Care",
+   90.56,
+   60.3,
+   4,
+   "111110111"
+  ],
+  [
+   "AMCR",
+   "Materials",
+   46.19,
+   72.0,
+   6,
+   "011111111"
+  ],
+  [
+   "WMB",
+   "Energy",
+   71.75,
+   50.7,
+   0,
+   "111110111"
+  ],
+  [
+   "DRI",
+   "Consumer Discretionary",
+   213.25,
+   56.0,
+   7,
+   "011111111"
+  ],
+  [
+   "CCI",
+   "Real Estate",
+   87.47,
+   73.9,
+   10,
+   "011111111"
+  ],
+  [
+   "SBUX",
+   "Consumer Discretionary",
+   102.69,
+   65.2,
+   4,
+   "111111110"
+  ],
+  [
+   "VTR",
+   "Real Estate",
+   87.42,
+   57.1,
+   2,
+   "111111110"
+  ],
+  [
+   "MMM",
+   "Industrials",
+   172.79,
+   59.2,
+   3,
+   "111011111"
+  ],
+  [
+   "AFL",
+   "Financials",
+   120.93,
+   61.0,
+   8,
+   "011111111"
+  ],
+  [
+   "WRB",
+   "Financials",
+   73.79,
+   58.0,
+   13,
+   "011111111"
+  ],
+  [
+   "KIM",
+   "Real Estate",
+   23.65,
+   65.5,
+   4,
+   "111111110"
+  ],
+  [
+   "DOV",
+   "Industrials",
+   202.51,
+   65.7,
+   8,
+   "011111111"
+  ],
+  [
+   "SBAC",
+   "Real Estate",
+   185.92,
+   58.8,
+   9,
+   "011111111"
+  ],
+  [
+   "VMRK",
+   "Real Estate",
+   62.78,
+   56.4,
+   2,
+   "111011111"
+  ],
+  [
+   "UDR",
+   "Real Estate",
+   35.7,
+   62.5,
+   3,
+   "111011111"
+  ],
+  [
+   "NOC",
+   "Industrials",
+   565.41,
+   71.6,
+   4,
+   "111101111"
+  ],
+  [
+   "COF",
+   "Financials",
+   202.35,
+   51.5,
+   3,
+   "101111111"
+  ],
+  [
+   "CCL",
+   "Consumer Discretionary",
+   26.86,
+   58.7,
+   17,
+   "011111111"
+  ],
+  [
+   "HBAN",
+   "Financials",
+   15.73,
+   53.1,
+   0,
+   "101111111"
+  ],
+  [
+   "ES",
+   "Utilities",
+   67.55,
+   56.4,
+   2,
+   "111110111"
+  ],
+  [
+   "HON",
+   "Industrials",
+   219.28,
+   62.0,
+   3,
+   "111011111"
+  ],
+  [
+   "VRSK",
+   "Industrials",
+   196.19,
+   64.7,
+   8,
+   "011111111"
+  ],
+  [
+   "FERG",
+   "Industrials",
+   229.52,
+   57.5,
+   7,
+   "011111111"
+  ],
+  [
+   "O",
+   "Real Estate",
+   57.16,
+   57.0,
+   1,
+   "101111111"
+  ],
+  [
+   "EFX",
+   "Industrials",
+   178.56,
+   64.6,
+   4,
+   "111011111"
+  ],
+  [
+   "VICI",
+   "Real Estate",
+   24.02,
+   56.9,
+   1,
+   "111111110"
+  ],
+  [
+   "LEN",
+   "Consumer Discretionary",
+   83.98,
+   59.2,
+   2,
+   "111011111"
+  ],
+  [
+   "LHX",
+   "Industrials",
+   260.23,
+   66.9,
+   3,
+   "111111110"
+  ],
+  [
+   "NKE",
+   "Consumer Discretionary",
+   37.91,
+   59.1,
+   5,
+   "011111111"
+  ],
+  [
+   "LULU",
+   "Consumer Discretionary",
+   102.91,
+   55.1,
+   1,
+   "101111111"
+  ],
+  [
+   "ILMN",
+   "Health Care",
+   271.04,
+   55.5,
+   122,
+   "01111011-"
+  ],
+  [
+   "FTNT",
+   "Information Technology",
+   183.33,
+   56.3,
+   0,
+   "111110110"
+  ],
+  [
+   "PSX",
+   "Energy",
+   288.85,
+   62.7,
+   78,
+   "01111011-"
+  ],
+  [
+   "NTAP",
+   "Information Technology",
+   222.08,
+   56.4,
+   31,
+   "01111011-"
+  ],
+  [
+   "DDOG",
+   "Information Technology",
+   280.24,
+   57.3,
+   25,
+   "01111011-"
+  ],
+  [
+   "RVTY",
+   "Health Care",
+   160.39,
+   67.7,
+   119,
+   "01111011-"
+  ],
+  [
+   "COP",
+   "Energy",
+   151.37,
+   77.3,
+   11,
+   "01111011-"
+  ],
+  [
+   "TRGP",
+   "Energy",
+   304.68,
+   63.0,
+   11,
+   "01111011-"
+  ],
+  [
+   "BIIB",
+   "Health Care",
+   252.26,
+   71.5,
+   62,
+   "01111011-"
+  ],
+  [
+   "PLTR",
+   "Information Technology",
+   198.84,
+   56.1,
+   58,
+   "01111011-"
+  ],
+  [
+   "EOG",
+   "Energy",
+   163.68,
+   77.0,
+   12,
+   "01111011-"
+  ],
+  [
+   "XOM",
+   "Energy",
+   184.54,
+   77.4,
+   71,
+   "01111011-"
+  ],
+  [
+   "BBY",
+   "Consumer Discretionary",
+   97.95,
+   64.0,
+   7,
+   "01101111-"
+  ],
+  [
+   "TXN",
+   "Information Technology",
+   298.12,
+   64.5,
+   24,
+   "01111011-"
+  ],
+  [
+   "PTC",
+   "Information Technology",
+   194.25,
+   78.6,
+   17,
+   "01111011-"
+  ],
+  [
+   "VTRS",
+   "Health Care",
+   18.29,
+   57.5,
+   30,
+   "01111011-"
+  ],
+  [
+   "A",
+   "Health Care",
+   175.96,
+   61.0,
+   28,
+   "01111011-"
+  ],
+  [
+   "SWKS",
+   "Information Technology",
+   83.34,
+   55.6,
+   0,
+   "11101011-"
+  ],
+  [
+   "NUE",
+   "Materials",
+   257.35,
+   54.5,
+   9,
+   "01101111-"
+  ],
+  [
+   "DVN",
+   "Energy",
+   51.64,
+   62.5,
+   12,
+   "01111011-"
+  ],
+  [
+   "IFF",
+   "Materials",
+   93.69,
+   77.1,
+   10,
+   "01101111-"
+  ],
+  [
+   "TRV",
+   "Financials",
+   400.17,
+   69.1,
+   9,
+   "01110111-"
+  ],
+  [
+   "ABBV",
+   "Health Care",
+   286.74,
+   67.1,
+   30,
+   "01111011-"
+  ],
+  [
+   "CAH",
+   "Health Care",
+   251.54,
+   62.5,
+   12,
+   "01111011-"
+  ],
+  [
+   "LYB",
+   "Materials",
+   67.35,
+   70.5,
+   6,
+   "011111110"
+  ],
+  [
+   "GILD",
+   "Health Care",
+   158.69,
+   62.0,
+   11,
+   "01111011-"
+  ],
+  [
+   "ADP",
+   "Industrials",
+   301.12,
+   70.2,
+   9,
+   "01101111-"
+  ],
+  [
+   "KDP",
+   "Consumer Staples",
+   34.99,
+   67.6,
+   10,
+   "01111011-"
+  ],
+  [
+   "FANG",
+   "Energy",
+   207.13,
+   63.8,
+   8,
+   "01111011-"
+  ],
+  [
+   "OKE",
+   "Energy",
+   96.36,
+   63.7,
+   6,
+   "01111011-"
+  ],
+  [
+   "CBOE",
+   "Financials",
+   335.25,
+   69.1,
+   12,
+   "01101111-"
+  ],
+  [
+   "EL",
+   "Consumer Staples",
+   108.82,
+   66.9,
+   10,
+   "01111011-"
+  ],
+  [
+   "WSM",
+   "Consumer Discretionary",
+   249.96,
+   58.4,
+   17,
+   "01101111-"
+  ],
+  [
+   "MET",
+   "Financials",
+   100.04,
+   53.8,
+   12,
+   "01011111-"
+  ],
+  [
+   "LMT",
+   "Industrials",
+   635.2,
+   82.7,
+   6,
+   "01110111-"
+  ],
+  [
+   "MAR",
+   "Consumer Discretionary",
+   394.75,
+   67.9,
+   22,
+   "01110111-"
+  ],
+  [
+   "STT",
+   "Financials",
+   169.94,
+   40.7,
+   null,
+   "00111111-"
+  ],
+  [
+   "WELL",
+   "Real Estate",
+   240.61,
+   62.3,
+   6,
+   "011111110"
+  ],
+  [
+   "VRSN",
+   "Information Technology",
+   308.72,
+   62.1,
+   12,
+   "01111011-"
+  ],
+  [
+   "PM",
+   "Consumer Staples",
+   201.87,
+   57.4,
+   30,
+   "01111011-"
+  ],
+  [
+   "HLT",
+   "Consumer Discretionary",
+   351.89,
+   65.9,
+   19,
+   "01110111-"
+  ],
+  [
+   "FDX",
+   "Industrials",
+   300.58,
+   54.3,
+   2,
+   "101111110"
+  ],
+  [
+   "CF",
+   "Materials",
+   120.84,
+   53.3,
+   null,
+   "00111111-"
+  ],
+  [
+   "PFG",
+   "Financials",
+   110.13,
+   49.6,
+   null,
+   "00111111-"
+  ],
+  [
+   "DHR",
+   "Health Care",
+   232.97,
+   62.1,
+   27,
+   "01111011-"
+  ],
+  [
+   "BMY",
+   "Health Care",
+   61.61,
+   52.2,
+   1,
+   "111110110"
+  ],
+  [
+   "BNY",
+   "Financials",
+   147.18,
+   51.6,
+   null,
+   "00111111-"
+  ],
+  [
+   "RSG",
+   "Industrials",
+   241.31,
+   73.6,
+   10,
+   "011111110"
+  ],
+  [
+   "CHD",
+   "Consumer Staples",
+   105.38,
+   63.8,
+   11,
+   "01111011-"
+  ],
+  [
+   "MNST",
+   "Consumer Staples",
+   46.44,
+   60.1,
+   7,
+   "01111011-"
+  ],
+  [
+   "ALLE",
+   "Industrials",
+   178.22,
+   78.3,
+   6,
+   "01101111-"
+  ],
+  [
+   "BRK-B",
+   "Financials",
+   548.56,
+   76.8,
+   11,
+   "01110111-"
+  ],
+  [
+   "RMD",
+   "Health Care",
+   253.2,
+   77.5,
+   11,
+   "01111011-"
+  ],
+  [
+   "CB",
+   "Financials",
+   356.74,
+   60.2,
+   10,
+   "01110111-"
+  ],
+  [
+   "TECH",
+   "Health Care",
+   72.69,
+   60.7,
+   99,
+   "01111011-"
+  ],
+  [
+   "DAL",
+   "Industrials",
+   79.16,
+   48.6,
+   null,
+   "00111111-"
+  ],
+  [
+   "WAB",
+   "Industrials",
+   277.67,
+   42.4,
+   null,
+   "10011111-"
+  ],
+  [
+   "BALL",
+   "Materials",
+   64.45,
+   67.8,
+   7,
+   "01101111-"
+  ],
+  [
+   "NTRS",
+   "Financials",
+   169.55,
+   48.2,
+   null,
+   "00111111-"
+  ],
+  [
+   "PGR",
+   "Financials",
+   229.25,
+   64.9,
+   12,
+   "01111110-"
+  ],
+  [
+   "PRU",
+   "Financials",
+   115.79,
+   50.6,
+   null,
+   "00111111-"
+  ],
+  [
+   "AMT",
+   "Real Estate",
+   188.28,
+   65.4,
+   10,
+   "01101111-"
+  ],
+  [
+   "PAYX",
+   "Industrials",
+   115.7,
+   61.1,
+   5,
+   "01101111-"
+  ],
+  [
+   "TSLA",
+   "Consumer Discretionary",
+   391.62,
+   60.1,
+   16,
+   "01110111-"
+  ],
+  [
+   "MRSH",
+   "Financials",
+   194.72,
+   69.2,
+   8,
+   "01101111-"
+  ],
+  [
+   "AIG",
+   "Financials",
+   81.13,
+   64.2,
+   12,
+   "01101111-"
+  ],
+  [
+   "EVRG",
+   "Utilities",
+   84.61,
+   64.8,
+   10,
+   "01111011-"
+  ],
+  [
+   "VLTO",
+   "Industrials",
+   103.35,
+   67.7,
+   12,
+   "01101111-"
+  ],
+  [
+   "WM",
+   "Industrials",
+   241.02,
+   79.5,
+   7,
+   "011111110"
+  ],
+  [
+   "AES",
+   "Utilities",
+   15.03,
+   75.1,
+   76,
+   "01111011-"
+  ],
+  [
+   "AWK",
+   "Utilities",
+   141.7,
+   66.9,
+   4,
+   "11101011-"
+  ],
+  [
+   "AJG",
+   "Financials",
+   266.79,
+   68.1,
+   6,
+   "01101111-"
+  ],
+  [
+   "ACGL",
+   "Financials",
+   102.34,
+   64.6,
+   8,
+   "011111110"
+  ],
+  [
+   "WMT",
+   "Consumer Staples",
+   120.29,
+   70.2,
+   12,
+   "01111011-"
+  ],
+  [
+   "SYY",
+   "Consumer Staples",
+   82.16,
+   57.0,
+   8,
+   "01111011-"
+  ],
+  [
+   "FTV",
+   "Industrials",
+   60.78,
+   68.6,
+   14,
+   "011111110"
+  ],
+  [
+   "ECL",
+   "Materials",
+   288.89,
+   59.0,
+   14,
+   "011111110"
+  ],
+  [
+   "CFG",
+   "Financials",
+   65.37,
+   52.2,
+   null,
+   "00111111-"
+  ],
+  [
+   "DOC",
+   "Real Estate",
+   19.36,
+   51.1,
+   null,
+   "00111111-"
+  ],
+  [
+   "ETR",
+   "Utilities",
+   107.5,
+   62.8,
+   9,
+   "01111011-"
+  ],
+  [
+   "IRM",
+   "Real Estate",
+   113.08,
+   49.3,
+   null,
+   "00111111-"
+  ],
+  [
+   "PNC",
+   "Financials",
+   225.84,
+   55.3,
+   null,
+   "00111111-"
+  ],
+  [
+   "NXPI",
+   "Information Technology",
+   245.83,
+   59.7,
+   3,
+   "111110110"
+  ],
+  [
+   "D",
+   "Utilities",
+   65.1,
+   61.6,
+   2,
+   "11101011-"
+  ],
+  [
+   "KHC",
+   "Consumer Staples",
+   24.73,
+   61.1,
+   2,
+   "11101011-"
+  ],
+  [
+   "MTB",
+   "Financials",
+   221.8,
+   50.3,
+   null,
+   "00111111-"
+  ],
+  [
+   "SPGI",
+   "Financials",
+   450.65,
+   72.0,
+   7,
+   "01110111-"
+  ],
+  [
+   "MAS",
+   "Industrials",
+   75.51,
+   63.1,
+   7,
+   "01101111-"
+  ],
+  [
+   "ITW",
+   "Industrials",
+   276.22,
+   58.5,
+   6,
+   "011111110"
+  ],
+  [
+   "GEHC",
+   "Health Care",
+   71.98,
+   66.2,
+   9,
+   "01111011-"
+  ],
+  [
+   "UPS",
+   "Industrials",
+   100.32,
+   60.3,
+   4,
+   "111011110"
+  ],
+  [
+   "ICE",
+   "Financials",
+   160.05,
+   55.7,
+   9,
+   "01101111-"
+  ],
+  [
+   "HIG",
+   "Financials",
+   135.94,
+   58.1,
+   7,
+   "01101111-"
+  ],
+  [
+   "AEE",
+   "Utilities",
+   108.08,
+   64.5,
+   8,
+   "01111011-"
+  ],
+  [
+   "GD",
+   "Industrials",
+   357.04,
+   65.4,
+   2,
+   "111101110"
+  ],
+  [
+   "EXR",
+   "Real Estate",
+   143.37,
+   65.3,
+   6,
+   "01101111-"
+  ],
+  [
+   "YUM",
+   "Consumer Discretionary",
+   149.47,
+   56.9,
+   10,
+   "01101111-"
+  ],
+  [
+   "WEC",
+   "Utilities",
+   111.12,
+   66.6,
+   9,
+   "01111011-"
+  ],
+  [
+   "CNP",
+   "Utilities",
+   41.2,
+   68.0,
+   10,
+   "01111011-"
+  ],
+  [
+   "PPG",
+   "Materials",
+   109.9,
+   56.5,
+   4,
+   "111011110"
+  ],
+  [
+   "ABT",
+   "Health Care",
+   104.88,
+   58.1,
+   6,
+   "01111011-"
+  ],
+  [
+   "INVH",
+   "Real Estate",
+   27.52,
+   58.1,
+   2,
+   "111011110"
+  ],
+  [
+   "WFC",
+   "Financials",
+   82.65,
+   48.8,
+   null,
+   "00111111-"
+  ],
+  [
+   "REG",
+   "Real Estate",
+   73.67,
+   54.3,
+   2,
+   "10101111-"
+  ],
+  [
+   "EXE",
+   "Energy",
+   94.02,
+   62.3,
+   7,
+   "01111011-"
+  ],
+  [
+   "SHW",
+   "Materials",
+   335.16,
+   54.4,
+   6,
+   "01101111-"
+  ],
+  [
+   "FE",
+   "Utilities",
+   46.18,
+   58.6,
+   8,
+   "01111011-"
+  ],
+  [
+   "EXC",
+   "Utilities",
+   44.54,
+   65.3,
+   8,
+   "01111011-"
+  ],
+  [
+   "NI",
+   "Utilities",
+   43.44,
+   66.9,
+   10,
+   "01111011-"
+  ],
+  [
+   "ORLY",
+   "Consumer Discretionary",
+   91.05,
+   61.8,
+   7,
+   "011111110"
+  ],
+  [
+   "DHI",
+   "Consumer Discretionary",
+   146.52,
+   60.1,
+   2,
+   "111011110"
+  ],
+  [
+   "BXP",
+   "Real Estate",
+   62.26,
+   55.5,
+   null,
+   "00111111-"
+  ],
+  [
+   "CMS",
+   "Utilities",
+   69.59,
+   65.0,
+   8,
+   "01111011-"
+  ],
+  [
+   "SW",
+   "Materials",
+   42.24,
+   47.0,
+   null,
+   "00111111-"
+  ],
+  [
+   "SRE",
+   "Utilities",
+   84.24,
+   60.9,
+   9,
+   "01111011-"
+  ],
+  [
+   "ADBE",
+   "Information Technology",
+   258.62,
+   55.8,
+   4,
+   "11101011-"
+  ],
+  [
+   "RJF",
+   "Financials",
+   158.07,
+   45.7,
+   null,
+   "00111111-"
+  ],
+  [
+   "NEE",
+   "Utilities",
+   82.04,
+   62.6,
+   2,
+   "11101011-"
+  ],
+  [
+   "BRO",
+   "Financials",
+   71.08,
+   61.6,
+   7,
+   "01101111-"
+  ],
+  [
+   "RCL",
+   "Consumer Discretionary",
+   280.6,
+   54.1,
+   15,
+   "01011111-"
+  ],
+  [
+   "AOS",
+   "Industrials",
+   61.91,
+   65.5,
+   6,
+   "011111110"
+  ],
+  [
+   "OTIS",
+   "Industrials",
+   75.27,
+   72.9,
+   7,
+   "011111110"
+  ],
+  [
+   "PEP",
+   "Consumer Staples",
+   135.46,
+   59.0,
+   4,
+   "11101011-"
+  ],
+  [
+   "CARR",
+   "Industrials",
+   56.44,
+   52.9,
+   1,
+   "101111110"
+  ],
+  [
+   "MAA",
+   "Real Estate",
+   119.58,
+   55.2,
+   1,
+   "10101111-"
+  ],
+  [
+   "APO",
+   "Financials",
+   114.37,
+   43.4,
+   null,
+   "00111111-"
+  ],
+  [
+   "PEG",
+   "Utilities",
+   72.11,
+   56.7,
+   11,
+   "01111011-"
+  ],
+  [
+   "HD",
+   "Consumer Discretionary",
+   319.38,
+   62.1,
+   6,
+   "01101111-"
+  ],
+  [
+   "VMC",
+   "Materials",
+   261.48,
+   58.3,
+   5,
+   "01101111-"
+  ],
+  [
+   "HRL",
+   "Consumer Staples",
+   20.95,
+   58.9,
+   3,
+   "11101011-"
+  ],
+  [
+   "TXT",
+   "Industrials",
+   78.11,
+   54.1,
+   0,
+   "101111110"
+  ],
+  [
+   "BX",
+   "Financials",
+   119.06,
+   55.1,
+   null,
+   "00111111-"
+  ],
+  [
+   "EIX",
+   "Utilities",
+   57.78,
+   58.7,
+   4,
+   "10111011-"
+  ],
+  [
+   "AON",
+   "Financials",
+   302.06,
+   58.2,
+   3,
+   "111011110"
+  ],
+  [
+   "KKR",
+   "Financials",
+   91.62,
+   48.1,
+   null,
+   "00111111-"
+  ],
+  [
+   "CLX",
+   "Consumer Staples",
+   86.76,
+   51.3,
+   2,
+   "10111011-"
+  ],
+  [
+   "COO",
+   "Health Care",
+   61.14,
+   60.8,
+   2,
+   "11101011-"
+  ],
+  [
+   "LOW",
+   "Consumer Discretionary",
+   198.22,
+   56.7,
+   5,
+   "01101111-"
+  ],
+  [
+   "XYL",
+   "Industrials",
+   108.24,
+   60.4,
+   2,
+   "111011110"
+  ],
+  [
+   "IP",
+   "Materials",
+   33.4,
+   46.7,
+   null,
+   "00111111-"
+  ],
+  [
+   "CSGP",
+   "Real Estate",
+   33.7,
+   63.8,
+   8,
+   "01101111-"
+  ],
+  [
+   "WY",
+   "Real Estate",
+   19.58,
+   46.5,
+   null,
+   "00111111-"
+  ],
+  [
+   "ARE",
+   "Real Estate",
+   43.4,
+   41.6,
+   null,
+   "00111111-"
+  ],
+  [
+   "CRH",
+   "Materials",
+   85.43,
+   51.9,
+   0,
+   "101111110"
+  ],
+  [
+   "FIS",
+   "Financials",
+   36.87,
+   55.1,
+   4,
+   "10101111-"
+  ],
+  [
+   "FISV",
+   "Financials",
+   48.33,
+   52.3,
+   3,
+   "10101111-"
+  ],
+  [
+   "BSX",
+   "Health Care",
+   45.58,
+   56.5,
+   4,
+   "11101011-"
+  ],
+  [
+   "PODD",
+   "Health Care",
+   149.26,
+   66.3,
+   6,
+   "01111011-"
+  ],
+  [
+   "ROL",
+   "Industrials",
+   34.55,
+   59.0,
+   6,
+   "01101111-"
+  ],
+  [
+   "PNR",
+   "Industrials",
+   55.22,
+   56.4,
+   0,
+   "10101111-"
+  ],
+  [
+   "APTV",
+   "Consumer Discretionary",
+   43.61,
+   45.3,
+   null,
+   "10011111-"
+  ],
+  [
+   "MPC",
+   "Energy",
+   470.64,
+   65.0,
+   82,
+   "01110011-"
+  ],
+  [
+   "CRWD",
+   "Information Technology",
+   261.83,
+   57.8,
+   null,
+   "00111011-"
+  ],
+  [
+   "P",
+   "Information Technology",
+   131.33,
+   52.2,
+   null,
+   "00111011-"
+  ],
+  [
+   "APA",
+   "Energy",
+   51.66,
+   74.8,
+   14,
+   "01101011-"
+  ],
+  [
+   "CRL",
+   "Health Care",
+   357.27,
+   76.4,
+   24,
+   "01110011-"
+  ],
+  [
+   "VEEV",
+   "Health Care",
+   318.18,
+   70.0,
+   83,
+   "01101011-"
+  ],
+  [
+   "BE",
+   "Industrials",
+   203.92,
+   37.2,
+   null,
+   "00011111-"
+  ],
+  [
+   "CVX",
+   "Energy",
+   232.01,
+   74.1,
+   12,
+   "01101011-"
+  ],
+  [
+   "NOW",
+   "Information Technology",
+   158.18,
+   68.7,
+   62,
+   "01101011-"
+  ],
+  [
+   "OXY",
+   "Energy",
+   64.07,
+   67.9,
+   11,
+   "01101011-"
+  ],
+  [
+   "AMGN",
+   "Health Care",
+   444.63,
+   63.2,
+   19,
+   "01110011-"
+  ],
+  [
+   "ACN",
+   "Information Technology",
+   247.23,
+   71.3,
+   17,
+   "01101011-"
+  ],
+  [
+   "LLY",
+   "Health Care",
+   1279.14,
+   63.1,
+   13,
+   "01110011-"
+  ],
+  [
+   "ADI",
+   "Information Technology",
+   407.93,
+   56.4,
+   25,
+   "01110011-"
+  ],
+  [
+   "WDAY",
+   "Information Technology",
+   208.5,
+   64.8,
+   7,
+   "01101011-"
+  ],
+  [
+   "BDX",
+   "Health Care",
+   196.39,
+   63.7,
+   11,
+   "01101011-"
+  ],
+  [
+   "IQV",
+   "Health Care",
+   273.6,
+   57.7,
+   7,
+   "01101011-"
+  ],
+  [
+   "CSCO",
+   "Information Technology",
+   110.24,
+   50.6,
+   null,
+   "00111011-"
+  ],
+  [
+   "CRM",
+   "Information Technology",
+   247.61,
+   59.7,
+   7,
+   "01101011-"
+  ],
+  [
+   "MSFT",
+   "Information Technology",
+   532.6,
+   57.3,
+   63,
+   "01110011-"
+  ],
+  [
+   "TMO",
+   "Health Care",
+   684.89,
+   57.8,
+   86,
+   "01110011-"
+  ],
+  [
+   "ABNB",
+   "Consumer Discretionary",
+   171.05,
+   53.3,
+   7,
+   "01001111-"
+  ],
+  [
+   "SJM",
+   "Consumer Staples",
+   128.64,
+   59.2,
+   7,
+   "01101011-"
+  ],
+  [
+   "KO",
+   "Consumer Staples",
+   92.7,
+   60.0,
+   10,
+   "01101011-"
+  ],
+  [
+   "PFE",
+   "Health Care",
+   29.79,
+   61.9,
+   11,
+   "01101011-"
+  ],
+  [
+   "AAPL",
+   "Information Technology",
+   343.91,
+   57.7,
+   40,
+   "01101011-"
+  ],
+  [
+   "V",
+   "Financials",
+   404.16,
+   65.3,
+   12,
+   "01100111-"
+  ],
+  [
+   "CTSH",
+   "Information Technology",
+   69.34,
+   64.0,
+   9,
+   "01101011-"
+  ],
+  [
+   "CDW",
+   "Information Technology",
+   163.23,
+   67.7,
+   9,
+   "01101011-"
+  ],
+  [
+   "BAX",
+   "Health Care",
+   25.29,
+   56.7,
+   10,
+   "01101011-"
+  ],
+  [
+   "KMI",
+   "Energy",
+   33.94,
+   60.7,
+   13,
+   "01101011-"
+  ],
+  [
+   "JCI",
+   "Industrials",
+   147.5,
+   48.1,
+   null,
+   "00011111-"
+  ],
+  [
+   "EBAY",
+   "Consumer Discretionary",
+   118.62,
+   59.7,
+   12,
+   "01001111-"
+  ],
+  [
+   "KVUE",
+   "Consumer Staples",
+   19.5,
+   66.7,
+   7,
+   "01101011-"
+  ],
+  [
+   "QCOM",
+   "Information Technology",
+   179.6,
+   51.9,
+   null,
+   "00111011-"
+  ],
+  [
+   "NWSA",
+   "Communication Services",
+   30.59,
+   60.1,
+   7,
+   "01101011-"
+  ],
+  [
+   "MA",
+   "Financials",
+   613.5,
+   61.8,
+   11,
+   "01100111-"
+  ],
+  [
+   "VRTX",
+   "Health Care",
+   517.49,
+   51.7,
+   2,
+   "11100011-"
+  ],
+  [
+   "NEM",
+   "Materials",
+   110.39,
+   39.4,
+   null,
+   "00011111-"
+  ],
+  [
+   "DLTR",
+   "Consumer Staples",
+   124.92,
+   56.6,
+   8,
+   "01101011-"
+  ],
+  [
+   "EXPE",
+   "Consumer Discretionary",
+   283.97,
+   51.0,
+   6,
+   "01001111-"
+  ],
+  [
+   "ED",
+   "Utilities",
+   115.42,
+   70.9,
+   10,
+   "01101011-"
+  ],
+  [
+   "CL",
+   "Consumer Staples",
+   93.1,
+   57.9,
+   10,
+   "01101011-"
+  ],
+  [
+   "AME",
+   "Industrials",
+   242.81,
+   45.6,
+   null,
+   "00011111-"
+  ],
+  [
+   "PNW",
+   "Utilities",
+   105.34,
+   68.0,
+   13,
+   "01101011-"
+  ],
+  [
+   "IVZ",
+   "Financials",
+   28.53,
+   41.1,
+   null,
+   "00011111-"
+  ],
+  [
+   "MDT",
+   "Health Care",
+   94.79,
+   58.2,
+   9,
+   "01101011-"
+  ],
+  [
+   "KR",
+   "Consumer Staples",
+   66.77,
+   67.2,
+   31,
+   "01101011-"
+  ],
+  [
+   "FOXA",
+   "Communication Services",
+   65.33,
+   52.8,
+   4,
+   "11001011-"
+  ],
+  [
+   "GDDY",
+   "Information Technology",
+   109.82,
+   59.5,
+   12,
+   "01101011-"
+  ],
+  [
+   "AMZN",
+   "Consumer Discretionary",
+   249.09,
+   44.3,
+   null,
+   "00011111-"
+  ],
+  [
+   "CI",
+   "Health Care",
+   305.78,
+   63.7,
+   11,
+   "01101011-"
+  ],
+  [
+   "LIN",
+   "Materials",
+   507.56,
+   69.0,
+   15,
+   "01100111-"
+  ],
+  [
+   "JPM",
+   "Financials",
+   334.04,
+   45.9,
+   null,
+   "00011111-"
+  ],
+  [
+   "CVS",
+   "Health Care",
+   92.53,
+   56.1,
+   6,
+   "01101011-"
+  ],
+  [
+   "KMB",
+   "Consumer Staples",
+   109.63,
+   65.8,
+   7,
+   "01101011-"
+  ],
+  [
+   "COST",
+   "Consumer Staples",
+   1005.16,
+   69.7,
+   14,
+   "01110011-"
+  ],
+  [
+   "AEP",
+   "Utilities",
+   129.22,
+   64.2,
+   11,
+   "01101011-"
+  ],
+  [
+   "ZBH",
+   "Health Care",
+   97.44,
+   60.2,
+   6,
+   "01101011-"
+  ],
+  [
+   "IBM",
+   "Information Technology",
+   253.44,
+   71.0,
+   6,
+   "01101011-"
+  ],
+  [
+   "C",
+   "Financials",
+   121.04,
+   36.2,
+   null,
+   "00011111-"
+  ],
+  [
+   "MCHP",
+   "Information Technology",
+   75.9,
+   50.9,
+   null,
+   "00111011-"
+  ],
+  [
+   "GPN",
+   "Financials",
+   81.86,
+   44.4,
+   null,
+   "10001111-"
+  ],
+  [
+   "AKAM",
+   "Information Technology",
+   98.5,
+   48.1,
+   null,
+   "00111011-"
+  ],
+  [
+   "IBKR",
+   "Financials",
+   80.59,
+   38.0,
+   null,
+   "00011111-"
+  ],
+  [
+   "EQT",
+   "Energy",
+   54.85,
+   58.6,
+   10,
+   "01101011-"
+  ],
+  [
+   "DUK",
+   "Utilities",
+   124.44,
+   66.1,
+   8,
+   "01101011-"
+  ],
+  [
+   "SO",
+   "Utilities",
+   92.57,
+   66.0,
+   9,
+   "01101011-"
+  ],
+  [
+   "XEL",
+   "Utilities",
+   77.86,
+   64.8,
+   10,
+   "01101011-"
+  ],
+  [
+   "LNT",
+   "Utilities",
+   69.5,
+   62.8,
+   9,
+   "01101011-"
+  ],
+  [
+   "GPC",
+   "Consumer Discretionary",
+   123.22,
+   40.8,
+   null,
+   "00011111-"
+  ],
+  [
+   "GNRC",
+   "Industrials",
+   189.23,
+   40.8,
+   null,
+   "00011111-"
+  ],
+  [
+   "MS",
+   "Financials",
+   183.49,
+   41.1,
+   null,
+   "00011111-"
+  ],
+  [
+   "BKR",
+   "Energy",
+   56.01,
+   47.6,
+   null,
+   "00111011-"
+  ],
+  [
+   "TEL",
+   "Information Technology",
+   213.86,
+   52.0,
+   null,
+   "00111011-"
+  ],
+  [
+   "GS",
+   "Financials",
+   893.28,
+   44.3,
+   null,
+   "00110111-"
+  ],
+  [
+   "ADSK",
+   "Information Technology",
+   249.45,
+   62.6,
+   12,
+   "01101011-"
+  ],
+  [
+   "DLR",
+   "Real Estate",
+   174.53,
+   45.4,
+   null,
+   "00011111-"
+  ],
+  [
+   "TROW",
+   "Financials",
+   103.49,
+   48.9,
+   null,
+   "00101111-"
+  ],
+  [
+   "STZ",
+   "Consumer Staples",
+   135.62,
+   67.8,
+   10,
+   "01101011-"
+  ],
+  [
+   "PPL",
+   "Utilities",
+   34.92,
+   58.6,
+   11,
+   "01101011-"
+  ],
+  [
+   "TSN",
+   "Consumer Staples",
+   56.4,
+   65.4,
+   9,
+   "01101011-"
+  ],
+  [
+   "GM",
+   "Consumer Discretionary",
+   76.31,
+   37.7,
+   null,
+   "00011111-"
+  ],
+  [
+   "TRMB",
+   "Information Technology",
+   63.37,
+   64.2,
+   14,
+   "01101011-"
+  ],
+  [
+   "ECHO",
+   "Communication Services",
+   89.26,
+   48.0,
+   null,
+   "00111011-"
+  ],
+  [
+   "ARES",
+   "Financials",
+   121.88,
+   53.7,
+   null,
+   "00101111-"
+  ],
+  [
+   "UAL",
+   "Industrials",
+   100.69,
+   43.1,
+   null,
+   "00011111-"
+  ],
+  [
+   "TJX",
+   "Consumer Discretionary",
+   143.7,
+   58.5,
+   14,
+   "01001111-"
+  ],
+  [
+   "DTE",
+   "Utilities",
+   131.74,
+   59.0,
+   6,
+   "01101011-"
+  ],
+  [
+   "AXP",
+   "Financials",
+   315.05,
+   51.1,
+   5,
+   "00011111-"
+  ],
+  [
+   "GE",
+   "Industrials",
+   288.43,
+   29.8,
+   null,
+   "00011111-"
+  ],
+  [
+   "MKC",
+   "Consumer Staples",
+   47.97,
+   53.8,
+   1,
+   "10101011-"
+  ],
+  [
+   "IR",
+   "Industrials",
+   74.52,
+   41.6,
+   null,
+   "00011111-"
+  ],
+  [
+   "SYK",
+   "Health Care",
+   306.13,
+   63.4,
+   6,
+   "01101011-"
+  ],
+  [
+   "GIS",
+   "Consumer Staples",
+   33.7,
+   50.9,
+   1,
+   "10101011-"
+  ],
+  [
+   "VRT",
+   "Industrials",
+   199.78,
+   32.2,
+   null,
+   "00011111-"
+  ],
+  [
+   "INTU",
+   "Information Technology",
+   339.89,
+   62.0,
+   7,
+   "01101011-"
+  ],
+  [
+   "TPR",
+   "Consumer Discretionary",
+   110.9,
+   37.1,
+   null,
+   "00011111-"
+  ],
+  [
+   "HWM",
+   "Industrials",
+   194.36,
+   29.7,
+   null,
+   "00011111-"
+  ],
+  [
+   "ZTS",
+   "Health Care",
+   80.97,
+   68.5,
+   10,
+   "01101011-"
+  ],
+  [
+   "CMG",
+   "Consumer Discretionary",
+   28.41,
+   33.3,
+   null,
+   "00011111-"
+  ],
+  [
+   "AXON",
+   "Industrials",
+   424.77,
+   48.3,
+   null,
+   "00110111-"
+  ],
+  [
+   "NCLH",
+   "Consumer Discretionary",
+   15.25,
+   49.3,
+   11,
+   "00011111-"
+  ],
+  [
+   "MGM",
+   "Consumer Discretionary",
+   28.54,
+   28.9,
+   null,
+   "00011111-"
+  ],
+  [
+   "LVS",
+   "Consumer Discretionary",
+   36.57,
+   38.8,
+   null,
+   "00011111-"
+  ],
+  [
+   "WYNN",
+   "Consumer Discretionary",
+   74.2,
+   37.8,
+   null,
+   "00011111-"
+  ],
+  [
+   "MRNA",
+   "Health Care",
+   198.85,
+   49.8,
+   51,
+   "01001011-"
+  ],
+  [
+   "HPE",
+   "Information Technology",
+   58.72,
+   46.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "MRVL",
+   "Information Technology",
+   233.78,
+   43.9,
+   null,
+   "00011011-"
+  ],
+  [
+   "VLO",
+   "Energy",
+   426.76,
+   54.7,
+   84,
+   "01010011-"
+  ],
+  [
+   "TWLO",
+   "Information Technology",
+   263.65,
+   49.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "PANW",
+   "Information Technology",
+   390.46,
+   55.3,
+   null,
+   "00110011-"
+  ],
+  [
+   "INTC",
+   "Information Technology",
+   90.47,
+   38.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "CNC",
+   "Health Care",
+   68.03,
+   52.7,
+   10,
+   "01001011-"
+  ],
+  [
+   "KEYS",
+   "Information Technology",
+   326.04,
+   41.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "MRK",
+   "Health Care",
+   140.61,
+   42.6,
+   null,
+   "10001011-"
+  ],
+  [
+   "TER",
+   "Information Technology",
+   309.0,
+   33.0,
+   null,
+   "00011011-"
+  ],
+  [
+   "CIEN",
+   "Information Technology",
+   335.93,
+   43.4,
+   null,
+   "00011011-"
+  ],
+  [
+   "ELV",
+   "Health Care",
+   431.32,
+   58.9,
+   11,
+   "01100011-"
+  ],
+  [
+   "FCX",
+   "Materials",
+   65.16,
+   34.1,
+   null,
+   "00001111-"
+  ],
+  [
+   "BEN",
+   "Financials",
+   30.99,
+   40.3,
+   null,
+   "00001111-"
+  ],
+  [
+   "GLW",
+   "Information Technology",
+   127.74,
+   36.9,
+   null,
+   "00011011-"
+  ],
+  [
+   "DXCM",
+   "Health Care",
+   78.57,
+   34.3,
+   null,
+   "00011011-"
+  ],
+  [
+   "NVDA",
+   "Information Technology",
+   216.0,
+   44.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "SOLV",
+   "Health Care",
+   85.81,
+   44.7,
+   null,
+   "00011011-"
+  ],
+  [
+   "UNH",
+   "Health Care",
+   410.7,
+   60.1,
+   8,
+   "01100011-"
+  ],
+  [
+   "COHR",
+   "Information Technology",
+   221.5,
+   35.3,
+   null,
+   "00011011-"
+  ],
+  [
+   "PG",
+   "Consumer Staples",
+   159.92,
+   63.4,
+   14,
+   "01101010-"
+  ],
+  [
+   "LRCX",
+   "Information Technology",
+   237.5,
+   29.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "HCA",
+   "Health Care",
+   465.26,
+   61.6,
+   33,
+   "01100011-"
+  ],
+  [
+   "MDLZ",
+   "Consumer Staples",
+   62.97,
+   54.8,
+   9,
+   "01001011-"
+  ],
+  [
+   "PWR",
+   "Industrials",
+   563.93,
+   33.9,
+   null,
+   "00010111-"
+  ],
+  [
+   "DIS",
+   "Communication Services",
+   110.4,
+   57.4,
+   11,
+   "01001011-"
+  ],
+  [
+   "LYV",
+   "Communication Services",
+   172.58,
+   51.0,
+   4,
+   "10001011-"
+  ],
+  [
+   "GEV",
+   "Industrials",
+   855.12,
+   38.2,
+   null,
+   "00010111-"
+  ],
+  [
+   "DG",
+   "Consumer Staples",
+   128.42,
+   50.6,
+   11,
+   "01001011-"
+  ],
+  [
+   "BF-B",
+   "Consumer Staples",
+   28.95,
+   60.5,
+   9,
+   "01101010-"
+  ],
+  [
+   "APH",
+   "Information Technology",
+   75.27,
+   35.9,
+   null,
+   "00011011-"
+  ],
+  [
+   "SNPS",
+   "Information Technology",
+   454.33,
+   51.2,
+   null,
+   "00110011-"
+  ],
+  [
+   "ON",
+   "Information Technology",
+   74.06,
+   46.7,
+   null,
+   "00011011-"
+  ],
+  [
+   "TT",
+   "Industrials",
+   455.03,
+   48.1,
+   null,
+   "00010111-"
+  ],
+  [
+   "ISRG",
+   "Health Care",
+   451.63,
+   70.3,
+   27,
+   "01100011-"
+  ],
+  [
+   "JBL",
+   "Information Technology",
+   275.68,
+   40.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "COR",
+   "Health Care",
+   330.0,
+   53.3,
+   11,
+   "01001011-"
+  ],
+  [
+   "OMC",
+   "Communication Services",
+   79.83,
+   52.9,
+   7,
+   "01001011-"
+  ],
+  [
+   "ETN",
+   "Industrials",
+   371.92,
+   34.2,
+   null,
+   "00010111-"
+  ],
+  [
+   "GEN",
+   "Information Technology",
+   24.41,
+   48.3,
+   null,
+   "00101011-"
+  ],
+  [
+   "XYZ",
+   "Financials",
+   74.55,
+   42.0,
+   null,
+   "00001111-"
+  ],
+  [
+   "CAT",
+   "Industrials",
+   692.13,
+   28.7,
+   null,
+   "00010111-"
+  ],
+  [
+   "ATO",
+   "Utilities",
+   171.29,
+   66.2,
+   8,
+   "01101010-"
+  ],
+  [
+   "ODFL",
+   "Industrials",
+   182.47,
+   46.5,
+   7,
+   "00001111-"
+  ],
+  [
+   "CDNS",
+   "Information Technology",
+   322.17,
+   48.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "PYPL",
+   "Financials",
+   54.99,
+   46.3,
+   11,
+   "00001111-"
+  ],
+  [
+   "PLD",
+   "Real Estate",
+   126.31,
+   39.5,
+   null,
+   "00001111-"
+  ],
+  [
+   "HOOD",
+   "Financials",
+   92.84,
+   34.5,
+   null,
+   "00001111-"
+  ],
+  [
+   "FLEX",
+   "Information Technology",
+   76.99,
+   23.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "HSY",
+   "Consumer Staples",
+   168.23,
+   50.7,
+   4,
+   "10001011-"
+  ],
+  [
+   "CMI",
+   "Industrials",
+   522.13,
+   44.6,
+   null,
+   "00010111-"
+  ],
+  [
+   "KLAC",
+   "Information Technology",
+   149.21,
+   27.6,
+   null,
+   "00011011-"
+  ],
+  [
+   "BAC",
+   "Financials",
+   50.52,
+   26.2,
+   null,
+   "00001111-"
+  ],
+  [
+   "SCHW",
+   "Financials",
+   89.73,
+   28.9,
+   null,
+   "00001111-"
+  ],
+  [
+   "AVGO",
+   "Information Technology",
+   329.17,
+   39.7,
+   null,
+   "00011011-"
+  ],
+  [
+   "VST",
+   "Utilities",
+   141.73,
+   44.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "F",
+   "Consumer Discretionary",
+   11.58,
+   31.7,
+   null,
+   "00001111-"
+  ],
+  [
+   "CHRW",
+   "Industrials",
+   140.15,
+   44.3,
+   null,
+   "00001111-"
+  ],
+  [
+   "CMCSA",
+   "Communication Services",
+   22.05,
+   48.4,
+   1,
+   "10001011-"
+  ],
+  [
+   "PCAR",
+   "Industrials",
+   104.37,
+   29.2,
+   null,
+   "00001111-"
+  ],
+  [
+   "UBER",
+   "Industrials",
+   66.13,
+   37.1,
+   null,
+   "00001111-"
+  ],
+  [
+   "TSCO",
+   "Consumer Discretionary",
+   32.53,
+   47.1,
+   10,
+   "00001111-"
+  ],
+  [
+   "DASH",
+   "Consumer Discretionary",
+   168.44,
+   32.6,
+   null,
+   "00001111-"
+  ],
+  [
+   "BA",
+   "Industrials",
+   188.31,
+   42.3,
+   null,
+   "00001111-"
+  ],
+  [
+   "CBRE",
+   "Real Estate",
+   122.88,
+   34.8,
+   null,
+   "00001111-"
+  ],
+  [
+   "COIN",
+   "Financials",
+   159.6,
+   39.1,
+   null,
+   "00001111-"
+  ],
+  [
+   "BKNG",
+   "Consumer Discretionary",
+   153.14,
+   35.3,
+   null,
+   "00001111-"
+  ],
+  [
+   "TMUS",
+   "Communication Services",
+   146.93,
+   36.0,
+   null,
+   "00011011-"
+  ],
+  [
+   "PCG",
+   "Utilities",
+   12.85,
+   44.3,
+   null,
+   "00011011-"
+  ],
+  [
+   "DECK",
+   "Consumer Discretionary",
+   80.37,
+   41.7,
+   10,
+   "00001111-"
+  ],
+  [
+   "CVNA",
+   "Consumer Discretionary",
+   56.61,
+   35.2,
+   null,
+   "00001111-"
+  ],
+  [
+   "ALB",
+   "Materials",
+   93.42,
+   28.4,
+   null,
+   "00001111-"
+  ],
+  [
+   "MOS",
+   "Materials",
+   17.71,
+   27.3,
+   null,
+   "00001111-"
+  ],
+  [
+   "NRG",
+   "Utilities",
+   93.61,
+   37.8,
+   null,
+   "00011011-"
+  ],
+  [
+   "APP",
+   "Communication Services",
+   260.74,
+   36.1,
+   null,
+   "00011011-"
+  ],
+  [
+   "Q",
+   "Information Technology",
+   114.07,
+   40.5,
+   null,
+   "00011011-"
+  ],
+  [
+   "SNDK",
+   "Information Technology",
+   1255.58,
+   32.1,
+   null,
+   "00010011-"
+  ],
+  [
+   "DELL",
+   "Information Technology",
+   467.09,
+   40.8,
+   null,
+   "00010011-"
+  ],
+  [
+   "LITE",
+   "Information Technology",
+   818.1,
+   41.7,
+   null,
+   "00010011-"
+  ],
+  [
+   "MU",
+   "Information Technology",
+   903.7,
+   42.3,
+   null,
+   "00010011-"
+  ],
+  [
+   "AMD",
+   "Information Technology",
+   531.28,
+   42.9,
+   null,
+   "00010011-"
+  ],
+  [
+   "STX",
+   "Information Technology",
+   644.21,
+   34.3,
+   null,
+   "00010011-"
+  ],
+  [
+   "HUM",
+   "Health Care",
+   417.22,
+   54.0,
+   15,
+   "01000011-"
+  ],
+  [
+   "WDC",
+   "Information Technology",
+   356.13,
+   39.7,
+   null,
+   "00010011-"
+  ],
+  [
+   "TGT",
+   "Consumer Staples",
+   148.53,
+   40.3,
+   null,
+   "00001011-"
+  ],
+  [
+   "DE",
+   "Industrials",
+   641.25,
+   44.9,
+   null,
+   "00000111-"
+  ],
+  [
+   "MO",
+   "Consumer Staples",
+   73.62,
+   58.6,
+   13,
+   "01001010-"
+  ],
+  [
+   "ADM",
+   "Consumer Staples",
+   79.01,
+   40.6,
+   null,
+   "00001011-"
+  ],
+  [
+   "AMAT",
+   "Information Technology",
+   387.59,
+   30.6,
+   null,
+   "00010011-"
+  ],
+  [
+   "HSIC",
+   "Health Care",
+   84.51,
+   45.7,
+   null,
+   "00001011-"
+  ],
+  [
+   "INCY",
+   "Health Care",
+   113.31,
+   43.4,
+   null,
+   "00001011-"
+  ],
+  [
+   "SMCI",
+   "Information Technology",
+   32.69,
+   37.5,
+   null,
+   "00001011-"
+  ],
+  [
+   "VZ",
+   "Communication Services",
+   43.1,
+   40.2,
+   null,
+   "00001011-"
+  ],
+  [
+   "GOOGL",
+   "Communication Services",
+   316.8,
+   29.6,
+   null,
+   "00001011-"
+  ],
+  [
+   "GOOG",
+   "Communication Services",
+   314.19,
+   29.2,
+   null,
+   "00001011-"
+  ],
+  [
+   "BG",
+   "Consumer Staples",
+   102.22,
+   37.1,
+   null,
+   "00001011-"
+  ],
+  [
+   "T",
+   "Communication Services",
+   20.85,
+   31.3,
+   null,
+   "00001011-"
+  ],
+  [
+   "CEG",
+   "Utilities",
+   252.48,
+   40.3,
+   null,
+   "00001011-"
+  ],
+  [
+   "TTWO",
+   "Communication Services",
+   203.35,
+   44.0,
+   null,
+   "00001011-"
+  ],
+  [
+   "ORCL",
+   "Information Technology",
+   126.06,
+   39.3,
+   null,
+   "00001011-"
+  ],
+  [
+   "FSLR",
+   "Information Technology",
+   168.15,
+   36.0,
+   null,
+   "00001011-"
+  ],
+  [
+   "NFLX",
+   "Communication Services",
+   63.9,
+   33.5,
+   null,
+   "00001011-"
+  ],
+  [
+   "RDDT",
+   "Communication Services",
+   138.45,
+   36.8,
+   null,
+   "00001011-"
+  ],
+  [
+   "CHTR",
+   "Communication Services",
+   102.18,
+   35.8,
+   null,
+   "00001011-"
+  ],
+  [
+   "META",
+   "Communication Services",
+   630.56,
+   33.7,
+   null,
+   "00000011-"
+  ],
+  [
+   "FICO",
+   "Information Technology",
+   708.07,
+   39.1,
+   null,
+   "00000011-"
+  ]
+ ],
+ "live_at": null
+}
