@@ -2401,7 +2401,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", 63), ("6M", 126), ("1Y", 252), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2><div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 and the close above the 50 EMA '
-                      '(your rule), by day for the last 3 months; greener = more stocks rising. ▲ = an upswing (Rising '
+                      '(your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold). ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
