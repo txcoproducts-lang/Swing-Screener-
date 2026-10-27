@@ -1986,8 +1986,7 @@ OV_SCREEN_JS = """<style>
 const D=JSON.parse(document.getElementById('ov-data').textContent),CH=new Set(D.ch),T=document.getElementById('ov-s'),S=document.getElementById('ovsec');
 let lim=2;
 const miss=r=>D.rules.filter(q=>r[5][q[0]]==='0'),n0=r=>miss(r).length;
-function heat(v){const st=[[30,[47,111,237]],[45,[130,170,240]],[55,[226,230,236]],[65,[255,190,110]],[75,[226,80,60]]];v=Math.max(30,Math.min(75,v));
- for(let i=1;i<st.length;i++)if(v<=st[i][0]){const[a,ca]=st[i-1],[b,cb]=st[i],t=(v-a)/(b-a);return'rgb('+ca.map((c,j)=>Math.round(c+(cb[j]-c)*t)).join(',')+')'}}
+function heat(v){return v>=70?'#f4a6a0':v<30?'#f7dc7a':'#a8e0bf'}
 const dot=c=>c==='1'?'<i class="od y">✓</i>':c==='0'?'<i class="od n">✗</i>':'<i class="od u" title="not checked">·</i>';
 function away(k){return k?'<span class="oa'+(k<=2?' w':'')+'">'+k+' away</span>':'<span class="oa r">Ready</span>'}
 function draw(){
@@ -2105,11 +2104,10 @@ def heat_html(bh, days=63):
     if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
-    key = "".join(f'<i class="h{k}"></i>' for k in range(10))
     zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
             f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>')
     return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
-            f'<div class="hmk"><span>0%</span>{key}<span>100% of stocks rising</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% of stocks rising: good</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
 
 
 def swing_tag(w, since=True):
@@ -2304,15 +2302,14 @@ def sector_tiles(df, sws, bh, etfs=None, unit="stock"):
     for n in secs:
         w, k = sws[n], int((ss.sector == n).sum())
         r = w["rise"]
-        bg, dark = (("#c98a2b", 0) if w["z"] == 2 or r >= CFG["OB_BREADTH"] - 5 else ("#1f8a5b", 0) if r >= 55 else
-                    ("#4fa37d", 0) if r >= 40 else ("#a3b394", 0) if r >= 25 else ("#ddd6ca", 1))
+        bg, dark = ("#f4a6a0" if w["z"] == 2 else "#f7dc7a" if w["z"] == -1 else "#a8e0bf"), 1   # the user's 3 colours: overbought / oversold / good
         tag = ("OVER 75" if w["z"] == 2 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
         line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
         sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Colored by the share of stocks rising (10 EMA over 20, price over the 50 EMA), strongest first · line = the last 5 days. '
+    return ('<div class="hint">Red = overbought (over 75% of stocks rising), yellow = oversold (under 30%), green = in between, strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2598,12 +2595,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
-.hmc i{{display:block;background:var(--line)}}.hmc i.o{{box-shadow:inset 0 4px var(--warn)}}.hmc i.u{{box-shadow:inset 0 -4px var(--acc)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
-.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{box-shadow:inset 0 3px var(--warn)}}.hmz i.u{{box-shadow:inset 0 -3px var(--acc)}}
+.hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
 .hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
-.hm i.h0{{background:color-mix(in srgb,var(--dn) 95%,var(--line))}}.hm i.h1{{background:color-mix(in srgb,var(--dn) 78%,var(--line))}}.hm i.h2{{background:color-mix(in srgb,var(--dn) 60%,var(--line))}}.hm i.h3{{background:color-mix(in srgb,var(--dn) 42%,var(--line))}}.hm i.h4{{background:color-mix(in srgb,var(--dn) 22%,var(--line))}}.hm i.h5{{background:color-mix(in srgb,var(--up) 22%,var(--line))}}.hm i.h6{{background:color-mix(in srgb,var(--up) 42%,var(--line))}}.hm i.h7{{background:color-mix(in srgb,var(--up) 60%,var(--line))}}.hm i.h8{{background:color-mix(in srgb,var(--up) 78%,var(--line))}}.hm i.h9{{background:color-mix(in srgb,var(--up) 95%,var(--line))}}
+.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f7dc7a}}
 .hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
 .bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
 .blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
