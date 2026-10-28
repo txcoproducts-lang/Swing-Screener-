@@ -84,7 +84,7 @@ def rules(aid):
                 "setups and option rules as Your system. Sells on the same signals, checked every 30 minutes from about "
                 "10:00 New York time until the close.")
         return [
-            "Uses your screener: last night's setups (Momentum and Pullback) on the strongest sector, strongest stock "
+            "Uses your screener: last night's setups (Momentum and Pullback, Super and Regular) on the strongest sector, strongest stock "
             "list (your rule, from Oct 14): the stock is in your uptrend, its sector is turning up and rising (its "
             "breadth above its 10-day average), and it goes highest score first. The score is 40% the market (S&P 500 "
             "breadth), 40% the sector (its breadth) and 20% the stock (its relative strength rank inside its sector).",
@@ -504,6 +504,12 @@ def ss_why(r, n, src):
             f"(#{r.rs_n:.0f} of {r.rs_of:.0f} in {sec} on relative strength).")
 
 
+def tier(r):
+    """'Super ' or 'Regular ' (the user's tiers, 2026-10-15: over the 150 line or not), '' for older screener files."""
+    t = r.get("tier")
+    return f"{t} " if isinstance(t, str) and t else ""
+
+
 def setup_why(r, n, src="last night's screener", ranked=False):
     """Plain-words reason a screener row is a setup; ranked = the setups are in the strongest-sector list's order."""
     if ranked:                                   # "#n setup in ... (score s): it ..." -> "It's a Momentum setup (score s): it ..."
@@ -515,10 +521,11 @@ def setup_why(r, n, src="last night's screener", ranked=False):
         where = " and ".join((["closed above its 20-day high"] if brk else [])
                              + (["is at its 52-week high"] if r.from_hi >= -0.5 else
                                 [f"is within {abs(r.from_hi):.1f}% of its 52-week high"] if r.from_hi >= -3 else []))
-        return (f"#{n} setup in {src}, a Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
-                f"volume {r.relvol:.1f}x its 20-day average. It's in your uptrend: EMA10 above EMA20, price above the "
-                "50-day EMA and the 150-day average.")
-    return (f"#{n} setup in {src}, a Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
+        return (f"#{n} setup in {src}, a {tier(r)}Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
+                f"volume {r.relvol:.1f}x its 20-day average. " + ("It's in your uptrend minus the 150 line: EMA10 above EMA20 "
+                "and price above the 50-day EMA, but under the 150-day average." if tier(r) == "Regular " else
+                "It's in your uptrend: EMA10 above EMA20, price above the 50-day EMA and the 150-day average."))
+    return (f"#{n} setup in {src}, a {tier(r)}Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
             f"{r.vs20:+.1f}% from its 20-day EMA and {r.vs50:+.1f}% from its 50-day EMA, volume {r.relvol:.1f}x its "
             "20-day average. The trend under it holds: price above the 50-day EMA, 20-day EMA above the 50-day.")
 
@@ -670,9 +677,13 @@ def paper_order(scr):
     if "ss_ok" not in scr or "blocked" not in scr:
         return SC.ss_order(scr)
     has, blk = scr.has_setup.astype(bool), scr.blocked.astype(bool)
-    s = scr[(has | blk) & scr.core.astype(bool) & scr.sec_on.astype(bool) & scr.strength.notna() & scr.rs.notna()].copy()
+    # Super setups (your full uptrend), then since Oct 28 Regular ones (EMA10 > EMA20 and price > EMA50, under the 150 line)
+    sup = scr.tier.eq("Super") if "tier" in scr else pd.Series(True, index=scr.index)
+    reg = (scr.tier.eq("Regular") & scr.reg_up.astype(bool)) if "reg_up" in scr else False
+    s = scr[(has | blk) & (scr.core.astype(bool) | reg) & scr.sec_on.astype(bool) & scr.strength.notna() & scr.rs.notna()].copy()
     s["setup"] = s.setup.where(s.has_setup.astype(bool), (s.rsi > 50).map({True: "Momentum", False: "Pullback"}))
-    return s.sort_values("strength", ascending=False, kind="stable").reset_index(drop=True), True
+    s["_sup"] = sup.reindex(s.index).fillna(False).astype(bool)
+    return s.sort_values(["_sup", "strength"], ascending=False, kind="stable").drop(columns="_sup").reset_index(drop=True), True
 
 
 def passed_over(passed, n):

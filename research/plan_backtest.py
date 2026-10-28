@@ -2,7 +2,7 @@
 """
 Ten-year backtests of the four paper trading plans, for the page's Backtests tab.
 
-  A  Your system               last night's setups on the strongest sector, strongest stock list, highest score first;
+  A  Your system               last night's Super then Regular setups on the strongest sector, strongest stock list, highest score first;
                                2 positions, each buy at most 30% of the account: a call by your rules when one fits
                                (nearest 0.65 delta at 0.50-0.80, else the highest delta down to 0.15), else shares;
                                sells on your exit (the 10 EMA under the 20 and the price under the 50), calls also at
@@ -115,11 +115,11 @@ def feats(M):
     hiY = C.rolling(Y, min_periods=200).max()
     prior20 = C.shift().rolling(20).max()
     core = (e10 > e20) & (C > e50) & (C > m150)
+    up = (e10 > e20) & (C > e50)            # your uptrend without the 150 line: a Super setup is over it, a Regular one under
     ext = (C - e20) / a
-    mom = core & (r >= 55) & (r <= 80) & (ext <= 3) & ((C > prior20) | (C >= 0.97 * hiY))
-    x50150 = e50 > m150
+    mom = up & (r >= 55) & (r <= 80) & (ext <= 3) & ((C > prior20) | (C >= 0.97 * hiY))
     depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
-    pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
+    pull = (C > e50) & (e20 > e50) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
     setup = (mom | pull) & hiY.notna() & m150.notna()      # RSI / CCI overbought checks dropped by the user, 2026-10-15
     exit_ = (e10 < e20) & (C < e50)
     av = V.rolling(20).mean()
@@ -132,7 +132,7 @@ def feats(M):
     f = lambda x: x.where(alive).to_numpy(float) if x.dtypes.iloc[0] != bool else (x & alive).to_numpy(bool)
     F = dict(O=O.to_numpy(float), H=H.to_numpy(float), L=L.to_numpy(float), C=C.to_numpy(float),
              Cf=C.ffill().to_numpy(float), e10=f(e10), e20=f(e20), e50=f(e50), rsi=f(r), cci=f(cc), atr=f(a),
-             core=f(core), setup=f(setup), exit=f(exit_), liquid=f(liquid), rs=f(rs), age=age.to_numpy(float))
+             core=f(core), up=f(up), setup=f(setup), exit=f(exit_), liquid=f(liquid), rs=f(rs), age=age.to_numpy(float))
     vol = np.log(C).diff().rolling(30, min_periods=20).std() * np.sqrt(M.year)
     F["iv"] = (vol * OPT["IV_X"]).clip(OPT["IV_MIN"], 2.5).ffill().fillna(0.4).to_numpy(float)
     F["last"] = np.array([C[c].last_valid_index() for c in C.columns], dtype=object)
@@ -167,7 +167,8 @@ def feats(M):
         j = np.flatnonzero(cols)
         pct[:, j] = rsd.iloc[:, j].rank(axis=1, pct=True, method="max").to_numpy() * 100
     F["strength"] = 0.4 * rise["_mkt"][:, None] + 0.4 * sr + 0.2 * pct
-    F["ss_ok"] = ok & F["core"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])
+    # Super and, since 2026-10-28 (the user's call), Regular setups: the full uptrend, or EMA10 > EMA20 and price > EMA50
+    F["ss_ok"] = ok & F["up"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])
     F["rs_pct"] = rsd.rank(axis=1, pct=True).to_numpy()
     return F
 
@@ -357,7 +358,7 @@ def run_system(M, F, when, options=True):
             if F["mkt_hot"][night]:
                 return
             c = np.flatnonzero(F["setup"][night] & F["ss_ok"][night])
-            c = [j for j in c[np.argsort(-F["strength"][night, c], kind="stable")] if j not in sold]
+            c = [j for j in c[np.lexsort((-F["strength"][night, c], ~F["core"][night, c]))] if j not in sold]   # Super first
             while len(A.pos) < A_SLOTS:
                 c = [j for j in c if j not in A.pos]
                 budget = min(A_CAP * A.value(t, at), A.cash)
@@ -561,7 +562,7 @@ def run_all(M):
     print(f"  signals ready ({time.time() - t0:.0f}s)", flush=True)
     unit, bn = ("coin", "BTC") if M.kind == "crypto" else ("stock", "SPY")
     desc = {
-        "A": (NAMES["A"], f"Last night's setups on the strongest sector, strongest {unit} list, highest score first; 2 at a time, "
+        "A": (NAMES["A"], f"Last night's Super then Regular setups on the strongest sector, strongest {unit} list, highest score first; 2 at a time, "
                           f"each at most 30% of the account; sells on your exit (10 EMA under the 20 and price under the 50) or an 8% stop. "
                           + "Buys at the next open." + (" Tested with shares: there's no history of option prices to test the "
                           "paper account's calls on; the card also shows the calls on a pricing model." if unit == "stock" else "")),

@@ -71,7 +71,7 @@ def rules(aid):
                 "setups as Your system. Sells on the same signals, checked every 30 minutes from 10:00 AM to 5:45 PM New "
                 "York time.")
         return [
-            "Uses your screener on coins: last night's setups (Momentum and Pullback) on the strongest category, "
+            "Uses your screener on coins: last night's setups (Momentum and Pullback, Super and Regular) on the strongest category, "
             "strongest coin list (your rule, from Oct 14): the coin is in your uptrend, its category is turning up and "
             "rising (its breadth above its 10-day average), and it goes highest score first. The score is 40% the market "
             "(crypto market breadth), 40% the category (its breadth) and 20% the coin (its relative strength rank inside "
@@ -395,6 +395,12 @@ def ss_why(r, n, src):
             f"of 20 (#{r.rs_n:.0f} of {r.rs_of:.0f} in {r.sector} on relative strength).")
 
 
+def tier(r):
+    """'Super ' or 'Regular ' (the user's tiers, 2026-10-15: over the 150 line or not), '' for older screener files."""
+    t = r.get("tier")
+    return f"{t} " if isinstance(t, str) and t else ""
+
+
 def setup_why(r, n, src="last night's screener", ranked=False):
     """Plain-words reason a screener row is a setup; ranked = the setups are in the strongest-category list's order."""
     if ranked:                                   # "#n setup in ... (score s): it ..." -> "It's a Momentum setup (screener score s): it ..."
@@ -406,10 +412,11 @@ def setup_why(r, n, src="last night's screener", ranked=False):
         where = " and ".join((["closed above its 20-day high"] if brk else [])
                              + (["is at its 52-week high"] if r.from_hi >= -0.5 else
                                 [f"is within {abs(r.from_hi):.1f}% of its 52-week high"] if r.from_hi >= -3 else []))
-        return (f"#{n} setup in {src}, a Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
-                f"volume {r.relvol:.1f}x its 20-day average. It's in your uptrend: EMA10 above EMA20, price above the "
-                "50-day EMA and the 150-day average.")
-    return (f"#{n} setup in {src}, a Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
+        return (f"#{n} setup in {src}, a {tier(r)}Momentum setup (score {r.score:g}): it {where}, RSI {r.rsi:.0f}, "
+                f"volume {r.relvol:.1f}x its 20-day average. " + ("It's in your uptrend minus the 150 line: EMA10 above EMA20 "
+                "and price above the 50-day EMA, but under the 150-day average." if tier(r) == "Regular " else
+                "It's in your uptrend: EMA10 above EMA20, price above the 50-day EMA and the 150-day average."))
+    return (f"#{n} setup in {src}, a {tier(r)}Pullback setup (score {r.score:g}): RSI {r.rsi:.0f} after a dip, "
             f"{r.vs20:+.1f}% from its 20-day EMA and {r.vs50:+.1f}% from its 50-day EMA, volume {r.relvol:.1f}x its "
             "20-day average. The trend under it holds: price above the 50-day EMA, 20-day EMA above the 50-day.")
 

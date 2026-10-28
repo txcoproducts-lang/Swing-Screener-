@@ -356,7 +356,7 @@ BT = dict(YEARS=10, STOP=0.08)   # each stock's last 10 years on the user's rule
 def backtest(d, spy, years=None, br=None, group=None):
     """The user's rules on one stock's daily bars, against buy-and-hold of the stock and of SPY over the same days.
     Buy at the next open after a close with one of the page's setups (Momentum or Pullback, as analyze() finds them)
-    that is on the strongest sector, strongest stock list that night, as Your system buys: the stock in your uptrend, its
+    that is on the strongest sector, strongest stock list that night, as Your system buys: a Super or Regular setup (EMA10 > EMA20 and price > EMA50; the 150 line not needed since 2026-10-28), its
     sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 75 line, and the market not over
     75 (RSI and CCI aren't checked: the user dropped that part of the overbought rule on 2026-10-15). Sell at the next open after a close with EMA10 under EMA20
     and the price under EMA50 (the user's 4-hour exit, on daily bars: Yahoo keeps only ~2 years of intraday bars), or
@@ -374,13 +374,12 @@ def backtest(d, spy, years=None, br=None, group=None):
     r, a = rsi(C), atr(d)
     hi252 = C.rolling(252, min_periods=200).max()
     prior20 = C.shift().rolling(20).max()
-    core = (e10 > e20) & (C > e50) & (C > m150)
+    up = (e10 > e20) & (C > e50)                       # your uptrend without the 150 line: Super over it, Regular under
     ext = (C - e20) / a
-    mom = core & r.between(55, 80) & (ext <= 3) & ((C > prior20) | (C >= 0.97 * hi252))
-    x50150 = e50 > m150
+    mom = up & r.between(55, 80) & (ext <= 3) & ((C > prior20) | (C >= 0.97 * hi252))
     depth = (C.rolling(15).max() - C) / C.rolling(15).max() * 100
-    pull = (C > e50) & (e20 > e50) & ((C > m150) | x50150) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
-    buy = (mom | pull) & core
+    pull = (C > e50) & (e20 > e50) & (r <= 50) & ((C - e20) / e20 <= 0.02) & (depth >= 3)
+    buy = (mom | pull) & up                           # Super and Regular setups (the user, 2026-10-28)
     lim, checked = CFG["OB_BREADTH"], 0
     for g, own in (("S&P 500", False), (group, True)):
         b = (br or {}).get(g) if g else None
@@ -585,7 +584,8 @@ def analyze(t, d):
     trend = (20 * p_e50 + 20 * x1020 + 10 * x2050 + 10 * p150 + 10 * p200 + 5 * x50150 + 5 * crossed)
 
     # ---- momentum breakout. The user's tiers (2026-10-15): a setup with the price over the 150 line is a Super setup, one
-    # without it a Regular setup. Only Super setups are bought (the paper accounts and backtests need the full uptrend).
+    # without it a Regular setup. Since 2026-10-28 both are bought, Super first (the user's call):
+    # a Super setup in your full uptrend, or a Regular one with EMA10 > EMA20 and price > EMA50.
     setup, pts = None, 0
     if p_e50 and x1020 and 55 <= r.iloc[-1] <= 80 and ext <= 3.0:
         near_hi = px >= 0.97 * hi252
@@ -614,7 +614,7 @@ def analyze(t, d):
         cci=float(cci(d.tail(3 * CFG["CCI_N"])).iloc[-1]), atr_pct=atr_pct, relvol=relv,
         from_hi=(px / hi252 - 1) * 100,
         vs10=(px / e10.iloc[-1] - 1) * 100, vs20=(px / e20.iloc[-1] - 1) * 100, vs50=(px / e50.iloc[-1] - 1) * 100,
-        p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core,
+        p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core, reg_up=bool(p_e50 and x1020 and not p150),
         cross=crossed, days_since_cross=days_since_cross, brk20=bool(px > prior20hi),
         stack=bool(e10.iloc[-1] > e20.iloc[-1] > e50.iloc[-1] > m150.iloc[-1] > m200.iloc[-1]),
     )
@@ -773,7 +773,8 @@ def strength(df, frames, bh):
     df["ss_stk"] = (SS["W_STK"] * pct).round(1)
     df["strength"] = (df.ss_mkt + df.ss_sec + df.ss_stk).round(1)
     df["sec_on"] = df.sector.map(lambda s: bool(s in sw and sw[s]["on"] and sw[s]["z"] != 2))
-    df["ss_ok"] = df.core & df.sec_on & (df.ob == "") & df.strength.notna() & df.rs.notna()
+    reg = df.reg_up & (df.tier == "Regular")                  # a Regular setup (or one left out as overbought)
+    df["ss_ok"] = (df.core | reg) & df.sec_on & (df.ob == "") & df.strength.notna() & df.rs.notna()
     return sw
 
 
@@ -783,7 +784,8 @@ def ss_order(scr):
     s = scr[scr.has_setup.astype(bool)]
     if "ss_ok" not in s:
         return s.reset_index(drop=True), False
-    return s[s.ss_ok.astype(bool)].sort_values("strength", ascending=False, kind="stable").reset_index(drop=True), True
+    s = s[s.ss_ok.astype(bool)].assign(_sup=s.tier.eq("Super") if "tier" in s else True)      # Super setups first (2026-10-28)
+    return s.sort_values(["_sup", "strength"], ascending=False, kind="stable").drop(columns="_sup").reset_index(drop=True), True
 
 # --------------------------------------------------------------- pick lists
 # Signals for the three lists at the top of the page (New uptrends, Breakout watch, AI picks).
@@ -2057,9 +2059,9 @@ def ss_html(df, sw, mkt_hot=""):
             '<b>Market</b> = 40% of the S&amp;P 500\'s Rising, the share of its stocks with the 10 EMA over the 20 and price over the 50 EMA (the breadth '
             'view). <b>Sector</b> = 40% of the stock\'s sector\'s Rising. <b>Stock</b> = 20% of how it ranks on relative '
             'strength (IBD-style: 40% on the last 3 months, 20% each on 6, 9 and 12) among the liquid stocks in its sector, '
-            '20 for the strongest. On the list: stocks in your uptrend, in a sector that is turning up and rising (Rising '
+            '20 for the strongest. On the list: stocks in your uptrend or with a Regular setup (EMA10 over EMA20 and price over EMA50, under the 150 line), in a sector that is turning up and rising (Rising '
             f'above its 10-day average, ▲, and not over your {CFG["OB_BREADTH"]} line), and not overbought themselves. '
-            '<b>Your system</b> and <b>Your system, after 2 PM</b> buy the highest-scoring setup on it.</div>' + warn
+            '<b>Your system</b> and <b>Your system, after 2 PM</b> buy from it: Super setups first, then Regular ones, highest score first.</div>' + warn
             + f'<div class="hint" style="margin-top:6px">Market tonight: S&amp;P 500 Rising <b>{m["rise"]:.0f}%</b> '
             f'(10-day average {m["avg"]:.0f}%) {swing_tag(m)}, worth <b>{SS["W_MKT"] * m["rise"]:.1f}</b> of 40 points '
             f'for every stock. {len(ok)} stocks on the list, {n_set} of them setups.</div>'
@@ -2636,11 +2638,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires EMA10 &gt; EMA20, price &gt; EMA50, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
-Your tiers: a <b>Super</b> setup also has the price over the {CFG["LONG_MA_TYPE"]}150; a <b>Regular</b> setup doesn't. Super setups are listed first and are the only ones the paper accounts buy.
+Your tiers: a <b>Super</b> setup also has the price over the {CFG["LONG_MA_TYPE"]}150; a <b>Regular</b> setup doesn't. Super setups are listed first; since Oct 28 the paper accounts buy both, Super first (a Regular one needs EMA10 &gt; EMA20 and price &gt; EMA50).
 Your overbought rule: a stock whose sector's breadth is over the {CFG["OB_BREADTH"]} line, gets no setup and shows as Overbought; while the market's breadth is over {CFG["OB_BREADTH"]}, nothing does. OB / OS next to RSI and CCI = overbought (over {CFG["OB_RSI"]} / {CFG["OB_CCI"]}) / oversold (under {CFG["OS_RSI"]} / {CFG["OS_CCI"]}), information only: since Oct 15 RSI and CCI no longer block a setup. Options shown for top {CFG["OPT_TOP_N"]} picks:
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
-10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest sector, strongest stock list, as Your system buys: in your uptrend, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it; sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
+10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Super or Regular setup (Momentum or Pullback) on the strongest sector, strongest stock list, as Your system buys: EMA10 over EMA20 and the price over EMA50, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it; sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
