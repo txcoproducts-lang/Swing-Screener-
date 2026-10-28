@@ -1308,7 +1308,7 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_ow
     funnel = dict(signal=int(sig.sum()), rules=int(rules.sum()), sector=len(in_sec), hot=len(in_sec) - len(cool), near_ob=near_n,
                   earnings=earn_n, setups=len(setups), earn_checked=bool(earn))
     return dict(asof=asof.isoformat(), market=market, sectors=secs, etf=etf, setups=setups, funnel=funnel, dropped=dropped,
-                prev_asof=(prev or {}).get("asof"), screen=ov_screen(locals()))
+                prev_asof=(prev or {}).get("asof"), screen=ov_screen(locals()), hist=ov_hist(locals()))
 
 
 OV_RULES = ("sig", "trend", "e10", "rsi", "px", "sec", "hot", "ob", "earn")   # the screener's 9 Plan M rules, in order
@@ -1329,22 +1329,36 @@ def ov_screen(v):
                        e10=bool(px > x10[t]), rsi=bool(r0[t] > r1[t]), px=bool(lo <= px <= hi),
                        sec=bool(secs.get(sectors.get(t) or "Other", {}).get("ok")), hot=t not in hot_own,
                        ob=not ob_near(ov_blocks(frames[t]), px, asof), earn=None)
+    dates = dict(v["dates"])
     if v["earn"]:
         near = [t for t, ok in rows.items() if sum(not x for k, x in ok.items() if k != "earn") <= 1]
-        dates = dict(v["dates"])
         dates.update(v["earn"]([t for t in near if t not in dates][:80]) if near else {})
         for t in near:
             e = dates.get(t)
             rows[t]["earn"] = not (e and (dt.date.fromisoformat(e) - v["entry"]).days < OV["EARN_DAYS"])
-    out = []
+    out, A = [], v["A"].iloc[-1]
     for t, ok in rows.items():
-        k = age[t]
+        k, a = age[t], A[t]
         out.append([t, sectors.get(t) or "", round(float(c_[t]), 2), round(float(r0[t]), 1),
                     int(k) if k == k and x10[t] > x20[t] else None,
-                    "".join("-" if ok[r] is None else "1" if ok[r] else "0" for r in OV_RULES)])
+                    "".join("-" if ok[r] is None else "1" if ok[r] else "0" for r in OV_RULES),
+                    round(float(a), 2) if a == a else None, dates.get(t) if v["earn"] else None])
     rs = v["rs"]
     out.sort(key=lambda r: (r[5].count("0"), -(rs[r[0]] if rs[r[0]] == rs[r[0]] else 0)))
     return out
+
+
+def ov_hist(v, n=63):
+    """The last 3 months for the OVTLYR page's charts: the market's and each sector's breadth (share of stocks with the
+    10 EMA over the 20) with its 5-day and 10-day EMAs, each sector's average heat (RSI), and SPY's heat."""
+    bull, R, C, idx, spy = (v[k] for k in ("bull", "R", "C", "idx", "spy"))
+    r1 = lambda x: [None if y != y else round(float(y), 1) for y in x.iloc[-n:]]
+    tri = lambda p_: [r1(p_), r1(p_.ewm(span=5, adjust=False).mean()), r1(p_.ewm(span=10, adjust=False).mean())]
+    secs = {name: dict(b=tri(bull[cols].mean(axis=1) * 100), heat=r1(R[cols].mean(axis=1)))
+            for name, cols in v["groups"].items() if name in v["secs"]}
+    sr = rsi(spy["Close"])
+    return dict(t=[d.strftime("%Y-%m-%d") for d in idx[-n:]], mkt=tri(bull[list(C.columns)].mean(axis=1) * 100),
+                spy=r1(sr.reindex(idx).ffill()), secs=secs)
 
 # ------------------------------------------------------------------ options
 def norm_cdf(x): return 0.5 * (1 + math.erf(x / math.sqrt(2)))
@@ -2625,7 +2639,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
 .mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}</style></head><body>
 <header class="top"><div class="hd"><h1>Swing Screener</h1>
-<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a></nav>
+<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a></nav>
 <span class="reg {rcls}">{reg}</span><span class="asof">{"Prices at " + live_at + " New York time, " + asof if live_at else "Closing data · " + asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
@@ -3120,6 +3134,15 @@ def main():
         ov["charted"] = [r[0] for r in ov.get("screen") or [] if (out / "data" / f"{r[0]}.json").exists()]
     for k in ("rules", "hold", "spy", "start"):
         picks[f"bt_{k}"] = picks.ticker.map({t: b[k] for t, b in bts.items()})
+    if ov:                                 # the OVTLYR screener page (ovtlyr/): the deck's rules only
+        try:
+            import ovtlyr_page
+            n = ovtlyr_page.build(ov, out)
+            print(f"  OVTLYR page: {n['ready']} ready, {n['one']} one rule away, {n['rows']} stocks")
+        except Exception as e:             # never block the scan on it
+            import traceback
+            traceback.print_exc()
+            print("  OVTLYR page failed:", e)
     html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")

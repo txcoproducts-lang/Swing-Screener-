@@ -2377,7 +2377,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
 .mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}</style></head><body>
 <header class="top"><div class="hd"><h1>Crypto Screener</h1>
-<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a></nav>
+<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a><a href="../ovtlyr/">OVTLYR</a></nav>
 <span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}

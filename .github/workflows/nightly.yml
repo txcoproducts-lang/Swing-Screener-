@@ -41,6 +41,7 @@ jobs:
           cp output/latest.html site/index.html
           cp output/*.csv site/
           cp -r output/data site/ 2>/dev/null || true
+          cp -r output/ovtlyr site/ 2>/dev/null || true    # the OVTLYR screener page
 
       - name: Add the crypto page from the last crypto run (crypto/, best effort)
         env:

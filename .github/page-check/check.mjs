@@ -154,5 +154,21 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   log(`[${name}] errors: ${errs.length ? "\n  " + errs.join("\n  ") : "none"}`);
   await p.close();
 }
+// the OVTLYR screener page (ovtlyr/): every tab, and the stock filters work
+for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+  const p = await b.newPage({ viewport: vp });
+  const errs = [];
+  p.on("pageerror", e => errs.push("pageerror: " + e.message));
+  await p.goto(process.env.PAGE_URL + "ovtlyr/?t=" + Date.now(), { waitUntil: "networkidle" });
+  for (const t of ["today", "market", "sectors", "heat", "stocks", "etf", "rules"]) {
+    await p.click(`nav.tabs a[data-t="${t}"]`); await p.waitForTimeout(200);
+    await p.screenshot({ path: `${out}/${name}-7-ovtlyr-${t}.png`, fullPage: t !== "heat" && t !== "stocks" });
+  }
+  await p.click('nav.tabs a[data-t="stocks"]'); await p.click('#stk .chip[data-f="99"]');
+  const shown = await p.$$eval("#stk tbody tr:not([hidden])", x => x.length);
+  log(`[${name}] OVTLYR page: ${shown} stocks, ${await p.$$eval(".tile", x => x.length)} sector tiles, ` +
+      `width ${await p.evaluate(() => document.documentElement.scrollWidth)}, errors: ${errs.length ? errs.join("; ") : "none"}`);
+  await p.close();
+}
 await b.close();
 fs.writeFileSync(`${out}/report.txt`, report.join("\n") + "\n");
