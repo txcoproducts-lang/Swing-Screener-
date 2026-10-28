@@ -22,11 +22,12 @@ esc = html.escape
 sn = lambda s: SHORT.get(s, s)
 
 
-def heat(v):
-    return RED if v >= HEAT_MAX else YELLOW if v < 30 else GREEN
+def heat(v, up=True):
+    """Red = overbought (70+); green only while the heat is rising; yellow when it's falling or oversold (under 30)."""
+    return RED if v >= HEAT_MAX else YELLOW if v < 30 or not up else GREEN
 
 
-hb = lambda v: f'<span class="hb" style="background:{heat(v)}">{v:.0f}</span>'
+hb = lambda v, up=True: f'<span class="hb" style="background:{heat(v, up)}">{v:.0f}</span>'
 dot = lambda c: '<i class="d dy">✓</i>' if c == "1" else '<i class="d dn">✗</i>' if c == "0" else '<i class="d du" title="not checked">·</i>'
 okb = lambda b: '<i class="d dy">✓</i>' if b else '<i class="d dn">✗</i>'
 md = lambda s: f"{dt.date.fromisoformat(s):%b} {dt.date.fromisoformat(s).day}"
@@ -117,7 +118,7 @@ def build(ov, out_dir):
         cards = "".join(f'<div class="step"><div class="n">{a} · {b}</div><div class="big">{okb(ok)} {c}</div>'
                         f'<a class="go" data-go="{g}">Open {g} ›</a></div>' for a, b, c, ok, g in lay)
         sig = lambda r: "signal today" if r["age"] == 0 else f'signal {r["age"]}d ago'
-        top = "".join(f'<div class="st">{tk(r["t"])}<span class="sub">{esc(sn(r["sec"]))}</span>{hb(r["rsi"])}<span class="sub">{sig(r)}</span></div>'
+        top = "".join(f'<div class="st">{tk(r["t"])}<span class="sub">{esc(sn(r["sec"]))}</span>{hb(r["rsi"], r["k"][3] == "1")}<span class="sub">{sig(r)}</span></div>'
                       for r in ready[:10]) or '<div class="sub">No stock passes every rule tonight.</div>'
         return (f'<div class="h1">What is the market telling us?</div><div class="sub lead">OVTLYR\'s plan for tonight, from the deck: '
                 f'market first, then sector, then stock.</div>{plan_strip()}<div class="steps" style="margin-top:14px">{cards}</div>'
@@ -152,14 +153,14 @@ def build(ov, out_dir):
             st = "excluded" if ex else "passes" if v["ok"] else "fails"
             a5 = "over" if b[-1] > e5[-1] else "under"
             a10 = "over" if b[-1] > e10[-1] else "under"
-            out.append(f'<div class="tile{" ex" if ex else ""}" style="background:{heat(v["rsi"])}"><div class="tn"><b>{esc(sn(n))}</b>'
+            out.append(f'<div class="tile{" ex" if ex else ""}" style="background:{heat(v["rsi"], v["rsi"] > v["rsi_prev"])}"><div class="tn"><b>{esc(sn(n))}</b>'
                        f'<span class="pill {"p-up" if st == "passes" else "p-dn" if st == "fails" else "p-n"}">{st}</span></div>'
                        f'<div class="tv">Heat {v["rsi"]:.0f} · breadth {b[-1]:.0f}%</div>'
                        f'<div class="tc">{spark([b, e5, e10], days, w=220, h=64, labels=False)}</div>'
                        f'<div class="tf">{a5} its 5-day ({e5[-1]:.0f}) · {a10} its 10-day ({e10[-1]:.0f})</div></div>')
         return (f'<div class="card" style="margin-bottom:14px"><h3>Sector breadth, last 3 months {LEG}</h3><div class="tiles">{"".join(out)}</div>'
-                f'<div class="hint" style="margin-top:8px">Tile colour = the sector\'s heat: red 70+ (overbought), green 30-70, yellow under 30 '
-                f'(oversold). Breadth = % of its stocks with the 10 EMA over the 20.</div></div>')
+                f'<div class="hint" style="margin-top:8px">Tile colour = the sector\'s heat: red 70+ (overbought), green 30-70 and rising, '
+                f'yellow falling or under 30 (oversold). Breadth = % of its stocks with the 10 EMA over the 20.</div></div>')
 
     def page_sectors():
         srsi = spy["rsi"]
@@ -174,7 +175,7 @@ def build(ov, out_dir):
             trs.append(f'<tr class="{"ex" if ex else ""}"><td><b>{esc(n)}</b>{"<div class=sub>excluded in the plan</div>" if ex else ""}</td>'
                        f'<td>{okb(v["bull"] > v["bull_ema"])} {v["bull"]:.0f}% <span class="sub">vs {v["bull_ema"]:.0f}%</span></td>'
                        f'<td class="sp">{spark(h["b"], days, w=120, h=34, labels=False) if h else ""}</td>'
-                       f'<td>{okb(greed > 1)} {greed:.2f}</td><td>{okb(v["rsi"] < HEAT_MAX)} {hb(v["rsi"])}</td>'
+                       f'<td>{okb(greed > 1)} {greed:.2f}</td><td>{okb(v["rsi"] < HEAT_MAX)} {hb(v["rsi"], v["rsi"] > v["rsi_prev"])}</td>'
                        f'<td>{okb(v["rsi"] > v["rsi_prev"])} <span class="sub">from {v["rsi_prev"]:.0f}</span></td><td>{pill}</td>'
                        f'<td class="num">{nready or ""}</td></tr>')
         return (f'<div class="h1">Sectors · 30% of the move</div><div class="sub lead">Plan M only trades sectors that pass all four. '
@@ -192,13 +193,13 @@ def build(ov, out_dir):
             st = sorted([r for r in rows if r["sec"] == n], key=lambda r: -r["rsi"])
             cells = "".join(f'<a class="sc{" pick" if not r["miss"] else ""}" data-r="{int(not r["miss"])}" data-u="{int(r["k"][3] == "1")}" '
                             f'href="https://www.tradingview.com/chart/?symbol={esc(r["t"])}" target="_blank" rel="noopener" '
-                            f'style="background:{heat(r["rsi"])}"><b>{esc(r["t"])}</b><span>{r["rsi"]:.0f}{" ▲" if r["k"][3] == "1" else " ▼"}</span></a>'
+                            f'style="background:{heat(r["rsi"], r["k"][3] == "1")}"><b>{esc(r["t"])}</b><span>{r["rsi"]:.0f}{" ▲" if r["k"][3] == "1" else " ▼"}</span></a>'
                             for r in st)
             ex = n in EXCLUDE
-            out.append(f'<div class="sg"><div class="sgh"><span class="hb" style="background:{heat(v["rsi"])}">{v["rsi"]:.0f}</span><b>{esc(n)}</b>'
+            out.append(f'<div class="sg"><div class="sgh">{hb(v["rsi"], v["rsi"] > v["rsi_prev"])}<b>{esc(n)}</b>'
                        f'<span class="pill {"p-n" if ex else "p-up" if v["ok"] else "p-dn"}">{"excluded" if ex else "passes" if v["ok"] else "fails"}</span>'
                        f'<span class="sub" style="margin-left:auto">{len(st)} stocks</span></div><div class="sgr">{cells}</div></div>')
-        scale = (f'<span style="background:{YELLOW}">under 30 oversold</span><span style="background:{GREEN}">30-70 good</span>'
+        scale = (f'<span style="background:{GREEN}">30-70 and rising</span><span style="background:{YELLOW}">falling or under 30</span>'
                  f'<span style="background:{RED}">70+ overbought</span>')
         return (f'<div class="h1">Fear &amp; greed heatmap</div><div class="sub lead">Every stock\'s heat, sectors that pass first. '
                 f'▲ = heat rising. Outlined = passes every Plan M rule. Tap a stock for its chart.</div>'
@@ -213,7 +214,7 @@ def build(ov, out_dir):
             tgt = 63 if r["rsi"] < 50 else r["rsi"] + (10 if r["rsi"] < 75 else 5)
             st = '<span class="pill p-up">Ready</span>' if not r["miss"] else f'<span class="pill p-w">{esc(", ".join(r["miss"][:2]))}</span>'
             trs.append(f'<tr data-n="{len(r["miss"])}" data-s="{esc(r["sec"])}"><td>{tk(r["t"])}<div class="sub">{esc(sn(r["sec"]))}</div></td>'
-                       f'<td class="num">{r["close"]:.2f}</td><td>{hb(r["rsi"])}</td>'
+                       f'<td class="num">{r["close"]:.2f}</td><td>{hb(r["rsi"], r["k"][3] == "1")}</td>'
                        f'<td class="num">{"—" if r["age"] is None else "today" if r["age"] == 0 else str(r["age"]) + "d"}</td>'
                        + "".join(f'<td class="c">{dot(c)}</td>' for c in r["k"])
                        + (f'<td class="num">{a:.2f}</td><td class="num">{r["close"] - a / 2:.2f}</td><td class="num">{r["close"] - 2 * a:.2f}</td>'

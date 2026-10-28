@@ -2002,7 +2002,7 @@ OV_SCREEN_JS = """<style>
 const D=JSON.parse(document.getElementById('ov-data').textContent),CH=new Set(D.ch),T=document.getElementById('ov-s'),S=document.getElementById('ovsec');
 let lim=2;
 const miss=r=>D.rules.filter(q=>r[5][q[0]]==='0'),n0=r=>miss(r).length;
-function heat(v){return v>=70?'#f4a6a0':v<30?'#f7dc7a':'#a8e0bf'}
+function heat(v,up){return v>=70?'#f4a6a0':v<30||!up?'#f7dc7a':'#a8e0bf'}   // green only while rising
 const dot=c=>c==='1'?'<i class="od y">✓</i>':c==='0'?'<i class="od n">✗</i>':'<i class="od u" title="not checked">·</i>';
 function away(k){return k?'<span class="oa'+(k<=2?' w':'')+'">'+k+' away</span>':'<span class="oa r">Ready</span>'}
 function draw(){
@@ -2011,7 +2011,7 @@ function draw(){
   +D.rules.map(q=>'<th class="c" title="'+q[2]+'">'+q[1]+'</th>').join('')+'<th></th><th class="ow">Missing</th></tr></thead>';
  T.innerHTML=head+'<tbody>'+(rows.length?rows.slice(0,400).map(r=>{const m=miss(r),k=m.length,ms=m.map(q=>q[1]).join(', ');
   return '<tr><td>'+(CH.has(r[0])?'<b class="tk" data-tk="'+r[0]+'">'+r[0]+'</b>':'<b>'+r[0]+'</b>')+'</td><td class="os mut">'+r[1]+'</td><td class="oc">'+r[2]+'</td>'
-  +'<td><span class="oh" style="background:'+heat(r[3])+'">'+Math.round(r[3])+'</span></td><td class="oc">'+(r[4]===null?'<span class="mut">—</span>':r[4]+'d')+'</td>'
+  +'<td><span class="oh" style="background:'+heat(r[3],r[5][3]==='1')+'">'+Math.round(r[3])+'</span></td><td class="oc">'+(r[4]===null?'<span class="mut">—</span>':r[4]+'d')+'</td>'
   +D.rules.map(q=>'<td class="c">'+dot(r[5][q[0]])+'</td>').join('')+'<td>'+away(k)+'</td><td class="ow">'+ms+'</td>'
   +'<td class="oz"><div class="odr">'+D.rules.map(q=>dot(r[5][q[0]])).join('')+'</div><div class="om">'+(k?'Missing: '+ms:'Passes every rule')+'</div></td></tr>'}).join('')
   :'<tr><td colspan="20" class="mut">No '+D.unit+' is that close tonight.</td></tr>')+'</tbody>';
@@ -2111,7 +2111,7 @@ def heat_html(bh, days=63):
     for i, n in enumerate(names):
         b, st = bh[n].reindex(idx), swing_state(bh[n])
         zc = {2: " o", -1: " u", 0: ""}
-        zd = lambda v, on: zc[bzone(round(float(v), 1))] or (" d" if on == 0 else "")   # d = green but on a downswing
+        zd = lambda v, on: zc[bzone(round(float(v), 1))] or (" d" if on == 0 else "")   # d = in the green zone but on a downswing: yellow
         cells = "".join(f'<i class="h{min(9, int(v // 10))}{zd(v, on)}"></i>' if v == v else "<i></i>"
                         for v, on in zip(b.rise, b.on))
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
@@ -2123,9 +2123,9 @@ def heat_html(bh, days=63):
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
     zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
             f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>'
-            f'<span class="hmz"><i class="g d"></i>yellow line = on a downswing (under its 10-day average)</span>')
+            f'<span class="hmz"><i class="g d"></i>30-75% but falling (under its 10-day average): yellow</span>')
     return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
-            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% of stocks rising: good</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
 
 
 def swing_tag(w, since=True):
@@ -2320,14 +2320,14 @@ def sector_tiles(df, sws, bh, etfs=None, unit="stock"):
     for n in secs:
         w, k = sws[n], int((ss.sector == n).sum())
         r = w["rise"]
-        bg, dark = ("#f4a6a0" if w["z"] == 2 else "#f7dc7a" if w["z"] == -1 else "#a8e0bf"), 1   # the user's 3 colours: overbought / oversold / good
+        bg, dark = ("#f4a6a0" if w["z"] == 2 else "#a8e0bf" if w["on"] else "#f7dc7a"), 1   # the user's 3 colours: overbought / rising / falling or oversold
         tag = ("OVER 75" if w["z"] == 2 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
         line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
         sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Red = overbought (over 75% of stocks rising), yellow = oversold (under 30%), green = in between, strongest first · line = the last 5 days. '
+    return ('<div class="hint">Red = overbought (over 75% of stocks rising), green = rising (above its 10-day average), yellow = falling or oversold (under 30%), strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2419,7 +2419,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", 63), ("6M", 126), ("1Y", 252), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2><div class="hint">Rising = the share of S&amp;P 500 stocks with the 10 EMA above the 20 and the close above the 50 EMA '
-                      '(your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold); a yellow line on top of green = on a downswing. ▲ = an upswing (Rising '
+                      '(your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold); 30-75% but on a downswing (under its 10-day average) is yellow too; green only while it is rising. ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2613,12 +2613,12 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
-.hmc i{{display:block;background:var(--line)}}.hmc i.d{{box-shadow:inset 0 5px #e5b800}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
-.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{box-shadow:inset 0 3px #e5b800}}
+.hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{background:#f7dc7a}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
 .hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
-.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f7dc7a}}
+.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f7dc7a}}.hm .hmc i.d{{background:#f7dc7a}}
 .hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
 .bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
 .blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
