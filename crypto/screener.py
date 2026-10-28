@@ -1864,8 +1864,9 @@ def heat_html(bh, days=QTR):
     for i, n in enumerate(names):
         b, st = bh[n].reindex(idx), swing_state(bh[n])
         zc = {2: " o", -1: " u", 0: ""}
-        cells = "".join(f'<i class="h{min(9, int(v // 10))}{zc[bzone(round(float(v), 1))]}"></i>' if v == v else "<i></i>"
-                        for v in b.rise)
+        zd = lambda v, on: zc[bzone(round(float(v), 1))] or (" d" if on == 0 else "")   # d = green but on a downswing
+        cells = "".join(f'<i class="h{min(9, int(v // 10))}{zd(v, on)}"></i>' if v == v else "<i></i>"
+                        for v, on in zip(b.rise, b.on))
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                     f'<span class="hmc" data-i="{i}">{cells}</span><span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
         data["rows"].append(dict(n=n, r=r1(b.rise), a=r1(b.avg), u=r1(b.up), s=[None if v != v else int(v) for v in b.on]))
@@ -1874,7 +1875,8 @@ def heat_html(bh, days=QTR):
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
     zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
-            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>')
+            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>'
+            f'<span class="hmz"><i class="g d"></i>yellow line = on a downswing (under its 10-day average)</span>')
     return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
             f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% of coins rising: good</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
 
@@ -2165,7 +2167,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2><div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
-                      'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold). ▲ = an upswing (Rising '
+                      'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold); a yellow line on top of green = on a downswing. ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2347,8 +2349,8 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
-.hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
-.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}
+.hmc i{{display:block;background:var(--line)}}.hmc i.d{{box-shadow:inset 0 5px #e5b800}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{box-shadow:inset 0 3px #e5b800}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
 .hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
