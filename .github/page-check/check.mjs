@@ -154,8 +154,8 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   log(`[${name}] errors: ${errs.length ? "\n  " + errs.join("\n  ") : "none"}`);
   await p.close();
 }
-// the OVTLYR screener page (ovtlyr/): every tab, and the stock filters work
-for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+// the OVTLYR screener page (ovtlyr/): every tab, and the stock filters work (stock site only; the crypto check runs this file on crypto/)
+if (!/crypto\/?$/.test(process.env.PAGE_URL)) for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
   const p = await b.newPage({ viewport: vp });
   const errs = [];
   p.on("pageerror", e => errs.push("pageerror: " + e.message));
