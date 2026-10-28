@@ -1139,6 +1139,26 @@ OV = dict(
 )
 
 
+_HK = None
+def hk(k):
+    """The collapsed "How to read this" key under a section's heading (page_keys.py in the repo root, shared with the
+    stock page)."""
+    global _HK
+    if _HK is None:
+        root = str(Path(__file__).resolve().parent.parent)
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        import page_keys
+        _HK = page_keys.page_keys("crypto", CFG, OV)
+    return _HK.get(k, "")
+
+
+def hk_css():
+    hk("")
+    import page_keys
+    return page_keys.CSS
+
+
 def ov_blocks(d):
     """Order blocks in one daily frame (the chart's definition): bot, top, side (1 bullish, -1 bearish),
     start / end dates and fresh (price hasn't come back to it yet)."""
@@ -1473,7 +1493,7 @@ def bt_tab(df):
                       "your 4-hour exit is checked on daily closes, the after-2 PM plan buys at the next day's close, and OVTLYR's "
                       "order block check is left out. Rebuilt every Saturday" + (f" (last: {plans['asof']})" if plans else "")
                       + ". Past results don't promise future ones. Not financial advice."))
-    html = ('<h2>Backtests</h2><div class="hint">Every test we\'ve run on coins: your four plans side by side, each plan\'s own '
+    html = ('<h2>Backtests</h2>' + hk("backtests") + '<div class="hint">Every test we\'ve run on coins: your four plans side by side, each plan\'s own '
             'backtest and paper trial, then the research.</div><div id="btx"></div>')
     js = "window.BTDATA=" + json.dumps(data, separators=(",", ":")).replace("</", "<\\/") + ";\n" + BT_JS.read_text(encoding="utf-8")
     return html, js
@@ -1600,7 +1620,7 @@ def picks_html(L, earn=None, calls=None):
                + (f'<div class="hint">Dropped today: {dropped}</div>' if dropped else "") + track + note("ai"))
     tab = lambda k, label, n, on: f'<button{" class=on" if on else ""} data-pk="{k}">{label} <span class="n">{n}</span></button>'
     n_nu = 0 if mh else max(0, nu["total"] - len(nu.get("hot") or []))
-    return ('<h2>Top picks</h2>'
+    return ('<h2>Top picks</h2>' + hk("picks")
             + (f'<div class="hint warn obn">The market is overbought tonight ({html_esc(mh)}), so by your rule nothing gets a '
                'buy signal: New uptrends and Breakout watch are empty, and AI picks adds no new coins.</div>' if mh else "")
             + '<div class="bar pk">' + tab("nu", "New uptrends", n_nu, True)
@@ -1679,7 +1699,7 @@ def ov_html(ov):
               + ("" if m["ok"] else " The market rules fail tonight, so the paper account won't buy these.") + "</div>")
     live = (f'<div class="hint warn">Built at {ov["live_at"]} New York time, before the close, from prices that are not closes yet. '
             'The paper account only trades on the plan from a run after the close.</div>' if ov.get("live_at") else "")
-    return ('<h2>OVTLYR plan</h2><div class="ovseg"><button data-ov="plan" class="on">Plan</button>'
+    return ('<h2>OVTLYR plan</h2>' + hk("ovtlyr") + '<div class="ovseg"><button data-ov="plan" class="on">Plan</button>'
             '<button data-ov="scr">Screener</button></div><div id="ov-plan"><div class="hint">OVTLYR\'s Plan M, Plan ETF and Plan #SICADFU from the trading-plan deck, '
             'rebuilt from this page\'s data; the <b>OVTLYR plan</b> paper account trades it. OVTLYR\'s fear &amp; greed heatmap and '
             'buy/sell signals are private, so this uses stand-ins: heatmap = 14-day RSI; buy signal = the 10 EMA crossing above the '
@@ -1821,7 +1841,7 @@ def ss_html(df, sw, mkt_hot=""):
     n_set = int(ok.has_setup.sum())
     warn = (f'<div class="hint warn obn">The market is overbought tonight ({html_esc(mkt_hot)}), so by your rule nothing gets '
             'bought from this list.</div>') if mkt_hot else ""
-    return ('<h2 id="ssh">Strongest category, strongest coin</h2>'
+    return ('<h2 id="ssh">Strongest category, strongest coin</h2>' + hk("strongest") +
             '<div class="hint">Your rule, as on the stock page with categories for sectors: find the strongest category, '
             'then the strongest coin inside it. A move is 40% the market, 40% the category and 20% the coin, so the score '
             'adds up those three parts (100 at most). <b>Market</b> = 40% of the crypto market\'s Rising, the share of coins '
@@ -2062,7 +2082,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
                + '</div>')
     else:
         ovc = ""
-    return (f'<div class="meta">{meta}</div><div class="steps">{s1}{s2}{s3}</div>'
+    return (f'<div class="meta">{meta}</div>{hk("today")}<div class="steps">{s1}{s2}{s3}</div>'
             f'<div class="tgrid">{secs_card}{st_card}</div><div class="trow">{pk}{pp}{ovc}</div>')
 
 
@@ -2094,7 +2114,7 @@ def news_html(df, sws, etfs=None, market="crypto", suf="USD", lbl="Strongest coi
     lead = {n: list(ss[ss.sector == n].ticker.head(4)) for n in secs}
     btn = lambda n: (f'<button data-n="{html_esc(n)}" data-sym="{"AMEX:" + etfs[n] if etfs.get(n) else ""}">{html_esc(SHORT_SECTOR.get(n, n))}'
                      + (f' <span class="mut">{sws[n]["rise"]:.0f}%</span>' if n in sws else '') + '</button>')
-    return ('<h2>News</h2><div class="hint">Crypto market news first. Tap a category (strongest first) for news on its strongest '
+    return ('<h2>News</h2>' + hk("news") + '<div class="hint">Crypto market news first. Tap a category (strongest first) for news on its strongest '
             'coin, then any of its other strongest coins. From TradingView\'s free news feed.</div>'
             f'<div class="bar nw"><button class="on" data-n="" data-sym="">Market</button>{"".join(btn(n) for n in secs)}</div>'
             f'<div class="nwl" id="nwl" hidden></div><div class="nwh" id="nwh"></div><div id="nwc" class="nwc"></div>'
@@ -2168,12 +2188,12 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                  + "".join(f'<button data-r="{k}"' + (' class="on"' if k == QTR else '') + f'>{lbl}</button>'
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
-    bt_html = ('<h2>Breadth over time</h2><div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
+    bt_html = ('<h2>Breadth over time</h2>' + hk("breadth") + '<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
                       'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold); 30-75% but on a downswing (under its 10-day average) is yellow too; green only while it is rising. ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
-    sector_html = ('<h2>Category breadth</h2>'
+    sector_html = ('<h2>Category breadth</h2>' + hk("sector_table")
                    + '<div class="hint">Click a category to filter the coin list. ± is the change vs 5 days ago.'
                    + '</div><div class="wrap"><table id="s"><thead><tr>'
                    '<th>Category</th><th>In uptrend</th>' + ('<th>Rising (10 &gt; 20, &gt; 50)</th>' if MARKET in sws else '') + '<th>Momentum</th><th>Pullback</th><th>% &gt; 20d</th>'
@@ -2185,7 +2205,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     charts = {n: charts[n] for n in order if charts and n in charts}
     if charts:
         strip = any(c.get("sw") for c in charts.values())
-        chart_html = ('<h2>Category charts</h2><div class="hint">The market is Bitcoin; each category is an equal-weight index '
+        chart_html = ('<h2>Category charts</h2>' + hk("sector_charts") + '<div class="hint">The market is Bitcoin; each category is an equal-weight index '
                       'of its coins (100 two years ago; there are no sector ETFs for crypto), with EMA 10 (orange), 20 (blue) and '
                       '50 (purple). Daily shows ~6 months, weekly ~2 years, monthly ~10 years for Bitcoin and 2 years for the indexes.'
                       + (' The strip under each chart is its breadth: the solid line is Rising (the share of the coins in it '
@@ -2263,7 +2283,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
         [("paper", "Paper trading")] if paper_js else []) + ([("backtests", "Backtests")] if bt_js else []) + [("news", "News")]
     tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
-    paper_html = f'<h2>Paper trading</h2><div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
+    paper_html = f'<h2>Paper trading</h2>{hk("paper")}<div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crypto Screener {asof}</title><style>
 :root{{--bg:#f4f6f9;--fg:#14202e;--mut:#6b7686;--card:#fff;--line:#e4e8ee;--up:#12936b;--dn:#d6453d;--acc:#2f6fed;--b5:#c96a12;--b10:#2a5bd7;--warn:#e0a020;--sc1:#a9bff5;color-scheme:light}}
@@ -2375,18 +2395,20 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmbt .btt{{overflow:auto;max-height:180px;margin-top:4px}}#cmbt table{{border-collapse:collapse;font-size:12px}}#cmbt th,#cmbt td{{padding:2px 8px 2px 0;text-align:left;white-space:nowrap}}
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
-.mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}</style></head><body>
+.mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}
+{hk_css()}
+#cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Crypto Screener</h1>
 <nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a><a href="../ovtlyr/">OVTLYR</a></nav>
 <span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
-<section class="tab" id="tab-market" hidden><h2>Market</h2><div class="cards">{cards}</div>{bt_html}</section>
-<section class="tab" id="tab-sectors" hidden><h2>Categories</h2>{sector_tiles(df, sws, bh, {})}{sector_html}{chart_html}</section>
+<section class="tab" id="tab-market" hidden><h2>Market</h2>{hk('market')}<div class="cards">{cards}</div>{bt_html}</section>
+<section class="tab" id="tab-sectors" hidden><h2>Categories</h2>{hk('tiles')}{sector_tiles(df, sws, bh, {})}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Coins <span id="secf" class="chip" hidden></span></h2>
-{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Super">Super</button><button data-f="Regular">Regular</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
+{hk('stock_table')}{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Super">Super</button><button data-f="Regular">Regular</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
 <div class="wrap"><table id="t"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <div class="note">Green bar = full stack (EMA10 &gt; 20 &gt; 50 &gt; {CFG["LONG_MA_TYPE"]}150 &gt; {CFG["LONG_MA_TYPE"]}200). Score = trend structure (70%) + setup quality (30 pts).
 Uptrend = EMA10 &gt; EMA20, price &gt; EMA50 and price &gt; {CFG["LONG_MA_TYPE"]}150. Momentum requires EMA10 &gt; EMA20, price &gt; EMA50, RSI 55–80 and a 20-day breakout or within 3% of the 52w high; pullbacks require price &gt; EMA50, EMA20 &gt; EMA50, RSI ≤ 50, 3%+ off the 15-day high and back near/below the EMA20 (EMA10 may dip).
@@ -2406,7 +2428,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmk">{hk('chart')}</div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
