@@ -1,0 +1,38 @@
+name: Day-trade backtest
+
+# Your rules on 5-minute and 10-minute charts, flat by the close (research/daytrade_backtest.py).
+# Yahoo keeps about 60 days of 5-minute bars, so each run covers the last ~60 trading days.
+on:
+  workflow_dispatch: {}      # run from the Actions tab; takes about 10 minutes
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Backtest day trades on 5- and 10-minute bars
+        run: python research/daytrade_backtest.py --out daytrade_results
+
+      - name: Show the results on the run page
+        run: cat daytrade_results/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the results to the daytrade-backtest branch
+        run: |
+          cd daytrade_results
+          git init -q -b daytrade-backtest
+          git config user.name "screener-bot"
+          git config user.email "screener-bot@users.noreply.github.com"
+          git add . && git commit -qm "Day-trade backtest $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" daytrade-backtest
