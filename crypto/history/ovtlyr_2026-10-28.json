@@ -1,0 +1,924 @@
+{
+ "asof": "2026-10-28",
+ "market": {
+  "ok": false,
+  "checks": [
+   {
+    "k": "heat",
+    "ok": true,
+    "text": "BTC heatmap (RSI) 48, up from 46 (needs under 70 and rising)"
+   },
+   {
+    "k": "signal",
+    "ok": false,
+    "text": "BTC buy signal: 10 EMA 81,210.25 below the 20 EMA 81,703.27"
+   },
+   {
+    "k": "trend",
+    "ok": false,
+    "text": "BTC 10/20/50 uptrend: close 81,267.59 above the 50 EMA 80,757.85, 10 EMA under the 20"
+   },
+   {
+    "k": "breadth",
+    "ok": false,
+    "text": "Market breadth: 10% of coins have the 10 EMA above the 20, below its 10-day average of 16%"
+   },
+   {
+    "k": "hot",
+    "ok": true,
+    "text": "Your overbought rule: 10% of coins rising, not over the 75 line"
+   }
+  ],
+  "spy": {
+   "date": "2026-10-28",
+   "close": 81267.59,
+   "high": 81703.2,
+   "e10": 81210.25,
+   "e20": 81703.27,
+   "e50": 80757.85,
+   "rsi": 47.7,
+   "rsi_prev": 45.5,
+   "atr": 1944.69,
+   "cci": -54.5
+  },
+  "breadth": {
+   "pct": 10.0,
+   "ema": 15.8
+  }
+ },
+ "sectors": {
+  "AI & data": {
+   "ok": false,
+   "n": 10,
+   "bull": 0.0,
+   "bull_ema": 15.8,
+   "rsi": 41.2,
+   "rsi_prev": 41.4,
+   "miss": [
+    "breadth 0% not above its 10-day average 16%",
+    "RSI 41 not above BTC's 48",
+    "RSI 41.2 not rising (was 41.4)"
+   ]
+  },
+  "DeFi": {
+   "ok": false,
+   "n": 18,
+   "bull": 0.0,
+   "bull_ema": 7.8,
+   "rsi": 42.5,
+   "rsi_prev": 41.6,
+   "miss": [
+    "breadth 0% not above its 10-day average 8%",
+    "RSI 43 not above BTC's 48"
+   ]
+  },
+  "Exchange tokens": {
+   "ok": true,
+   "n": 8,
+   "bull": 25.0,
+   "bull_ema": 19.0,
+   "rsi": 50.1,
+   "rsi_prev": 45.1,
+   "miss": []
+  },
+  "Gaming": {
+   "ok": false,
+   "n": 7,
+   "bull": 14.3,
+   "bull_ema": 23.5,
+   "rsi": 41.9,
+   "rsi_prev": 41.6,
+   "miss": [
+    "breadth 14% not above its 10-day average 24%",
+    "RSI 42 not above BTC's 48"
+   ]
+  },
+  "Infrastructure": {
+   "ok": false,
+   "n": 8,
+   "bull": 0.0,
+   "bull_ema": 13.6,
+   "rsi": 41.2,
+   "rsi_prev": 40.7,
+   "miss": [
+    "breadth 0% not above its 10-day average 14%",
+    "RSI 41 not above BTC's 48"
+   ]
+  },
+  "Layer 1": {
+   "ok": false,
+   "n": 25,
+   "bull": 12.0,
+   "bull_ema": 20.2,
+   "rsi": 40.3,
+   "rsi_prev": 39.1,
+   "miss": [
+    "breadth 12% not above its 10-day average 20%",
+    "RSI 40 not above BTC's 48"
+   ]
+  },
+  "Layer 2": {
+   "ok": false,
+   "n": 7,
+   "bull": 0.0,
+   "bull_ema": 12.2,
+   "rsi": 39.9,
+   "rsi_prev": 39.5,
+   "miss": [
+    "breadth 0% not above its 10-day average 12%",
+    "RSI 40 not above BTC's 48"
+   ]
+  },
+  "Memes": {
+   "ok": false,
+   "n": 8,
+   "bull": 12.5,
+   "bull_ema": 14.1,
+   "rsi": 43.5,
+   "rsi_prev": 41.4,
+   "miss": [
+    "breadth 12% not above its 10-day average 14%",
+    "RSI 43 not above BTC's 48"
+   ]
+  },
+  "Payments": {
+   "ok": false,
+   "n": 9,
+   "bull": 33.3,
+   "bull_ema": 17.0,
+   "rsi": 48.1,
+   "rsi_prev": 48.1,
+   "miss": [
+    "RSI 48.1 not rising (was 48.1)"
+   ]
+  }
+ },
+ "etf": {
+  "BTC": {
+   "under": "BTC",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "BTC heatmap (RSI) 48 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "BTC buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "BTC uptrend: close 81,267.59 above the 50 EMA 80,757.85"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "BTC value zone: close 81,267.59, zone 81,703.27-85,592.65 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "BTC order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 10% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "BTC's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-28",
+   "close": 81267.59,
+   "high": 81703.2,
+   "e10": 81210.25,
+   "e20": 81703.27,
+   "e50": 80757.85,
+   "rsi": 47.7,
+   "rsi_prev": 45.5,
+   "atr": 1944.69,
+   "cci": -54.5
+  },
+  "ETH": {
+   "under": "ETH",
+   "ok": false,
+   "checks": [
+    {
+     "k": "heat",
+     "ok": true,
+     "text": "ETH heatmap (RSI) 39 (needs under 70)"
+    },
+    {
+     "k": "signal",
+     "ok": false,
+     "text": "ETH buy signal: 10 EMA below the 20 EMA"
+    },
+    {
+     "k": "trend",
+     "ok": false,
+     "text": "ETH uptrend: close 2,357.62 below the 50 EMA 2,449.14"
+    },
+    {
+     "k": "zone",
+     "ok": false,
+     "text": "ETH value zone: close 2,357.62, zone 2,422.81-2,591.82 (20 EMA to 2 ATR above it)"
+    },
+    {
+     "k": "ob",
+     "ok": true,
+     "text": "ETH order blocks 30+ days old: none within 2%"
+    },
+    {
+     "k": "hot",
+     "ok": true,
+     "text": "Your overbought rule: 10% of coins rising, not over the 75 line"
+    }
+   ],
+   "sell": [
+    "ETH's 10 EMA is under its 20 EMA (a 10/20 bearish cross, the sell signal here)"
+   ],
+   "date": "2026-10-28",
+   "close": 2357.62,
+   "high": 2388.03,
+   "e10": 2375.51,
+   "e20": 2422.81,
+   "e50": 2449.14,
+   "rsi": 39.1,
+   "rsi_prev": 37.7,
+   "atr": 84.5026,
+   "cci": -80.2
+  }
+ },
+ "setups": [
+  {
+   "ticker": "KCS",
+   "sector": "Exchange tokens",
+   "close": 7.57149,
+   "e10": 7.42932,
+   "e20": 7.42726,
+   "e50": 7.34407,
+   "rsi": 57.0,
+   "rsi_prev": 53.4,
+   "atr": 0.212966,
+   "age": 0,
+   "cross": "2026-10-28",
+   "ob_up": 11.3781,
+   "earn": null,
+   "rs": 31,
+   "vol": 11318156,
+   "since": "2026-10-28",
+   "new": true
+  }
+ ],
+ "funnel": {
+  "signal": 3,
+  "rules": 1,
+  "sector": 1,
+  "hot": 0,
+  "near_ob": 0,
+  "earnings": 0,
+  "setups": 1,
+  "earn_checked": false
+ },
+ "dropped": [],
+ "prev_asof": "2026-10-27",
+ "screen": [
+  [
+   "KCS",
+   "Exchange tokens",
+   7.57149,
+   57.0,
+   0,
+   "1111-111-"
+  ],
+  [
+   "ZEC",
+   "Payments",
+   1308.34,
+   55.1,
+   0,
+   "1110-011-"
+  ],
+  [
+   "INJ",
+   "Layer 1",
+   8.13977,
+   53.5,
+   67,
+   "0111-011-"
+  ],
+  [
+   "BEAM",
+   "Gaming",
+   0.00341,
+   65.4,
+   67,
+   "0111-011-"
+  ],
+  [
+   "PEPE",
+   "Memes",
+   5e-06,
+   59.6,
+   40,
+   "0111-011-"
+  ],
+  [
+   "BNB",
+   "Exchange tokens",
+   758.668,
+   57.4,
+   null,
+   "0011-111-"
+  ],
+  [
+   "BCH",
+   "Payments",
+   288.709,
+   52.9,
+   0,
+   "1110-011-"
+  ],
+  [
+   "QNT",
+   "Infrastructure",
+   201.27,
+   52.4,
+   null,
+   "0011-011-"
+  ],
+  [
+   "ENA",
+   "DeFi",
+   0.209477,
+   51.5,
+   null,
+   "0011-011-"
+  ],
+  [
+   "HYPE",
+   "Exchange tokens",
+   80.6357,
+   47.9,
+   null,
+   "0010-111-"
+  ],
+  [
+   "UNI",
+   "DeFi",
+   7.21395,
+   46.5,
+   null,
+   "0011-011-"
+  ],
+  [
+   "XMR",
+   "Payments",
+   598.124,
+   56.7,
+   14,
+   "0110-011-"
+  ],
+  [
+   "ETHFI",
+   "DeFi",
+   0.681787,
+   51.4,
+   null,
+   "0011-011-"
+  ],
+  [
+   "TIA",
+   "Layer 1",
+   0.551924,
+   51.6,
+   40,
+   "0101-011-"
+  ],
+  [
+   "OKB",
+   "Exchange tokens",
+   111.651,
+   42.4,
+   null,
+   "0001-111-"
+  ],
+  [
+   "KAS",
+   "Layer 1",
+   0.037306,
+   49.4,
+   null,
+   "0011-011-"
+  ],
+  [
+   "BTC",
+   "Payments",
+   81267.6,
+   47.7,
+   null,
+   "0011-011-"
+  ],
+  [
+   "LTC",
+   "Payments",
+   59.1474,
+   46.3,
+   null,
+   "0011-011-"
+  ],
+  [
+   "PENGU",
+   "Memes",
+   0.007944,
+   48.9,
+   null,
+   "0011-011-"
+  ],
+  [
+   "DOGE",
+   "Memes",
+   0.079698,
+   42.4,
+   null,
+   "0011-011-"
+  ],
+  [
+   "FLOKI",
+   "Memes",
+   2.4e-05,
+   46.2,
+   null,
+   "0011-011-"
+  ],
+  [
+   "NEAR",
+   "Layer 1",
+   4.72919,
+   50.1,
+   null,
+   "0001-011-"
+  ],
+  [
+   "RAY",
+   "DeFi",
+   1.80791,
+   45.4,
+   null,
+   "0001-011-"
+  ],
+  [
+   "AR",
+   "AI & data",
+   3.5417,
+   42.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ZRO",
+   "Infrastructure",
+   1.69258,
+   45.2,
+   null,
+   "0001-011-"
+  ],
+  [
+   "DASH",
+   "Payments",
+   53.671,
+   51.9,
+   null,
+   "0010-011-"
+  ],
+  [
+   "ARB",
+   "Layer 2",
+   0.171727,
+   44.3,
+   null,
+   "0001-011-"
+  ],
+  [
+   "PYTH",
+   "Infrastructure",
+   0.073606,
+   48.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "CAKE",
+   "DeFi",
+   2.11399,
+   42.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "JUP",
+   "DeFi",
+   0.28162,
+   41.7,
+   null,
+   "0001-011-"
+  ],
+  [
+   "STRK",
+   "Layer 2",
+   0.046972,
+   43.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "LINK",
+   "Infrastructure",
+   11.7944,
+   42.8,
+   null,
+   "0001-011-"
+  ],
+  [
+   "MINA",
+   "Layer 1",
+   0.064841,
+   32.5,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ONDO",
+   "DeFi",
+   0.42087,
+   43.3,
+   null,
+   "0001-011-"
+  ],
+  [
+   "TAO",
+   "AI & data",
+   257.1,
+   43.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ICP",
+   "Layer 1",
+   2.6447,
+   38.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "SOL",
+   "Layer 1",
+   102.307,
+   39.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "FET",
+   "AI & data",
+   0.184023,
+   43.2,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ALGO",
+   "Layer 1",
+   0.10396,
+   40.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "COMP",
+   "DeFi",
+   21.6272,
+   44.3,
+   null,
+   "0001-011-"
+  ],
+  [
+   "RENDER",
+   "AI & data",
+   1.70212,
+   40.7,
+   null,
+   "0001-011-"
+  ],
+  [
+   "AVAX",
+   "Layer 1",
+   8.99029,
+   37.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "FIL",
+   "AI & data",
+   0.913182,
+   39.7,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ETH",
+   "Layer 1",
+   2357.62,
+   39.1,
+   null,
+   "0001-011-"
+  ],
+  [
+   "SUSHI",
+   "DeFi",
+   0.207501,
+   39.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "SUI",
+   "Layer 1",
+   0.941945,
+   42.2,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ATOM",
+   "Layer 1",
+   1.64291,
+   42.6,
+   null,
+   "0001-011-"
+  ],
+  [
+   "XRP",
+   "Payments",
+   1.32427,
+   44.9,
+   null,
+   "0010-011-"
+  ],
+  [
+   "WIF",
+   "Memes",
+   0.183766,
+   37.7,
+   null,
+   "0001-011-"
+  ],
+  [
+   "XLM",
+   "Payments",
+   0.172191,
+   37.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "DOT",
+   "Layer 1",
+   1.00951,
+   36.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ENS",
+   "Infrastructure",
+   5.28357,
+   34.5,
+   null,
+   "0001-011-"
+  ],
+  [
+   "LDO",
+   "DeFi",
+   0.380188,
+   43.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "ADA",
+   "Layer 1",
+   0.205784,
+   36.4,
+   null,
+   "0001-011-"
+  ],
+  [
+   "SEI",
+   "Layer 1",
+   0.053622,
+   37.2,
+   null,
+   "0001-011-"
+  ],
+  [
+   "MANA",
+   "Gaming",
+   0.079244,
+   39.1,
+   null,
+   "0001-011-"
+  ],
+  [
+   "OP",
+   "Layer 2",
+   0.112984,
+   42.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "APT",
+   "Layer 1",
+   0.698996,
+   40.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "TRUMP",
+   "Memes",
+   1.72682,
+   42.3,
+   null,
+   "0001-011-"
+  ],
+  [
+   "APE",
+   "Gaming",
+   0.12493,
+   37.0,
+   null,
+   "0001-011-"
+  ],
+  [
+   "CHZ",
+   "Gaming",
+   0.013036,
+   35.9,
+   null,
+   "0001-011-"
+  ],
+  [
+   "STX",
+   "Layer 2",
+   0.299661,
+   35.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "CRV",
+   "DeFi",
+   0.337219,
+   44.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "PENDLE",
+   "DeFi",
+   1.98892,
+   40.8,
+   null,
+   "0000-011-"
+  ],
+  [
+   "WLD",
+   "AI & data",
+   0.437136,
+   40.6,
+   null,
+   "0000-011-"
+  ],
+  [
+   "AAVE",
+   "DeFi",
+   133.789,
+   34.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "TRX",
+   "Layer 1",
+   0.329446,
+   44.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "GRT",
+   "AI & data",
+   0.022404,
+   39.9,
+   null,
+   "0000-011-"
+  ],
+  [
+   "POL",
+   "Layer 2",
+   0.091916,
+   41.8,
+   null,
+   "0000-011-"
+  ],
+  [
+   "VET",
+   "Infrastructure",
+   0.006401,
+   34.4,
+   null,
+   "0000-011-"
+  ],
+  [
+   "ETC",
+   "Payments",
+   7.58569,
+   39.6,
+   null,
+   "0000-011-"
+  ],
+  [
+   "VIRTUAL",
+   "AI & data",
+   0.625805,
+   39.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "JTO",
+   "DeFi",
+   0.430866,
+   40.0,
+   null,
+   "0000-011-"
+  ],
+  [
+   "MNT",
+   "Layer 2",
+   0.506083,
+   35.8,
+   null,
+   "0000-011-"
+  ],
+  [
+   "HBAR",
+   "Layer 1",
+   0.074818,
+   32.6,
+   null,
+   "0000-011-"
+  ],
+  [
+   "AXS",
+   "Gaming",
+   0.956455,
+   38.5,
+   null,
+   "0000-011-"
+  ],
+  [
+   "SHIB",
+   "Memes",
+   5e-06,
+   34.4,
+   null,
+   "0000-011-"
+  ],
+  [
+   "SAND",
+   "Gaming",
+   0.047623,
+   39.2,
+   null,
+   "0000-011-"
+  ],
+  [
+   "BONK",
+   "Memes",
+   3e-06,
+   36.2,
+   null,
+   "0000-011-"
+  ]
+ ],
+ "live_at": null
+}
