@@ -1,9 +1,12 @@
 name: Day-trade backtest
 
 # Your rules on 5-minute and 10-minute charts, flat by the close (research/daytrade_backtest.py).
-# Yahoo keeps about 60 days of 5-minute bars, so each run covers the last ~60 trading days.
+# Yahoo keeps about 60 days of 5-minute bars, so every run saves its bars on the daytrade-backtest branch and
+# tests all the bars saved so far: the test window grows a week every Saturday.
 on:
   workflow_dispatch: {}      # run from the Actions tab; takes about 10 minutes
+  schedule:
+    - cron: "0 14 * * 6"     # Saturdays (runs must be under ~8 weeks apart, or the saved bars have a gap)
 
 permissions:
   contents: write
@@ -22,15 +25,20 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Get the 5-minute bars saved by earlier runs
+        run: |
+          git fetch -q --depth 1 origin daytrade-backtest && git worktree add -q store FETCH_HEAD || mkdir -p store
+
       - name: Backtest day trades on 5- and 10-minute bars
-        run: python research/daytrade_backtest.py --out daytrade_results
+        run: python research/daytrade_backtest.py --store store --out daytrade_results
 
       - name: Show the results on the run page
         run: cat daytrade_results/summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Save the results to the daytrade-backtest branch
+      - name: Save the results and the bars to the daytrade-backtest branch
         run: |
-          cd daytrade_results
+          mkdir save && cp store/bars_*.pkl.gz daytrade_results/* save/
+          cd save
           git init -q -b daytrade-backtest
           git config user.name "screener-bot"
           git config user.email "screener-bot@users.noreply.github.com"

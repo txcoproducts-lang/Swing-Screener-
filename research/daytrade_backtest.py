@@ -14,7 +14,8 @@ Then the intraday chart decides when to buy and sell. Versions tested (each on 5
   full_spy  full, and SPY's own 5 / 10-minute chart is in the full uptrend at that moment too
   pull      full_spy, but buy only a pullback: the bar dips to the 20 EMA and closes back above it
   quick     full_spy, but sell as soon as EMA10 crosses under EMA20 (not waiting for the price to lose the 50 too)
-  any       full_spy on any liquid S&P 500 / Nasdaq 100 stock, skipping the daily market and sector checks
+  any_mkt   full_spy on any liquid S&P 500 / Nasdaq 100 stock, with last night's market check but no sector check
+  any       full_spy on any liquid stock, skipping the daily market and sector checks
 Sells: your exit on the same chart (a bar closes with EMA10 < EMA20 and price < EMA50; "quick" uses EMA10 < EMA20 alone),
 or at the close. Signals are read at a bar's close and filled at the next bar's open, 0.05% worse (as the paper
 accounts fill). No new buys after 3:30 PM New York. Today's signals only: a chart already up at the open is bought at
@@ -24,8 +25,9 @@ Account: $5,000 in shares, at most 3 positions at once, each 30% of the account'
 the paper accounts' 30% cap). Each version is also run under the pattern day trader rule (an account under $25,000 may
 make only 3 day trades in any 5 trading days).
 
-Limits: Yahoo keeps only about 60 days of 5-minute bars, so this is ~60 trading days (the first 5 warm up the 150-bar
-line on the 10-minute chart); 10-minute bars are built from the 5-minute ones. Shares only (no intraday option prices).
+Limits: Yahoo keeps only about 60 days of 5-minute bars. With --store, every run adds its bars to the ones saved by
+earlier runs (the workflow keeps them on the daytrade-backtest branch), so the test grows by a week each Saturday.
+The first 5 days warm up the 150-bar line on the 10-minute chart; 10-minute bars are built from the 5-minute ones. Shares only (no intraday option prices).
 Today's index members, so no survivorship correction (it matters little over 60 days).
 
 Runs on GitHub Actions ("Day-trade backtest" in the Actions tab), where Yahoo and Wikipedia work:
@@ -58,6 +60,7 @@ VERSIONS = {
     "full_spy": "Full uptrend, and SPY's chart is in the full uptrend too",
     "pull": "Full uptrend + SPY up, buy a pullback to the 20 EMA",
     "quick": "Full uptrend + SPY up, sell when EMA10 crosses under EMA20",
+    "any_mkt": "Full uptrend + SPY up, any liquid stock (market check, no sector check)",
     "any": "Full uptrend + SPY up, any liquid stock (no daily checks)",
 }
 
@@ -112,6 +115,38 @@ def download_intraday(tickers):
     return {t: session(d) for t, d in frames.items() if len(d)}
 
 
+def load_store(d):
+    """The 5-minute bars saved by earlier runs: one gzipped pickle per month, {ticker: Open / Low / Close}."""
+    out = {}
+    for f in sorted(Path(d).glob("bars_*.pkl.gz")):
+        for t, x in pd.read_pickle(f).items():
+            out.setdefault(t, []).append(x)
+    return {t: pd.concat(v) for t, v in out.items()}
+
+
+def merge_store(d, new):
+    """Adds this run's bars to the saved ones (this run wins where they overlap), saves them back, returns them all."""
+    old = load_store(d)
+    keep = ["Open", "High", "Low", "Close", "Volume"]
+    allb = {}
+    for t in set(old) | set(new):
+        parts = [x for x in (old.get(t), new.get(t)) if x is not None]
+        x = pd.concat(parts)
+        x = x[~x.index.duplicated(keep="last")].sort_index()
+        allb[t] = x.reindex(columns=keep)
+    Path(d).mkdir(parents=True, exist_ok=True)
+    months = sorted({m for x in allb.values() for m in x.index.to_period("M").unique()})
+    for m in months:
+        part = {t: x[x.index.to_period("M") == m][["Open", "Low", "Close"]].astype("float32") for t, x in allb.items()}
+        pd.to_pickle({t: x for t, x in part.items() if len(x)}, Path(d) / f"bars_{m}.pkl.gz")
+    # signals only need Open, Low and Close; High / Volume are kept for this run's bars only
+    for t, x in allb.items():
+        x["High"] = x["High"].fillna(x[["Open", "Close"]].max(axis=1))
+        x["Volume"] = x["Volume"].fillna(0)
+    print(f"  bars saved: {len(allb)} tickers, {months[0]} to {months[-1]}", flush=True)
+    return {t: x.astype(float) for t, x in allb.items()}
+
+
 def demo():
     """Driftless random walks: no version should make money here beyond luck, after costs it should lose a little."""
     rng = np.random.default_rng(3)
@@ -156,8 +191,8 @@ def simulate(sig, spy, lists, liquid, version, pdt=False):
         if not prior:
             continue
         gate, names = lists[prior[-1]]
-        if version == "any":
-            gate, names = True, liquid[prior[-1]]
+        if version in ("any", "any_mkt"):
+            gate, names = gate or version == "any", liquid[prior[-1]]
         bars = spy.index[spy.index.normalize() == day]
         start_val, held = cash, {}
         size = start_val * SIZE
@@ -194,7 +229,7 @@ def simulate(sig, spy, lists, liquid, version, pdt=False):
                         go = i == 0
                     else:
                         go = i > 0 and r[bk][i - 1] == True
-                        if version in ("full_spy", "pull", "quick", "any"):
+                        if version in ("full_spy", "pull", "quick", "any", "any_mkt"):
                             go = go and spy_up[i - 1] == True
                     spend = min(size, cash)
                     if go and spend > 50:
@@ -241,6 +276,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--store", help="folder of 5-minute bars saved by earlier runs; this run's bars are added to it")
     a = ap.parse_args()
     t0 = time.time()
     if a.demo:
@@ -256,6 +292,8 @@ def main():
         intra = download_intraday(sorted(daily))
         if "SPY" not in intra or len(intra) < 0.8 * len(daily):
             sys.exit(f"Only {len(intra)} of {len(daily)} tickers have 5-minute bars; not running on partial data.")
+    if a.store:
+        intra = merge_store(a.store, intra)
     lists, liquid = daily_list(daily, sectors, sp500)
     spy_close = daily["SPY"].Close
     res = dict(versions=VERSIONS, demo=a.demo, bars={}, trades={})
