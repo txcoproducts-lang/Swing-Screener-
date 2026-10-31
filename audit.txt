@@ -1,0 +1,60 @@
+tickers with charts: 281
+order block boxes: 6512 (891 untouched)
+daily bars per ticker: min 431, median 1260, max 1260 (5 years is about 1,260)
+missing data files: BNY, AME, JPM, WFC, BX, KKR, HBAN, RF, TFC, VICI, LULU
+data issues: 0
+table vs data mismatches: 0
+RSI / CCI vs data: 239 stocks checked, 1 off
+  AES CCI: table 135 vs data 143
+rows with an options contract: 14
+10-year backtests: 270 (years covered: min 0.9, median 10); rules beat holding on 22; table stocks without one: none
+  medians: in the market 39% of days, 28 trades, 42% winners; 7584 trades, average 1.86%, median -1.36%; ended by {"exit":6490,"stop":883,"open":211}
+  AAPL rules 181.8% hold 1227.3% spy 316.3% n 28 win 54% in 44%
+  SPY rules 204% hold 316.3% spy 316.3% n 31 win 61% in 72%
+  XLK rules 179.2% hold 738.6% spy 316.3% n 28 win 54% in 54%
+  MSFT rules 181.6% hold 880.9% spy 316.3% n 32 win 47% in 60%
+  EMR rules 34.5% hold 315.5% spy 316.3% n 29 win 38% in 40%
+top picks: 8 new uptrends, 10 breakout watch, 8 AI picks; issues: 0
+pk-nu calls that fit: 2 of 8, closest shown in grey: 2; none for GPN (none fits: no call 0.50-0.80 delta with OI over 500), PAYX (none fits: no call 0.50-0.80 delta with OI over 500), IR (none fits: no call 0.50-0.80 delta with OI over 500), TSCO (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-bo calls that fit: 6 of 10, closest shown in grey: 0; none for PTC (none fits: no call 0.50-0.80 delta with OI over 500), AIG (none fits: no call 0.50-0.80 delta with OI over 500), EBAY (none fits: no call 0.50-0.80 delta with OI over 500), EXPD (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-ai calls that fit: 6 of 8, closest shown in grey: 2
+filter setups: 56 rows, 0 wrong
+filter Super: 47 rows, 0 wrong
+filter Regular: 9 rows, 0 wrong
+filter Momentum: 50 rows, 0 wrong
+filter Pullback: 6 rows, 0 wrong
+filter Overbought: 116 rows, 0 wrong
+filter all: 239 rows, 0 wrong
+overbought rule: 56 setups, 116 marked Overbought, 2 oversold, market breadth 62.8; problems: none
+sector Energy: 0 rows ok
+sector Health Care: 0 rows ok
+sector Consumer Staples: 0 rows ok
+sector Materials: 0 rows ok
+sector Utilities: 0 rows ok
+sector Industrials: 14 rows ok
+sector Financials: 17 rows ok
+sector Consumer Discretionary: 12 rows ok
+sector Information Technology: 7 rows ok
+sector Real Estate: 4 rows ok
+sector Communication Services: 2 rows ok
+sorted 28 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: heatmap Industrials: 60.5 vs shown 60; table Industrials: 60 vs heatmap 60.5
+breadth line: 12 groups x 471 days from 2024-12-13, 7 canvases, problems: none
+Plan M list: 0 stocks (summary says 0), 0 new (summary says 0), 22 dropped, the Market box link opens it: true
+opened 281 tickers x 4 timeframes (daily also at 5Y), problems: 11
+  BNY: no trend data (Trend data not available for BNY here, showing the indicator)
+  AME: no trend data (Trend data not available for AME here, showing the indicator)
+  JPM: no trend data (Trend data not available for JPM here, showing the indicator)
+  WFC: no trend data (Trend data not available for WFC here, showing the indicator)
+  BX: no trend data (Trend data not available for BX here, showing the indicator )
+  KKR: no trend data (Trend data not available for KKR here, showing the indicator)
+  HBAN: no trend data (Trend data not available for HBAN here, showing the indicato)
+  RF: no trend data (Trend data not available for RF here, showing the indicator )
+  TFC: no trend data (Trend data not available for TFC here, showing the indicator)
+  VICI: no trend data (Trend data not available for VICI here, showing the indicato)
+  LULU: no trend data (Trend data not available for LULU here, showing the indicato)
+paper A Your system: $3,863.88 (updated 2026-10-30 14:28), cash $1,218.49, 2 open, 2 closed, 25 log lines, 11 closes; problems: none
+paper C Your system, after 2 PM: $4,243.55 (updated 2026-10-30 14:28), cash $2,853.55, 2 open, 2 closed, 26 log lines, 11 closes; problems: none
+paper B Claude's picks: $4,922.50 (updated 2026-10-30 14:28), cash $4,371.13, 1 open, 7 closed, 36 log lines, 11 closes; problems: none
+paper D OVTLYR plan: $4,126.31 (updated 2026-10-30 14:28), cash $0.00, 1 open, 8 closed, 37 log lines, 11 closes; problems: none
+page errors overall: none
