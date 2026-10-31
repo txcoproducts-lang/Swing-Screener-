@@ -23,8 +23,9 @@ font-size:13px;line-height:1.5;color:var(--fg);font-weight:400;text-align:left;w
 .hk-n{color:var(--mut);font-size:12px;margin-top:8px}
 @media(max-width:600px){.hk-r{grid-template-columns:minmax(0,1fr);gap:0}.hk-b{padding:9px 11px}}"""
 
-RED, GREEN, YELLOW = "#f4a6a0", "#a8e0bf", "#f7dc7a"      # the user's three colours: overbought / good / oversold
+RED, GREEN, YELLOW = "#f4a6a0", "#a8e0bf", "#f7dc7a"      # the user's breadth colours: over 75 or under 30 / 30-75 rising / 30-75 falling
 UP, DN, WARN, ACC, MUT = "#12936b", "#d6453d", "#e0a020", "#2f6fed", "#8a94a3"
+YEL = "#e5b800"      # strong yellow for bars and strip shading
 
 
 def sw(c):
@@ -103,10 +104,10 @@ def page_keys(market, cfg, ov):
         H(f"Step 2 · Strongest {g}"),
         R(f"Strongest {g}", f"The {g} with the most {us} Rising that also has at least one {u} on the strongest list. If the "
           f"top {g} by Rising is skipped, the line under it says why (over {ob}, fading, or no {u} in your uptrend)."),
-        R(f"{sw(UP)}{sw(DN)}{sw(WARN)} Bars", f"Bar length = Rising %. Green = upswing, red = fading, amber = over your {ob} "
-          f"line (overbought). The small tick = its 10-day average; the faint mark = the {ob} line."),
+        R(f"{sw(UP)}{sw(YEL)}{sw(DN)} Bars", f"Bar length = Rising %. Green = {os_}-{ob}% and rising (upswing), the only green; "
+          f"yellow = {os_}-{ob}% and falling; red = over your {ob} line (overbought) or under {os_} (oversold). The small tick = its 10-day average; the faint mark = the {ob} line."),
         R("Pills", f"\"3 {us}\" = how many of its {us} are on the strongest list · \"Over {ob}\" = overbought, nothing bought · "
-          f"\"Near {ob}\" = within 5 points of it with no {u} on the list · \"fading\" / \"none pass\" = no {u} qualifies."),
+          f"\"Under {os_}\" = oversold · \"Near {ob}\" = within 5 points of it with no {u} on the list · \"fading\" / \"none pass\" = no {u} qualifies."),
         H(f"Step 3 · Strongest {u}"),
         R("Score", f"The top {u} on the strongest {g}, strongest {u} list, out of 100: 40 points market + 40 points "
           f"{g} + 20 points {u}. More in the {Us} tab's \"Strongest {g}, strongest {u}\" key."),
@@ -130,8 +131,8 @@ def page_keys(market, cfg, ov):
     out["market"] = key(
         R("In uptrend", f"How many {us} pass {uptrend}, out of every liquid {u} ({w['liq']}). Green when more than half do."),
         R(f"{Mk} {'coins' if c else 'stocks'} rising", f"{rising} The state under it: ▲ upswing or ▼ fading and since when; "
-          f"\"overbought\" when it's over {ob}, \"oversold\" under {os_}; plus its 10-day average. Green = upswing, red = fading, "
-          f"black = overbought. The line = the last 60 days."),
+          f"\"overbought\" when it's over {ob}, \"oversold\" under {os_}; plus its 10-day average. Green = {os_}-{ob} and rising, "
+          f"yellow = {os_}-{ob} and falling, red = over {ob} or under {os_}. The line = the last 60 days."),
         R("% above 20 / 50 / 200-day", f"The share of {us} closing over their 20-, 50- and 200-day simple averages. ▲ / ▼ = up or "
           "down vs 5 days ago. Green over 50%. 20-day = short term, 50-day = the swing, 200-day = the long trend."),
         R("Advance / Decline", f"How many {us} closed up vs down today. The line is the running total over 60 days: rising = more "
@@ -163,11 +164,11 @@ def page_keys(market, cfg, ov):
         H("The heatmap"),
         R("Rows", f"{Mk} first, then each {g}, the most Rising tonight first. Each small cell is one {'day' if c else 'trading day'}, "
           "the last 3 months, newest on the right."),
-        R(f"{sw(GREEN)} Green", f"{os_}-{ob}% Rising and rising that day (above its 10-day average): the good zone. Green only "
-          "while it's rising."),
-        R(f"{sw(YELLOW)} Yellow", f"Falling: {os_}-{ob}% but under its 10-day average (a downswing), or under {os_} (oversold, "
-          "washed out)."),
-        R(f"{sw(RED)} Red", f"Over {ob}: overbought. Your rule: no upswing then, and nothing in it gets bought."),
+        R(f"{sw(GREEN)} Green", f"{os_}-{ob}% Rising and rising that day (above its 10-day average): the good zone. This is the "
+          "only time it's green."),
+        R(f"{sw(YELLOW)} Yellow", f"{os_}-{ob}% but falling (under its 10-day average, a downswing)."),
+        R(f"{sw(RED)} Red", f"Over {ob}: overbought (your rule: no upswing then, and nothing in it gets bought), or under {os_}: "
+          "oversold, washed out."),
         R("Right column", f"Rising tonight and its state: ▲ upswing, ▼ fading, <b>OB</b> overbought (over {ob}), <b>OS</b> oversold "
           f"(under {os_})."),
         R("Tap or hover", "A cell shows that day's Rising, its 10-day average, the share in your full uptrend and the state. "
@@ -177,7 +178,7 @@ def page_keys(market, cfg, ov):
         R(f"{ln('#c96a12')}5-day average", "The fast average (exponential). Rising crossing it is the earliest turn."),
         R(f"{ln('#2a5bd7')}10-day average", "The slow average (exponential). Rising above it = an upswing, below it = fading, the "
           "same test the heatmap and the paper accounts use."),
-        R(f"{ln(WARN, 'd')}Dashed lines", f"Your {ob} overbought and {os_} oversold lines."),
+        R(f"{ln(DN, 'd')}Dashed red lines", f"Your {ob} overbought and {os_} oversold lines: outside them is red."),
         R("Buttons", "3M / 6M / 1Y / All = how far back. The line above the chart says where Rising is against each average and since when."),
         U(f"The best time for your system is Rising crossing up through its 10-day average while it's between {os_} and {ob}: more "
           f"{us} turning up each day. Rising dropping under the 5-day line is the first warning, under the 10-day is fading. Over "
@@ -187,10 +188,10 @@ def page_keys(market, cfg, ov):
     out["tiles"] = key(
         R("Each tile", f"One {g}, the most Rising first. The big number = Rising %: its {us} with the 10 EMA over the 20 and the "
           "close over the 50 EMA."),
-        R(f"{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Tile colour", f"Green = rising (Rising above its 10-day average) · yellow = falling "
-          f"(under its 10-day average) or oversold (under {os_}) · red = over {ob} (overbought)."),
+        R(f"{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Tile colour", f"Green = {os_}-{ob}% and rising (above its 10-day average), the only "
+          f"green · yellow = {os_}-{ob}% and falling (under its 10-day average) · red = over {ob} (overbought) or under {os_} (oversold)."),
         R("Badge", f"RISING = upswing (above its 10-day average) · FADING = below it · NEAR {ob} = within 5 points of overbought · "
-          f"OVER {ob} = overbought, nothing bought."),
+          f"OVER {ob} = overbought, nothing bought · UNDER {os_} = oversold."),
         R("Small line", "Rising over the last 5 days."),
         R("Under the name", (f"Its SPDR ETF and " if not c else "") + f"how many of its {us} are on the strongest list (\"none pass\" "
           "= none)."),
@@ -215,12 +216,13 @@ def page_keys(market, cfg, ov):
         R("Lines", f"{ln('#e8a33d')}EMA 10 {ln(ACC)}EMA 20 {ln('#a259d9')}EMA 50."),
         R("Daily / Weekly / Monthly", "About 6 months, 2 years or 10 years of bars."),
         R("The strip under it", f"{ln('#14202e')}Rising {ln('#14202e', 'o')}share in your full uptrend. "
-          f"Shading: {sw(UP)}upswing, {sw(DN)}fading, {sw(WARN)}overbought (Rising over {ob}). Faint lines at {ob} and {os_}. "
+          f"Shading: {sw(UP)}{os_}-{ob}% and rising, {sw(YEL)}{os_}-{ob}% and falling, {sw(DN)}over {ob} (overbought) or under {os_} "
+          f"(oversold). Faint red lines at {ob} and {os_}. "
           "Daily and weekly only: the prices behind it go back 2 years."),
         R("Hover / tap", "The line above the strip shows that bar's numbers."),
         R("Ticker next to the name", "Opens its full chart."),
         U(f"The {g} you buy from should have its price over the 10, 20 and 50 EMAs, stacked 10 over 20 over 50, with green shading "
-          "in the strip. Amber shading = stretched: wait for it to cool."))
+          "in the strip. Yellow = breadth falling; red = stretched over the top line or washed out under the bottom one: wait."))
 
     # ---------------------------------------------------------------- strongest sector, strongest stock
     out["strongest"] = key(
@@ -230,7 +232,7 @@ def page_keys(market, cfg, ov):
         R(f"{U_} (20)", f"20% of its relative-strength rank inside its {g}: the strongest {u} in its {g} gets 20."),
         H(f"The {g} table"),
         R("Rising / 10-day avg", f"The {g}'s Rising % and its 10-day average."),
-        R("State", f"▲ upswing since a date, ▼ fading, or OB (over {ob})."),
+        R("State", f"▲ upswing since a date (green), ▼ fading (yellow), or OB (over {ob}) / OS (under {os_}) in red."),
         R(f"Strongest {us}", f"Its top 3 on the list by RS, or why none: over the {ob} line, fading, all overbought, or no {u} in "
           "your uptrend."),
         H("The list"),

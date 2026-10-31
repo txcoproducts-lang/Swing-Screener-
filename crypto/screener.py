@@ -1450,7 +1450,7 @@ def spark(vals, w=150, h=34, color="currentColor"):
 
 
 def card(label, value, sub, series, good=None):
-    cls = "" if good is None else ("up" if good else "dn")
+    cls = good if isinstance(good, str) else "" if good is None else ("up" if good else "dn")
     return f'<div class="card"><div class="lbl">{label}</div><div class="val {cls}">{value}</div><div class="sub">{sub}</div>{spark(series)}</div>'
 
 
@@ -1897,10 +1897,16 @@ def heat_html(bh, days=QTR):
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
     zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
-            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold</span>'
+            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold (red too)</span>'
             f'<span class="hmz"><i class="g d"></i>30-75% but falling (under its 10-day average): yellow</span>')
     return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
             f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+
+
+def bcls(w):
+    """The user's breadth colours (2026-10-31): under 30 or over 75 = red, 30-75 and rising (above its 10-day average) =
+    green, the only time it's green; 30-75 and falling = yellow. Returns the text class: dn / up / wn."""
+    return "dn" if w["z"] != 0 else "up" if w["on"] else "wn"
 
 
 def swing_tag(w, since=True):
@@ -1908,7 +1914,7 @@ def swing_tag(w, since=True):
     with OS when it's oversold (under 30); since = add the day the state began."""
     if w["z"] == 2:
         return '<span class="obt">OB</span>' + (f' <span class="mut">since {md(w["zsince"])}</span>' if since else "")
-    arrow = f'<span class="{"up" if w["on"] else "dn"}">{"▲" if w["on"] else "▼"}' + (f' since {md(w["since"])}' if since else "") + '</span>'
+    arrow = f'<span class="{bcls(w)}">{"▲" if w["on"] else "▼"}' + (f' since {md(w["since"])}' if since else "") + '</span>'
     return arrow + (' <span class="ost">OS</span>' if w["z"] == -1 else "")
 
 
@@ -1960,7 +1966,8 @@ def popup_info(df, sws, spy=None, mkt_hot="", charts=None):
         return "null"
     def state(x):
         return ('<span class="obt">overbought</span> over the ' + str(CFG["OB_BREADTH"]) + ' line' if x["z"] == 2 else
-                f'<span class="{"up" if x["on"] else "dn"}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
+                '<span class="ost">oversold</span> under the ' + str(CFG["OS_BREADTH"]) + ' line' if x["z"] == -1 else
+                f'<span class="{bcls(x)}">{"▲ upswing" if x["on"] else "▼ fading"}</span> since {md(x["since"])}')
     checks = spy_checks(spy, w, mkt_hot)
     n_ok = sum(ok for _, ok, _ in checks)
     def today(n):
@@ -2011,8 +2018,9 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     # step 2: the strongest sector
     def srow(i, n, short=False):
         x = sws[n]
-        col = "var(--warn)" if x["z"] == 2 else "var(--up)" if x["on"] else "var(--dn)"
-        tag = ('<span class="pill p-w">Over 75</span>' if x["z"] == 2 else
+        col = {"dn": "var(--dn)", "up": "var(--up)", "wn": "var(--yel)"}[bcls(x)]   # the user's breadth colours
+        tag = ('<span class="pill p-dn">Over 75</span>' if x["z"] == 2 else
+               '<span class="pill p-dn">Under 30</span>' if x["z"] == -1 else
                '<span class="pill p-w">Near 75</span>' if x["rise"] >= CFG["OB_BREADTH"] - 5 and n_on[n] == 0 else
                f'<span class="pill p-up">{n_on[n]} coin{"s" if n_on[n] != 1 else ""}</span>' if n_on[n] else
                '<span class="pill p-n">' + ("fading" if not x["on"] else "none pass") + '</span>')
@@ -2057,8 +2065,8 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
                  '<div class="hint">Share of each category\'s coins with the 10 EMA over the 20 and price over the 50 EMA · tick = its 10-day '
                  f'average · dashed = your {CFG["OB_BREADTH"]} line. Tap a category to see its coins.</div>'
                  + "".join(srow(i, n) for i, n in enumerate(secs))
-                 + '<div class="lgd"><span><i style="background:var(--up)"></i>Rising (upswing)</span><span><i style="background:var(--dn)"></i>Fading</span>'
-                 f'<span><i style="background:var(--warn)"></i>Over {CFG["OB_BREADTH"]} = overbought</span></div></div>') if secs else ""
+                 + f'<div class="lgd"><span><i style="background:var(--up)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising</span><span><i style="background:var(--yel)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and falling</span>'
+                 f'<span><i style="background:var(--dn)"></i>Over {CFG["OB_BREADTH"]} overbought or under {CFG["OS_BREADTH"]} oversold</span></div></div>') if secs else ""
     st_card = ('<div class="tcard"><h3>Strongest coins in the strongest categories <a data-go="stocks">All ' + str(len(ss)) + ' ›</a></h3>'
                '<div class="hint">Score out of 100 = market 40% + sector 40% + the coin\'s strength in its category 20%</div>'
                + ("".join(strow(r) for r in ss.head(10).itertuples()) or '<div class="hint pke">No coin passes tonight.</div>')
@@ -2095,14 +2103,14 @@ def sector_tiles(df, sws, bh, etfs=None, unit="coin"):
     for n in secs:
         w, k = sws[n], int((ss.sector == n).sum())
         r = w["rise"]
-        bg, dark = ("#f4a6a0" if w["z"] == 2 else "#a8e0bf" if w["on"] else "#f7dc7a"), 1   # the user's 3 colours: overbought / rising / falling or oversold
-        tag = ("OVER 75" if w["z"] == 2 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
+        bg, dark = {"dn": "#f4a6a0", "up": "#a8e0bf", "wn": "#f7dc7a"}[bcls(w)], 1   # the user's 3 colours: over 75 or under 30 / 30-75 rising / 30-75 falling
+        tag = ("OVER 75" if w["z"] == 2 else "UNDER 30" if w["z"] == -1 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
         line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
         sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Red = overbought (over 75% of coins rising), green = rising (above its 10-day average), yellow = falling or oversold (under 30%), strongest first · line = the last 5 days. '
+    return ('<div class="hint">Red = overbought (over 75% of coins rising) or oversold (under 30%), green = 30-75% and rising (above its 10-day average), yellow = 30-75% and falling, strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2141,7 +2149,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                      (f"overbought (over {CFG['OB_BREADTH']}) since {md(w['zsince'])}" if w["z"] == 2 else
                       f"{'▲ upswing' if w['on'] else '▼ fading'} since {md(w['since'])}"
                       + (f", oversold (under {CFG['OS_BREADTH']})" if w["z"] == -1 else ""))
-                     + f", 10-day avg {w['avg']:.0f}%", bh[MARKET].rise.iloc[-60:], None if w["z"] == 2 else w["on"]) if w else ""
+                     + f", 10-day avg {w['avg']:.0f}%", bh[MARKET].rise.iloc[-60:], bcls(w)) if w else ""
     cards = (f'<div class="card"><div class="lbl">In uptrend (EMA10 &gt; 20, price &gt; EMA50 &amp; 150)</div>'
              f'<div class="val {"up" if up_pct > 50 else "dn"}">{up_n} / {liq_n}</div>'
              f'<div class="sub">{up_pct:.0f}% of coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day</div></div>') + rise_card + cards
@@ -2189,7 +2197,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2>' + hk("breadth") + '<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
-                      'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% rising, red = over 75 (overbought), yellow = under 30 (oversold); 30-75% but on a downswing (under its 10-day average) is yellow too; green only while it is rising. ▲ = an upswing (Rising '
+                      'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% and rising (above its 10-day average), the only time it is green; yellow = 30-75% and falling (under its 10-day average); red = over 75 (overbought) or under 30 (oversold). ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2210,8 +2218,8 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                       '50 (purple). Daily shows ~6 months, weekly ~2 years, monthly ~10 years for Bitcoin and 2 years for the indexes.'
                       + (' The strip under each chart is its breadth: the solid line is Rising (the share of the coins in it '
                          'with the 10 EMA above the 20 and price above the 50 EMA), the dotted line the share in your full uptrend. Green '
-                         'shading = an upswing (Rising above its 10-day average), red = fading, amber = overbought (Rising over '
-                         f'your {CFG["OB_BREADTH"]} line, where there is no upswing). Daily and weekly only: the '
+                         f'shading = {CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising (above its 10-day average), yellow = {CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and falling, red = over '
+                         f'your {CFG["OB_BREADTH"]} line (overbought, no upswing) or under {CFG["OS_BREADTH"]} (oversold). Daily and weekly only: the '
                          'coin prices go back 2 years.' if strip else '') + '</div>'
                       '<div class="bar tf"><button class="on" data-tf="D">Daily</button><button data-tf="W">Weekly</button>'
                       '<button data-tf="M">Monthly</button></div><div class="charts">'
@@ -2286,7 +2294,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     paper_html = f'<h2>Paper trading</h2>{hk("paper")}<div class="hint">{PAPER_HINT}</div><div id="pp" class="pp"></div>' if paper_js else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crypto Screener {asof}</title><style>
-:root{{--bg:#f4f6f9;--fg:#14202e;--mut:#6b7686;--card:#fff;--line:#e4e8ee;--up:#12936b;--dn:#d6453d;--acc:#2f6fed;--b5:#c96a12;--b10:#2a5bd7;--warn:#e0a020;--sc1:#a9bff5;color-scheme:light}}
+:root{{--bg:#f4f6f9;--fg:#14202e;--mut:#6b7686;--card:#fff;--line:#e4e8ee;--up:#12936b;--dn:#d6453d;--acc:#2f6fed;--b5:#c96a12;--b10:#2a5bd7;--warn:#e0a020;--yel:#e5b800;--sc1:#a9bff5;color-scheme:light}}
 body{{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}}
 html{{scroll-padding-top:112px}}
 header.top{{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}}
@@ -2307,7 +2315,7 @@ main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display
 .ok.no{{background:color-mix(in srgb,var(--dn) 14%,transparent);color:var(--dn)}}
 .chks{{margin-top:10px}}.chk{{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:13px}}.chk .ok{{width:18px;height:18px;font-size:10px;margin-top:1px}}
 .mini{{margin-top:10px}}.pill{{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}}
-.p-up{{background:color-mix(in srgb,var(--up) 13%,transparent);color:var(--up)}}.p-w{{background:color-mix(in srgb,var(--warn) 20%,transparent);color:#9a6700}}.p-n{{background:var(--bg);color:var(--mut)}}
+.p-up{{background:color-mix(in srgb,var(--up) 13%,transparent);color:var(--up)}}.p-w{{background:color-mix(in srgb,var(--warn) 20%,transparent);color:#9a6700}}.p-n{{background:var(--bg);color:var(--mut)}}.p-dn{{background:color-mix(in srgb,var(--dn) 13%,transparent);color:var(--dn)}}
 .tgrid{{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:14px}}.trow{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}}
 .tcard h3{{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:8px}}.tcard h3 a{{margin-left:auto;font-size:12px;color:var(--acc);font-weight:600;cursor:pointer}}.tcard .hint{{margin-bottom:8px}}
 .sr{{display:grid;grid-template-columns:22px 112px minmax(40px,1fr) 42px 82px;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;cursor:pointer}}
@@ -2336,13 +2344,13 @@ main{{max-width:1240px;margin:auto;padding:16px 20px 40px}}.tab[hidden]{{display
 .reg.good{{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}}.reg.bad{{background:color-mix(in srgb,var(--dn) 20%,transparent);color:var(--dn)}}.reg.mid{{background:var(--bg);color:var(--mut)}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--mut)}}.lbl{{font-size:12px}}.val{{font-size:24px;font-weight:700;color:var(--fg)}}.sub{{font-size:11px;margin-bottom:4px}}
-.up{{color:var(--up)}}.dn{{color:var(--dn)}}
+.up{{color:var(--up)}}.wn{{color:#a87a00}}.dn{{color:var(--dn)}}
 .bar button{{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-right:6px;font-size:13px}}.bar button.on{{border-color:var(--acc);color:var(--acc)}}
 .wrap{{overflow-x:auto;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px}} table{{border-collapse:collapse;white-space:nowrap;font-size:13px}}
 th,td{{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}}th{{position:sticky;top:0;background:var(--card);cursor:pointer;color:var(--mut);font-weight:600}}
 td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(19),td:nth-child(20){{text-align:left}}
-.obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--warn) 45%,transparent)}}
-.ost{{background:color-mix(in srgb,var(--acc) 25%,transparent)}}.tsup,.treg{{font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;margin-right:3px}}.tsup{{background:color-mix(in srgb,var(--up) 25%,transparent)}}.treg{{background:color-mix(in srgb,var(--mut) 20%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
+.obt,.ost{{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;color:var(--fg)}}.obt{{background:color-mix(in srgb,var(--dn) 25%,transparent)}}
+.ost{{background:color-mix(in srgb,var(--dn) 25%,transparent)}}.tsup,.treg{{font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;margin-right:3px}}.tsup{{background:color-mix(in srgb,var(--up) 25%,transparent)}}.treg{{background:color-mix(in srgb,var(--mut) 20%,transparent)}}.obl{{font-weight:600;background:color-mix(in srgb,var(--warn) 30%,transparent);padding:1px 6px;border-radius:4px}}
 #t td:nth-child(2) .sec{{white-space:normal;min-width:150px;max-width:220px}}
 td:first-child,th:first-child{{position:sticky;left:0;background:var(--card);z-index:1}}th:first-child{{z-index:2}}
 .sec{{font-size:10px;color:var(--mut)}} tr.stack td:first-child{{box-shadow:inset 3px 0 var(--up)}}
@@ -2372,11 +2380,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
 .hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
-.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f7dc7a}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{background:#f7dc7a}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f4a6a0}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{background:#f7dc7a}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
 .hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
-.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f7dc7a}}.hm .hmc i.d{{background:#f7dc7a}}
+.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f4a6a0}}.hm .hmc i.d{{background:#f7dc7a}}
 .hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
 .bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
 .blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
@@ -2483,14 +2491,14 @@ const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',d
 (function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
 if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
 const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();
-const UP=V('--up'),DN=V('--dn'),WARN=V('--warn'),PW=60;let tf='D';
-// shading behind the strip: one box per run of upswing (green), fading (red) or overbought (amber, over your 75 line) days
+const UP=V('--up'),DN=V('--dn'),WARN=V('--warn'),YEL=V('--yel'),PW=60;let tf='D';
+// shading behind the strip (the user's breadth colours): green = 30-75 and rising, yellow = 30-75 and falling, red = over 75 or under 30
 function bandPrim(){{let ch,runs=[],rs=[];
 const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,H=sc.bitmapSize.height;
 rs.forEach(r=>{{x.fillStyle=r.col;x.fillRect(Math.round(r.x1*hr),0,Math.max(1,Math.round(r.x2*hr)-Math.round(r.x1*hr)),H)}})}})}};
 const view={{zOrder:()=>'bottom',renderer:()=>rend}};
 return {{attached:p=>{{ch=p.chart}},paneViews:()=>[view],set:v=>{{runs=v}},updateAllViews:()=>{{if(!ch)return;const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
-runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?WARN+'59':(z?UP:DN)+'3d'}})}})}}}}}}
+runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?DN+'3d':z===1?UP+'3d':YEL+'4d'}})}})}}}}}}
 // breadth line under a chart: the bar's (or tonight's) Rising, its 10-day average, Uptrend and the upswing state
 function leg(m,i){{if(!m.bl)return;const s=m.d[tf];if(!s||!s.br){{m.bl.textContent='';return}}
 const L=s.br.length,last=i==null||i<0||i>=L-1||s.br[i]==null;if(last)i=L-1;
@@ -2498,7 +2506,7 @@ const r=s.br[i],a=s.ba[i],u=s.bu[i],w=m.d.sw;if(r==null||a==null){{m.bl.textCont
 const on=last&&w?w.on:s.bs[i]===1,z=last&&w?w.z:r>OBL?2:r<OSL?-1:0;
 m.bl.innerHTML=(last?'':MD(s.t[i])+' · ')+'Breadth <b>'+r.toFixed(0)+'%</b> rising, avg '+a.toFixed(0)+'%'+(u==null?'':' · '+u.toFixed(0)+'% in uptrend')
 +' · '+(z===2?'<span class="obt">OB</span> overbought'+(last&&w?' since '+MD(w.zsince):''):
-'<span class="'+(on?'up':'dn')+'">'+(on?'▲ upswing':'▼ fading')+(last&&w?' since '+MD(w.since):'')+'</span>'+(z===-1?' · <span class="ost">OS</span> oversold':''))}}
+'<span class="'+(z===-1?'dn':on?'up':'wn')+'">'+(on?'▲ upswing':'▼ fading')+(last&&w?' since '+MD(w.since):'')+'</span>'+(z===-1?' · <span class="ost">OS</span> oversold':''))}}
 const made=boxes.map(b=>{{const d=CH[b.dataset.sector];
 const c=LightweightCharts.createChart(b.querySelector('.cv'),{{autoSize:true,localization:{{locale:'en-US'}},layout:{{background:{{color:'transparent'}},textColor:V('--mut'),fontSize:11}},
 grid:{{vertLines:{{visible:false}},horzLines:{{color:V('--line')}}}},rightPriceScale:{{borderVisible:false,minimumWidth:PW}},timeScale:{{borderVisible:false}},handleScroll:false,handleScale:false}});
@@ -2516,8 +2524,8 @@ const fix=()=>({{priceRange:{{minValue:0,maxValue:100}}}});
 const bu=bc.addLineSeries({{color:V('--mut'),lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
 const br=bc.addLineSeries({{color:V('--fg'),lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:fix}});
 br.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:true}});
-br.createPriceLine({{price:OBL,color:WARN,lineWidth:1,lineStyle:1,axisLabelVisible:false}});
-br.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:1,axisLabelVisible:false}});
+br.createPriceLine({{price:OBL,color:DN,lineWidth:1,lineStyle:1,axisLabelVisible:false}});
+br.createPriceLine({{price:OSL,color:DN,lineWidth:1,lineStyle:1,axisLabelVisible:false}});
 const band=bandPrim();br.attachPrimitive(band);st={{bc,band,bu,br}}}}
 const m={{b,d,c,k,vol,ln,st,bv,bl}};
 const at=p=>p.point&&p.logical!=null?Math.round(p.logical):null;
@@ -2532,7 +2540,7 @@ m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}
 m.c.timeScale().fitContent();
 if(m.st){{const has=!!s.br;m.bv.hidden=m.bl.hidden=!has;
 if(has){{const f=a=>s.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
-const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL?2:s.bs[i]===1?1:0,r=runs[runs.length-1];
+const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL||s.br[i]<OSL?2:s.bs[i]===1?1:0,r=runs[runs.length-1];
 if(r&&r[2]===z&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,z,i])}});m.st.band.set(runs);
 m.st.bu.setData(f(s.bu));m.st.br.setData(f(s.br));m.st.bc.timeScale().fitContent();
 requestAnimationFrame(()=>requestAnimationFrame(()=>m.st.bc.timeScale().fitContent()))}}}}
@@ -2549,7 +2557,7 @@ const i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left)/r.width*n))),v=R.r
 const a=R.a[i],u=R.u[i],d=new Date(HM.t[i]+'T12:00:00').toLocaleDateString('en-US',{{weekday:'short',month:'short',day:'numeric'}});
 tip.innerHTML='<b>'+R.n+'</b> · '+d+'<br>'+v.toFixed(0)+'% rising (10 EMA over the 20, price over the 50), avg '+a.toFixed(0)+'%'
 +(u==null?'':'<br>'+u.toFixed(0)+'% in your uptrend')+'<br>'+(v>OBL?'<span class="obt">OB</span> overbought (over '+OBL+')':
-'<span class="'+(R.s[i]?'up':'dn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>'+(v<OSL?' · <span class="ost">OS</span> oversold (under '+OSL+')':''));
+'<span class="'+(v<OSL?'dn':R.s[i]?'up':'wn')+'">'+(R.s[i]?'▲ upswing':'▼ fading')+'</span>'+(v<OSL?' · <span class="ost">OS</span> oversold (under '+OSL+')':''));
 c.children[i].classList.add('cur');tip.hidden=false;const h=hm.getBoundingClientRect();
 tip.style.left=Math.max(0,Math.min(e.clientX-h.left+12,h.width-tip.offsetWidth))+'px';tip.style.top=(r.bottom-h.top+6)+'px'}}
 hm.querySelectorAll('.hmc').forEach(c=>{{c.addEventListener('pointermove',show);c.addEventListener('pointerdown',show);
@@ -2567,8 +2575,8 @@ crosshair:{{horzLine:{{visible:false,labelVisible:false}}}},handleScroll:false,h
 const line=col=>c.addLineSeries({{color:col,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerRadius:4}});
 const s10=line(V('--b10')),s5=line(V('--b5')),sr=line(V('--fg'));          // Rising drawn last, on top
 sr.createPriceLine({{price:50,color:V('--mut'),lineWidth:1,lineStyle:2,axisLabelVisible:false}});
-sr.createPriceLine({{price:OBL,color:V('--warn'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'overbought'}});
-sr.createPriceLine({{price:OSL,color:V('--acc'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'oversold'}});
+sr.createPriceLine({{price:OBL,color:V('--dn'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'overbought'}});
+sr.createPriceLine({{price:OSL,color:V('--dn'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'oversold'}});
 // keep both lines in view, with a little room past them
 sr.applyOptions({{autoscaleInfoProvider:o=>{{const r=o();if(!r||!r.priceRange)return r;
 r.priceRange.minValue=Math.min(r.priceRange.minValue,OSL-5);r.priceRange.maxValue=Math.max(r.priceRange.maxValue,OBL+5);return r}}}});
