@@ -1,0 +1,14 @@
+list,rank,ticker,sector,close,rs,added,price,vol1,vol5,ai_rank,why
+nu,1,ZEC,Payments,1268.636962890625,99,,,1104764524.0,5174244888.0,,
+nu,2,HYPE,Exchange tokens,90.08018493652344,94,,,1876894527.0,7316866999.0,,
+nu,3,BCH,Payments,293.7574462890625,35,,,288786244.0,1210958381.0,,
+ai,1,ZEC,Payments,1268.636962890625,99,2026-10-10,1220.34,1104764524.0,5174244888.0,1.0,+178% in 3 months and +267% in 12; 23% below its 52-week high
+ai,2,QNT,Infrastructure,192.61801147460938,98,2026-10-10,239.705,99227361.0,491044110.0,2.0,+220% in 3 months and +145% in 12; 33% below its 52-week high
+ai,3,HYPE,Exchange tokens,90.08018493652344,94,2026-10-10,85.402,1876894527.0,7316866999.0,5.0,+71% in 3 months and +98% in 12; 7% below its 52-week high
+ai,4,RAY,DeFi,1.6335200071334839,93,2026-10-12,2.13521,38439917.0,194028729.0,6.0,+172% in 3 months and -1% in 12; 34% below its 52-week high; strong industry (DeFi)
+ai,5,UNI,DeFi,7.146155834197998,92,2026-10-12,6.9682,930814221.0,2939096892.0,7.0,+64% in 3 months and +22% in 12; 30% below its 52-week high; strong industry (DeFi)
+ai,6,ENA,DeFi,0.190077006816864,91,2026-10-12,0.205666,1028126986.0,3586255281.0,8.0,+137% in 3 months and -52% in 12; 51% below its 52-week high; strong industry (DeFi)
+ai,7,XMR,Payments,587.2415771484375,89,2026-10-10,519.52,148612871.0,720503667.0,9.0,+64% in 3 months and +82% in 12; 18% below its 52-week high
+ai,8,ZRO,Infrastructure,1.7153079509735107,88,2026-10-10,1.9895,184365602.0,514134856.0,10.0,+131% in 3 months and +11% in 12; 26% below its 52-week high
+ai,9,STX,Layer 2,0.28715500235557556,85,2026-10-11,0.398661,12816989.0,64478528.0,13.0,+109% in 3 months and -29% in 12; 34% below its 52-week high
+ai,10,ARB,Layer 2,0.16307400166988373,83,2026-10-10,0.189363,179856266.0,799204353.0,14.0,+109% in 3 months and -44% in 12; 47% below its 52-week high
