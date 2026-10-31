@@ -42,8 +42,8 @@
    "cci": -199.4
   },
   "breadth": {
-   "pct": 69.9,
-   "ema": 63.8
+   "pct": 69.8,
+   "ema": 63.7
   }
  },
  "sectors": {
@@ -119,12 +119,12 @@
   "Industrials": {
    "ok": false,
    "n": 81,
-   "bull": 61.3,
-   "bull_ema": 56.0,
-   "rsi": 55.5,
+   "bull": 60.5,
+   "bull_ema": 55.8,
+   "rsi": 55.4,
    "rsi_prev": 57.9,
    "miss": [
-    "RSI 56 not rising (was 58)"
+    "RSI 55 not rising (was 58)"
    ]
   },
   "Information Technology": {
@@ -385,13 +385,13 @@
    "ticker": "CPRT",
    "sector": "Industrials",
    "since": "2026-10-29",
-   "why": "its sector, Industrials, stopped passing: RSI 56 not rising (was 58)"
+   "why": "its sector, Industrials, stopped passing: RSI 55 not rising (was 58)"
   },
   {
    "ticker": "PNR",
    "sector": "Industrials",
    "since": "2026-10-29",
-   "why": "its sector, Industrials, stopped passing: RSI 56 not rising (was 58)"
+   "why": "its sector, Industrials, stopped passing: RSI 55 not rising (was 58)"
   },
   {
    "ticker": "RF",
@@ -4791,7 +4791,7 @@
     69.0,
     68.8,
     71.0,
-    69.9
+    69.8
    ],
    [
     64.6,
@@ -4921,7 +4921,7 @@
     58.6,
     60.5,
     62.4,
-    63.8
+    63.7
    ]
   ],
   "spy": [
@@ -6375,7 +6375,7 @@
       60.5,
       60.5,
       63.0,
-      61.3
+      60.5
      ],
      [
       61.2,
@@ -6440,7 +6440,7 @@
       57.3,
       58.4,
       59.9,
-      60.4
+      60.1
      ],
      [
       60.3,
@@ -6505,7 +6505,7 @@
       51.3,
       53.0,
       54.8,
-      56.0
+      55.8
      ]
     ],
     "heat": [
@@ -6571,7 +6571,7 @@
      54.5,
      53.9,
      57.9,
-     55.5
+     55.4
     ]
    },
    "Utilities": {
