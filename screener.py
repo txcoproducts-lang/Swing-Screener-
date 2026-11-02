@@ -62,6 +62,9 @@ CFG = dict(
 ICB_TO_GICS = {"Technology": "Information Technology", "Telecommunications": "Communication Services",
                "Basic Materials": "Materials"}
 
+NAMES = {}   # ticker -> company name (S&P 500, from Wikipedia), for the search bar's suggestions
+
+
 def get_universe():
     import requests
     hdr = {"User-Agent": "Mozilla/5.0"}
@@ -73,6 +76,8 @@ def get_universe():
     sp = tables("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
     tk = sp["Symbol"].str.replace(".", "-", regex=False)
     sectors = dict(zip(tk, sp["GICS Sector"]))
+    if "Security" in sp.columns:          # company names, for the ticker search
+        NAMES.update(zip(tk, sp["Security"].astype(str)))
     subs = dict(zip(tk, sp["GICS Sub-Industry"])) if "GICS Sub-Industry" in sp.columns else {}   # for industry strength
     syms = set(sectors)
     sp500 = set(sectors)                 # the breadth view counts S&P 500 stocks only
@@ -85,6 +90,10 @@ def get_universe():
             if scol:
                 for tk, sec in zip(t[col], t[scol].astype(str)):
                     sectors.setdefault(tk, ICB_TO_GICS.get(sec, sec))
+            ncol = next((c for c in ("Company", "Security") if c in t.columns), None)
+            if ncol:
+                for tk, nm in zip(t[col], t[ncol].astype(str)):
+                    NAMES.setdefault(tk, nm)
             ucol = next((c for c in t.columns if "Sub" in str(c)), None)
             if ucol:
                 for tk, sub in zip(t[col], t[ucol].astype(str)):
@@ -617,6 +626,7 @@ def analyze(t, d):
         p150=bool(p150), p200=bool(p200), x1020=bool(x1020), core=core, reg_up=bool(p_e50 and x1020 and not p150),
         cross=crossed, days_since_cross=days_since_cross, brk20=bool(px > prior20hi),
         stack=bool(e10.iloc[-1] > e20.iloc[-1] > e50.iloc[-1] > m150.iloc[-1] > m200.iloc[-1]),
+        ext=ext, x2050=bool(x2050), depth=(c.iloc[-15:].max() - px) / c.iloc[-15:].max() * 100,   # for the search panel's setup checks
     )
 
 # ------------------------------------------------------------------ breadth
@@ -2370,7 +2380,7 @@ def news_html(df, sws, etfs=None, market="stock", suf="", lbl="Strongest stocks"
             f'<script>const NEWS={json.dumps(dict(lead=lead, market=market, suf=suf, lbl=lbl), separators=(",", ":"))};</script>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -2538,6 +2548,9 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     pinfo = popup_info(df, sws, spy, mkt_hot, charts)
+    import search_info                     # the ticker search bar (signals in data/signals.json)
+    srch_box, srch_alias = search_info.box(sig), search_info.alias_js(sig)
+    srch_css, srch_js = (search_info.CSS, search_info.JS) if sig else ("", "")
     news = news_html(df, sws)
     tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
@@ -2662,10 +2675,10 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
 .mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}
-{hk_css()}
+{hk_css()}{srch_css}
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Swing Screener</h1>
-<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a></nav>
+<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a></nav>{srch_box}
 <span class="reg {rcls}">{reg}</span><span class="asof">{"Prices at " + live_at + " New York time, " + asof if live_at else "Closing data · " + asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
@@ -2694,7 +2707,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmk">{hk('chart')}</div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmi" hidden></div><details id="cms" hidden></details><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmk">{hk('chart')}</div><div id="cmw"><div id="cmc"></div></div></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
@@ -2894,7 +2907,7 @@ tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbo
 theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
 studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
-function openChart(t){{cmSym=t;document.getElementById('cmt').textContent=t;
+function openChart(t,all){{cmSym=t;document.getElementById('cmt').textContent=t;if(window.sigDraw)sigDraw(t,all);
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
 cm.hidden=false;document.body.style.overflow='hidden';cmInfo(t);draw();btDraw(t)}}
 function cmInfo(t){{const el=document.getElementById('cmi');if(!PINFO){{el.hidden=true;return}}const sec=PINFO.t[t];
@@ -2969,6 +2982,8 @@ document.getElementById('obt').onclick=e=>{{cmOB=!cmOB;e.currentTarget.classList
 document.querySelectorAll('.bar.rng button').forEach(b=>b.onclick=()=>{{cmRng=b.dataset.rng;setOn('.bar.rng',cmRng,'rng');draw()}});
 cm.querySelector('.x').onclick=closeChart;cm.onclick=e=>{{if(e.target===cm)closeChart()}};
 document.addEventListener('keydown',e=>{{if(e.key==='Escape'&&!cm.hidden)closeChart()}});
+const SALIAS={srch_alias};
+{srch_js}
 </script>
 <script>{paper_js}</script><script>{bt_js}</script></body></html>"""
 
@@ -3144,7 +3159,8 @@ def main():
     listed += [h["ticker"] for k in ("nu", "bo") for h in (lists or {}).get(k, {}).get("hot", [])]
     listed += [s["ticker"] for s in (ov or {}).get("setups", [])]
     listed += [r[0] for r in (ov or {}).get("screen") or [] if r[5].count("0") <= 2]   # the OVTLYR screener's closest
-    chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values())))
+    # every scanned stock gets a chart file (2026-11-02, the ticker search opens any of them), table and lists first
+    chart_tks = list(dict.fromkeys(list(picks.ticker) + listed + list(SECTOR_ETF.values()) + list(df.ticker)))
     print(f"Building trend charts and 10-year backtests for {len(chart_tks)} tickers...")
     bts = {}
     try:
@@ -3169,7 +3185,22 @@ def main():
             import traceback
             traceback.print_exc()
             print("  OVTLYR page failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix)
+    sig = None
+    try:                                   # the ticker search: every signal per ticker, in data/signals.json
+        import search_info
+        skipped = {t: (sectors.get(t) or "", f"under ${CFG['MIN_PRICE']:.0f}, under {CFG['MIN_AVG_VOL']:,} shares a day "
+                       "or under 200 days of prices, so the screener skips it") for t in frames if t not in set(df.ticker)}
+        sig = search_info.build(sys.modules[__name__], "stock", df, sw or {g: swing_state(b) for g, b in bh.items()},
+                                spy=etf_frames.get("SPY"), mkt_hot=mkt_hot, lists=lists, ov=ov, calls=calls, earn=earn,
+                                picks=picks, secb=secb, breadth=breadth, vix=vix, skipped=skipped, names=NAMES)
+        sig["asof"] = asof
+        search_info.write(sig, out)
+        print(f"  ticker search: {len(sig['t'])} tickers")
+    except Exception as e:                 # an extra; never block the page
+        import traceback
+        traceback.print_exc()
+        print("  ticker search failed:", e)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)

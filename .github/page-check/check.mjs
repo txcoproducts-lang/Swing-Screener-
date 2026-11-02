@@ -151,6 +151,18 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   await p.click('.bar.src button[data-src="tv"]'); await p.waitForTimeout(8000);
   log(`[${name}] tradingview iframe=${await p.$$eval("#cmc iframe", f => f.length)}`);
   await p.screenshot({ path: `${out}/${name}-5-indicators.png` });
+  // the search bar: a ticker, a sector by name, the market, and a ticker the screener doesn't scan
+  await p.click("#cm .x").catch(() => {});
+  const crypto = /crypto\/?$/.test(process.env.PAGE_URL);
+  if (await p.$("#sq")) for (const [i, q] of [tk.toLowerCase(), crypto ? "layer 1" : "technology", crypto ? "btc" : "spy", "zzqx"].entries()) {
+    await p.fill("#sq", q); await p.press("#sq", "Enter"); await p.waitForTimeout(3000);
+    log(`[${name}] search "${q}": opened ${await p.textContent("#cmt")}, ${await p.$$eval("#cms .sc", x => x.length)} cards, ` +
+        `${await p.$$eval("#cms .sr", x => x.length)} signals: "${(await p.$eval("#cms > summary", e => e.textContent).catch(() => "(none)")).slice(0, 160)}"`);
+    await p.screenshot({ path: `${out}/${name}-8-search-${i}.png` });
+    if (i === 0) { await p.evaluate(() => { const b = document.querySelector("#cm .box"); b.scrollTop = b.scrollHeight; }); await p.waitForTimeout(400);
+      await p.screenshot({ path: `${out}/${name}-8-search-0-chart.png` }); }
+    await p.click("#cm .x");
+  }
   log(`[${name}] errors: ${errs.length ? "\n  " + errs.join("\n  ") : "none"}`);
   await p.close();
 }

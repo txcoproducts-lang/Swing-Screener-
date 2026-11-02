@@ -304,6 +304,17 @@ def page_keys(market, cfg, ov):
         R("Info line", f"Its {g}'s rank by Rising, Rising % and state; the market line with {b}'s price and % today, how many "
           "of the Today checks pass and the market's breadth."),
         R("Backtest line", f"10 years on your rules vs holding it vs holding {b}, what $1,000 became, and every trade (tap to open)."),
+        H("Search and every signal"),
+        R("Search bar", f"At the top of the page. Type any {u}'s ticker" + ("" if c else " or company name") + f", a {g}'s ETF or "
+          f"name (" + ("e.g. L1, Memes" if c else "e.g. XLK or Technology") + f") or {b} / \"market\", then Enter. It opens this "
+          f"pop-up with every signal open. A ticker the screener doesn't scan still opens the TradingView chart."),
+        R("✓ / ✕ / ·", "In the signals panel: ✓ = passes, ✕ = fails, · = information only."),
+        R("Verdict line", f"Its setup (Super / Regular, Momentum / Pullback, Overbought, or none and why), its spot on the "
+          f"strongest list and in Your system's buying order, and its strength score. Tap it to fold the panel away."),
+        R("Cards", f"Setup checks (each Momentum and Pullback rule) · your trend rules · the strength score's 40 / 40 / 20 parts "
+          f"and its RS rank in its {g} · every list it is on (" + ("" if c else "Top picks, ") + "AI picks, OVTLYR Plan M and the OVTLYR "
+          f"screener's rules) · price and momentum" + ("" if c else " · the call and next earnings") + f" · its {g}'s breadth, rank "
+          f"and strongest {us} · the market: {b}'s checks, breadth, " + ("" if c else "VIX, ") + "OVTLYR's market rules."),
         U("Before you buy: green shading, the price over the EMAs, room up to the nearest orange block, and a 10-year line that "
           "shows your rules work on this name."), title="How to read this chart")
 

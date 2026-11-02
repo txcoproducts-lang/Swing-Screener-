@@ -283,6 +283,7 @@ def build(ov, out_dir):
             ("heat", "Heatmap", page_heat), ("stocks", "Stocks", page_stocks), ("etf", "Plan ETF", page_etf), ("rules", "Rules", page_rules)]
     nav = "".join(f'<a href="#{k}" data-t="{k}">{n}</a>' for k, n, _ in tabs)
     import page_keys
+    import search_info                 # the search bar's style; a search opens the ticker on the Stocks page
     keys = page_keys.ovtlyr_keys(HEAT_MAX)
 
     def with_key(k, h):
@@ -295,8 +296,8 @@ def build(ov, out_dir):
             f'{dt.date.fromisoformat(ov["asof"]).day}')
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OVTLYR screener</title><style>{CSS}
-{page_keys.CSS}</style></head><body><header><div class="hd"><span class="logo"><i></i>OVTLYR screener</span>
-<nav class="sw" aria-label="Market"><a href="../">Stocks</a><a href="../crypto/">Crypto</a><a class="on" href="./" aria-current="page">OVTLYR</a></nav>
+{page_keys.CSS}{search_info.CSS}</style></head><body><header><div class="hd"><span class="logo"><i></i>OVTLYR screener</span>
+<nav class="sw" aria-label="Market"><a href="../">Stocks</a><a href="../crypto/">Crypto</a><a class="on" href="./" aria-current="page">OVTLYR</a></nav><form class="srch" action="../" method="get" role="search"><input name="q" placeholder="Search a ticker, sector or SPY" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="Search a ticker: opens it on the Stocks page with every signal"><button>Search</button></form>
 <span class="asof">{when}</span></div><nav class="tabs">{nav}</nav></header><main>{body}</main><script>{JS}</script></body></html>"""
     d = Path(out_dir) / "ovtlyr"
     d.mkdir(parents=True, exist_ok=True)
