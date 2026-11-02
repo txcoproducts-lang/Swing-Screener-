@@ -417,7 +417,7 @@ TA_JS = r"""
 function sqInit(f,q,ix,pick){const d=f.querySelector('.sqd');let items=[],on=-1;
 const known=new Set(ix.map(x=>x[0]));
 function list(s){const u=s.trim().toUpperCase().replace(/\./g,'-');if(!u)return[];const a=[],b=[],c=[];
-for(const x of ix){const L=(x[1]||'').split(' · ')[0].toUpperCase();if(x[0].startsWith(u))a.push(x);else if(L.startsWith(u)||L.split(/[ ·&]+/).some(w=>w.startsWith(u)&&u.length>1))b.push(x);else if(u.length>2&&L.includes(u))c.push(x)}
+for(const x of ix){const L=(x[1]||'').split(' · ')[0].toUpperCase();if(x[0].startsWith(u))a.push(x);else if(u.length>1&&L.startsWith(u))b.push(x);else if(u.length>3&&L.includes(u))c.push(x)}
 a.sort((p,r)=>p[0].length-r[0].length||p[0].localeCompare(r[0]));
 const al=Object.entries(typeof SALIAS==='object'?SALIAS:{}).filter(([k])=>k.startsWith(u)&&u.length>1).map(([k,t])=>[t,k.charAt(0)+k.slice(1).toLowerCase()]);
 const seen=new Set(),out=[];for(const x of a.concat(al,b,c))if(!seen.has(x[0])){seen.add(x[0]);out.push(x)}return out.slice(0,40)}
