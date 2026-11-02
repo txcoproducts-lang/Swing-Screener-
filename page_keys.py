@@ -308,6 +308,11 @@ def page_keys(market, cfg, ov):
         R("Search bar", f"At the top of the page. Type any {u}'s ticker" + ("" if c else " or company name") + f", a {g}'s ETF or "
           f"name (" + ("e.g. L1, Memes" if c else "e.g. XLK or Technology") + f") or {b} / \"market\", then Enter. It opens this "
           f"pop-up with every signal open. A ticker the screener doesn't scan still opens the TradingView chart."),
+        R("Suggestions", f"As you type, a list drops down: every ticker that starts with what you typed (S, then SP, then SPY), "
+          f"then " + ("" if c else "company names and ") + f"{gs} that start with it. Tap one, or use the arrow keys and Enter."),
+        R("Pictures", f"At the top of the panel, copied from the page: the Today tab's score bar for the {u}, its {g}'s tile, "
+          f"the breadth heatmap rows for the market and its {g} (last 3 months)" + ("" if c else ", and for SPY the Step 1 card and the VIX panel")
+          + ". Same colours as on the page. \"Jump to the chart\" scrolls down to the chart."),
         R("✓ / ✕ / ·", "In the signals panel: ✓ = passes, ✕ = fails, · = information only."),
         R("Verdict line", f"Its setup (Super / Regular, Momentum / Pullback, Overbought, or none and why), its spot on the "
           f"strongest list and in Your system's buying order, and its strength score. Tap it to fold the panel away."),

@@ -154,6 +154,13 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   // the search bar: a ticker, a sector by name, the market, and a ticker the screener doesn't scan
   await p.click("#cm .x").catch(() => {});
   const crypto = /crypto\/?$/.test(process.env.PAGE_URL);
+  if (await p.$("#sqd")) {                 // the type-ahead list narrows letter by letter
+    await p.click("#sq"); let typed = "";
+    for (const k of crypto ? ["e", "t", "h"] : ["s", "p", "y"]) { await p.keyboard.type(k); typed += k; await p.waitForTimeout(200);
+      log(`[${name}] type-ahead "${typed}": ${await p.$$eval("#sqd [data-i]", x => x.length + " - " + x.slice(0, 6).map(e => e.querySelector("b").textContent).join(" "))}`);
+      if (typed.length === 2) await p.screenshot({ path: `${out}/${name}-8-typeahead.png` }); }
+    await p.fill("#sq", "");
+  }
   if (await p.$("#sq")) for (const [i, q] of [tk.toLowerCase(), crypto ? "layer 1" : "technology", crypto ? "btc" : "spy", "zzqx"].entries()) {
     await p.fill("#sq", q); await p.press("#sq", "Enter"); await p.waitForTimeout(3000);
     log(`[${name}] search "${q}": opened ${await p.textContent("#cmt")}, ${await p.$$eval("#cms .sc", x => x.length)} cards, ` +

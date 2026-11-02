@@ -300,7 +300,16 @@ def build(S, market, df, sws, *, spy=None, mkt_hot="", lists=None, ov=None, call
         if oe:
             x.append(["Options and earnings", oe])
         x += ["@sec", "@mkt"]
-        T[t] = dict(g=g, n=names.get(t, ""), h=h, x=x)
+        v = ""
+        if _num(gr("strength")) is not None:              # the Today tab's score bar (same markup and colours)
+            v = (f'<div class="st"><span>{tk(t)}<div class="sub">{short(g)}</div></span>'
+                 f'<span><span class="score"><b style="width:{gr("ss_mkt"):.1f}%;background:var(--sc1)"></b>'
+                 f'<b style="width:{_num(gr("ss_sec")) or 0:.1f}%;background:var(--acc)"></b>'
+                 f'<b style="width:{_num(gr("ss_stk")) or 0:.1f}%;background:var(--up)"></b></span>'
+                 f'<span class="sub">{(esc(tier) + " " + esc(setup)) if has else "no setup"} · RSI {_f(rs_, "{:.0f}")}</span></span>'
+                 f'<span class="chg"><span>{_px(gr("close"))}</span><span class="{"up" if (gr("chg1d") or 0) >= 0 else "dn"}">{gr("chg1d") or 0:+.2f}%</span></span>'
+                 f'<span class="sc">{gr("strength"):.0f}</span></div>')
+        T[t] = dict(g=g, n=names.get(t, ""), h=h, x=x, v=v)
 
     # sector ETFs (indexes for crypto) and the benchmark: the group's card first
     for n, etf in S.SECTOR_ETF.items():
@@ -342,24 +351,37 @@ def build(S, market, df, sws, *, spy=None, mkt_hot="", lists=None, ov=None, call
             continue
         alias[n.upper()] = etf
         alias[S.SHORT_SECTOR.get(n, n).upper()] = etf
-    return dict(asof=str(getattr(df, "attrs", {}).get("asof", "")), mk=MK, m=mcard, s=scards, t=T, alias=alias)
+    hl = {n: S.SHORT_SECTOR.get(n, n) for n in sws}       # each group's label in the breadth heatmap
+    return dict(asof=str(getattr(df, "attrs", {}).get("asof", "")), mk=MK, m=mcard, s=scards, t=T, alias=alias, hl=hl)
 
 
 def write(sig, out):
     d = out / "data"
     d.mkdir(parents=True, exist_ok=True)
     (d / "signals.json").write_text(json.dumps(sig, separators=(",", ":")), encoding="utf-8")
+    (d / "search_index.json").write_text(json.dumps(index(sig), separators=(",", ":")), encoding="utf-8")   # the OVTLYR page's list
+
+
+def index(sig):
+    """[ticker, label] for the type-ahead list: company name and sector, or what the ticker is; sector names as aliases."""
+    if not sig:
+        return []
+    hl = sig.get("hl") or {}
+    out = [[t, " · ".join(x for x in (e.get("n") or "", hl.get(e.get("g"), "") if e.get("n") != f'{hl.get(e.get("g"), "")} sector' else "") if x)]
+           for t, e in sorted(sig["t"].items())]
+    return out
 
 
 def box(sig, market="stock"):
-    """The search bar for the header, with every ticker in a list for suggestions."""
+    """The search bar for the header, with the type-ahead list (every ticker the page knows)."""
     if not sig:
         return ""
-    opts = "".join(f'<option value="{t}">{e.get("n") or ""}</option>' for t, e in sorted(sig["t"].items()))
     ph = "Search a coin, category or BTC" if market == "crypto" else "Search a ticker, sector or SPY"
-    return (f'<form class="srch" role="search" id="srch"><input id="sq" list="sidx" placeholder="{ph}" autocomplete="off" '
-            f'autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="{ph}"><button>Search</button></form>'
-            f'<datalist id="sidx">{opts}</datalist>')
+    ix = json.dumps(index(sig), separators=(",", ":")).replace("</", "<\\/")
+    return (f'<form class="srch" role="search" id="srch"><input id="sq" placeholder="{ph}" autocomplete="off" '
+            f'autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="{ph}" role="combobox" '
+            f'aria-autocomplete="list" aria-controls="sqd" aria-expanded="false"><button>Search</button>'
+            f'<div id="sqd" class="sqd" role="listbox" hidden></div></form><script>const SIDX={ix};</script>')
 
 
 def alias_js(sig):
@@ -368,6 +390,8 @@ def alias_js(sig):
 
 CSS = """
 .srch{display:flex;gap:4px;flex:1 1 220px;max-width:340px}.srch input{flex:1;min-width:0;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+.srch{position:relative}.sqd{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.16);max-height:min(60vh,420px);overflow:auto;padding:4px 0}.sqd[hidden]{display:none}
+.sqd div{display:flex;gap:10px;align-items:baseline;padding:6px 12px;cursor:pointer;font-size:13px}.sqd div b{min-width:58px;font-weight:700}.sqd div span{color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sqd div.on,.sqd div:hover{background:var(--card)}.sqd div em{font-style:normal;color:var(--acc)}
 .srch button{background:var(--acc);color:#fff;border:0;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}
 @media(max-width:600px){.srch{order:5;flex:1 1 100%;max-width:none;margin-top:2px}.srch input{font-size:16px}}
 #cms{border-bottom:1px solid var(--line);padding:6px 12px;font-size:13px;line-height:1.45;max-height:46%;overflow:auto}#cms[hidden]{display:none}
@@ -379,11 +403,40 @@ CSS = """
 #cms .sr>b{max-width:58%}#cms .nt{color:var(--mut);font-size:12px;margin-top:4px}
 #cm .box:has(#cms[open]){overflow:auto}#cm .box:has(#cms[open]) #cms{max-height:none;overflow:visible}#cm .box:has(#cms[open]) #cmbt{max-height:none}
 #cm .box:has(#cms[open]) #cmw{flex:none;height:max(420px,70vh)}#cm .box:has(#cms[open]) .top{position:sticky;top:0;background:var(--bg);z-index:4}
-@media(max-width:600px){#cms .sg{grid-template-columns:1fr}}
+#cms .sv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin:6px 0 2px;align-items:start}
+#cms .sv>div{background:var(--card);border-radius:8px;padding:8px 10px;min-width:0}#cms .sv h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+#cms .sv .stile{min-height:96px;cursor:default;pointer-events:none}#cms .sv .step{margin:0;padding:0;background:none;border:0;box-shadow:none}#cms .sv .vix{margin:0;border:0;padding:0;background:none;grid-template-columns:minmax(0,1fr)}
+#cms .sv .hm{margin:0}#cms .sv .st{border-top:0;padding:2px 0}#cms .sv .vtl{display:flex;gap:8px;flex-wrap:wrap}#cms .sv .vtl .stile{flex:1 1 150px}
+#cms .gochart{background:none;border:1px solid var(--line);border-radius:999px;color:var(--acc);font-size:12px;padding:2px 10px;cursor:pointer;margin-left:8px}
+@media(max-width:600px){#cms .sg,#cms .sv{grid-template-columns:1fr}}
+"""
+
+TA_JS = r"""
+// type-ahead: tickers that start with what's typed, then names and sectors that start with it
+function sqInit(f,q,ix,pick){const d=f.querySelector('.sqd');let items=[],on=-1;
+const known=new Set(ix.map(x=>x[0]));
+function list(s){const u=s.trim().toUpperCase().replace(/\./g,'-');if(!u)return[];const a=[],b=[],c=[];
+for(const x of ix){const L=(x[1]||'').split(' · ')[0].toUpperCase();if(x[0].startsWith(u))a.push(x);else if(L.startsWith(u)||L.split(/[ ·&]+/).some(w=>w.startsWith(u)&&u.length>1))b.push(x);else if(u.length>2&&L.includes(u))c.push(x)}
+a.sort((p,r)=>p[0].length-r[0].length||p[0].localeCompare(r[0]));
+const al=Object.entries(typeof SALIAS==='object'?SALIAS:{}).filter(([k])=>k.startsWith(u)&&u.length>1).map(([k,t])=>[t,k.charAt(0)+k.slice(1).toLowerCase()]);
+const seen=new Set(),out=[];for(const x of a.concat(al,b,c))if(!seen.has(x[0])){seen.add(x[0]);out.push(x)}return out.slice(0,40)}
+function show(){items=list(q.value);on=-1;if(!items.length){d.hidden=true;q.setAttribute('aria-expanded','false');return}
+const u=q.value.trim().toUpperCase().replace(/\./g,'-');
+d.innerHTML=items.map((x,i)=>'<div role="option" data-i="'+i+'"><b>'+(x[0].startsWith(u)?'<em>'+x[0].slice(0,u.length)+'</em>'+x[0].slice(u.length):x[0])+'</b><span>'+(x[1]||'')+'</span></div>').join('');
+d.hidden=false;q.setAttribute('aria-expanded','true')}
+function mark(){[...d.children].forEach((c,i)=>c.classList.toggle('on',i===on));if(on>=0)d.children[on].scrollIntoView({block:'nearest'})}
+function go(t){d.hidden=true;q.value='';q.blur();pick(t)}
+q.addEventListener('input',show);q.addEventListener('focus',()=>{if(q.value)show()});
+q.addEventListener('keydown',e=>{if(d.hidden)return;if(e.key==='ArrowDown'){on=Math.min(items.length-1,on+1);mark();e.preventDefault()}
+else if(e.key==='ArrowUp'){on=Math.max(-1,on-1);mark();e.preventDefault()}else if(e.key==='Escape'){d.hidden=true}
+else if(e.key==='Enter'&&on>=0){e.preventDefault();go(items[on][0])}});
+d.addEventListener('pointerdown',e=>{const r=e.target.closest('[data-i]');if(r){e.preventDefault();go(items[+r.dataset.i][0])}});
+document.addEventListener('pointerdown',e=>{if(!f.contains(e.target))d.hidden=true});
+return {known,first:()=>items[0]&&items[0][0],go}}
 """
 
 # needs the pop-up's openChart(t), cmSym, and setOn/tvDraw for the fallback; SALIAS is set by the page
-JS = r"""
+JS = TA_JS + r"""
 // ---- ticker search: every signal the screener has, in a panel over the chart (data/signals.json, loaded once)
 let SIG=null,sigP=null;
 function sigLoad(){return sigP||(sigP=fetch('data/signals.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>SIG=j).catch(()=>null))}
@@ -394,17 +447,38 @@ sigLoad().then(S=>{if(t!==cmSym)return;if(!S){el.hidden=true;return}const e=S.t[
 if(!e){h='<b>'+t+'</b> is not tracked by the screener, so only the TradingView chart is here';x=['@mkt']}else{h=e.h;x=e.x}
 const g=e&&e.g&&S.s[e.g];
 const cards=x.map(c=>c==='@sec'?(g?sigCard(g):''):c==='@mkt'?sigCard(S.m):sigCard({t:c[0],rows:c[1]})).join('');
-el.open=!!open&&!!e;el.innerHTML='<summary>'+(e&&e.n?'<span class="mut">'+e.n+'</span> · ':'')+h+'<span class="sml">Show every signal ▾</span></summary><div class="sg">'+cards+'</div>'+
+el.open=!!open&&!!e;el.innerHTML='<summary>'+(e&&e.n?'<span class="mut">'+e.n+'</span> · ':'')+h+'<span class="sml">Show every signal ▾</span></summary>'+sigVis(S,e)+'<div class="sg">'+cards+'</div>'+
 (e?'':'<div class="nt">The screener scans '+(S.mk==='S&P 500'?'S&amp;P 500 and Nasdaq 100 stocks over $10 averaging 1M+ shares a day':'the coins on its list')+'; the market card above is tonight\'s.</div>');
 el.querySelectorAll('.tk').forEach(a=>a.onclick=ev=>{ev.stopPropagation();openChart(a.dataset.tk,true)})})}
-(function(){const f=document.getElementById('srch'),q=document.getElementById('sq');if(!f)return;
-const known=new Set([...document.querySelectorAll('#sidx option')].map(o=>o.value));
+// the page's own visuals for this ticker, copied from the page (nothing new is drawn): its sector's tile, its score bar,
+// the breadth heatmap rows for the market and its sector, and for the market the Today tab's Step 1 card and the VIX panel
+function sigClone(e){if(!e)return'';const c=e.cloneNode(true);c.removeAttribute('id');c.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));return c.outerHTML}
+function sigHeat(labels){const hm=document.getElementById('hm');if(!hm)return'';const c=hm.cloneNode(true);c.removeAttribute('id');
+c.querySelectorAll('.hmtip,[id]').forEach(x=>x.id==='hmtip'||x.classList.contains('hmtip')?x.remove():x.removeAttribute('id'));
+c.querySelectorAll('.hmr').forEach(r=>{const l=r.querySelector('.hml');if(l&&!labels.includes(l.textContent.trim()))r.remove();else if(l)r.classList.remove('sel')});return c.outerHTML}
+function sigVis(S,e){const box=[],g=e&&e.g,isMk=!e||g===S.mk,hl=S.hl||{};
+const tile=g&&!isMk?document.querySelector('.stile[data-sector="'+CSS.escape(g)+'"]'):null;
+if(tile||(e&&e.v))box.push('<div><h4>'+(e&&e.v?'Strength score':'Its sector')+'</h4>'+(e&&e.v?e.v:'')+(tile?'<div class="vtl">'+sigClone(tile)+'</div>':'')+'</div>');
+const labs=[hl[S.mk]||S.mk];if(g&&!isMk&&hl[g])labs.push(hl[g]);const hm=sigHeat(labs);
+if(hm)box.push('<div><h4>Breadth, last 3 months</h4>'+hm+'</div>');
+if(isMk){const st=document.querySelector('#tab-today .step');if(st)box.push('<div>'+sigClone(st)+'</div>');
+const vx=document.querySelector('#tab-market .vix');if(vx)box.push('<div><h4>VIX</h4>'+sigClone(vx)+'</div>')}
+return box.length?'<div class="sv">'+box.join('')+'</div><div class="nt">The same pictures as on the page'+(e&&e.v?' (score bar: light blue = market, blue = sector, green = its own part)':'')+'. <button class="gochart" onclick="const b=document.querySelector(\'#cm .box\');b.scrollTo({top:document.getElementById(\'cmw\').offsetTop-60,behavior:\'smooth\'})">Jump to the chart ↓</button></div>':''}
+(function(){const f=document.getElementById('srch'),q=document.getElementById('sq');if(!f||typeof SIDX==='undefined')return;
+const ta=sqInit(f,q,SIDX,t=>openChart(t,true)),known=ta.known;
 function find(s){s=s.trim();if(!s)return null;const u=s.toUpperCase();
 if(known.has(u))return u;const d=u.replace(/\./g,'-').replace(/\s+/g,'');if(known.has(d))return d;
 if(SALIAS[u])return SALIAS[u];const c=d.replace(/-?USDT?$/,'');if(c!==d&&known.has(c))return c;
-const o=[...document.querySelectorAll('#sidx option')].find(o=>o.textContent&&o.textContent.toUpperCase().includes(u)&&u.length>2);
-return o?o.value:d}
-f.onsubmit=e=>{e.preventDefault();const t=find(q.value);if(!t)return;q.blur();openChart(t,true);q.value=''};
-q.addEventListener('input',e=>{if((!e.inputType||e.inputType==='insertReplacementText')&&known.has(q.value)){const t=q.value;q.blur();openChart(t,true);q.value=''}});
+const o=SIDX.find(x=>x[1]&&x[1].toUpperCase().includes(u)&&u.length>2);
+return o?o[0]:d}
+f.onsubmit=e=>{e.preventDefault();const t=find(q.value);if(t)ta.go(t)};
 const p=new URLSearchParams(location.search).get('q');if(p){const t=find(p);if(t)openChart(t,true)}})();
+"""
+
+# the OVTLYR page's search bar: the same type-ahead from ../data/search_index.json; a pick opens it on the Stocks page
+OV_JS = TA_JS + r"""
+(function(){const f=document.querySelector('form.srch'),q=f&&f.querySelector('input');if(!f)return;let ta=null;
+const go=t=>{location.href='../?q='+encodeURIComponent(t)};
+fetch('../data/search_index.json').then(r=>r.ok?r.json():[]).then(ix=>{ta=sqInit(f,q,ix,go);if(q.value)q.dispatchEvent(new Event('input'))}).catch(()=>{});
+f.onsubmit=e=>{e.preventDefault();const v=q.value.trim();if(!v)return;const u=v.toUpperCase();go(ta&&ta.known.has(u)?u:(ta&&ta.first())||u)}})();
 """
