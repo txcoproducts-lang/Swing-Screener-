@@ -1,0 +1,153 @@
+tickers with charts: 314
+order block boxes: 7614 (1011 untouched)
+daily bars per ticker: min 432, median 1260, max 1260 (5 years is about 1,260)
+missing data files: none
+data issues: 38
+  EXPD D bad high/low at 2026-11-02
+  EXPD W bad high/low at 2026-11-02
+  EXPD M bad high/low at 2026-11-01
+  WSM D bad high/low at 2026-11-02
+  WSM W bad high/low at 2026-11-02
+  WSM M bad high/low at 2026-11-01
+  LOW D bad high/low at 2026-11-02
+  LOW W bad high/low at 2026-11-02
+  LOW M bad high/low at 2026-11-01
+  SPG D bad high/low at 2026-11-02
+  SPG W bad high/low at 2026-11-02
+  DIS D bad high/low at 2026-11-02
+  DIS W bad high/low at 2026-11-02
+  DIS M bad high/low at 2026-11-01
+  EXR D bad high/low at 2026-11-02
+  EXR W bad high/low at 2026-11-02
+  EXR M bad high/low at 2026-11-01
+  IFF D bad high/low at 2026-11-02
+  IFF W bad high/low at 2026-11-02
+  IFF M bad high/low at 2026-11-01
+  ALL D bad high/low at 2026-11-02
+  ALL W bad high/low at 2026-11-02
+  ALL M bad high/low at 2026-11-01
+  DHR D bad high/low at 2026-11-02
+  DHR W bad high/low at 2026-11-02
+  DHR M bad high/low at 2026-11-01
+  CCL D bad high/low at 2026-11-02
+  CCL W bad high/low at 2026-11-02
+  CCL M bad high/low at 2026-11-01
+  EFX D bad high/low at 2026-11-02
+  EFX W bad high/low at 2026-11-02
+  EFX M bad high/low at 2026-11-01
+  HRL D bad high/low at 2026-11-02
+  HRL W bad high/low at 2026-11-02
+  HRL M bad high/low at 2026-11-01
+  CMG D bad high/low at 2026-11-02
+  CMG W bad high/low at 2026-11-02
+  CMG M bad high/low at 2026-11-01
+table vs data mismatches: 243
+  HAS close: table 119.25 vs data 119.19
+  BBY close: table 96.94 vs data 96.81
+  MAR close: table 416.34 vs data 416.49
+  EBAY close: table 123.85 vs data 123.56
+  EBAY d1: table 1.82 vs data 1.58
+  EBAY d5: table 4.41 vs data 4.16
+  EBAY m1: table 16.40 vs data 16.13
+  ABNB close: table 172.50 vs data 172.43
+  SWK close: table 107.43 vs data 107.49
+  EXPD close: table 197.85 vs data 197.80
+  WSM close: table 262.39 vs data 262.12
+  DE close: table 670.97 vs data 670.03
+  DAL close: table 83.75 vs data 83.82
+  ORLY close: table 90.40 vs data 90.44
+  LOW close: table 216.12 vs data 215.96
+  ADSK close: table 259.15 vs data 259.31
+  AAPL close: table 340.99 vs data 340.81
+  HD close: table 339.00 vs data 338.88
+  MPC close: table 437.48 vs data 437.36
+  PSX close: table 277.71 vs data 277.39
+  SPG close: table 221.99 vs data 221.88
+  ALLE close: table 191.97 vs data 191.82
+  LYV close: table 178.91 vs data 179.02
+  ADP close: table 299.85 vs data 299.64
+  HLT close: table 364.88 vs data 364.55
+  EXPE close: table 300.46 vs data 300.10
+  CSX close: table 51.72 vs data 51.67
+  GM close: table 89.46 vs data 89.39
+  UNP close: table 306.68 vs data 306.74
+  MAS close: table 83.71 vs data 83.66
+  TSLA close: table 411.37 vs data 410.92
+  FDX close: table 320.10 vs data 319.89
+  MMM close: table 179.05 vs data 179.18
+  ITW close: table 288.31 vs data 288.14
+  OMC close: table 82.68 vs data 82.72
+  TRMB close: table 67.15 vs data 67.11
+  AMT close: table 188.20 vs data 188.22
+  CDW close: table 151.53 vs data 151.90
+  CDW d1: table -1.47 vs data -1.23
+  CDW d5: table -7.17 vs data -6.94
+RSI / CCI vs data: 257 stocks checked, 2 off
+  AES RSI: table 66.0 vs data 67.6
+  AES CCI: table 173 vs data 186
+rows with an options contract: 21
+10-year backtests: 314 (years covered: min 0.9, median 10); rules beat holding on 27; table stocks without one: none
+  medians: in the market 39% of days, 28 trades, 42% winners; 8789 trades, average 1.92%, median -1.36%; ended by {"exit":7458,"stop":1104,"open":227}
+  AAPL rules 183.8% hold 1235.5% spy 324.6% n 27 win 56% in 44%
+  SPY rules 204% hold 324.6% spy 324.6% n 31 win 61% in 72%
+  XLK rules 179.2% hold 748.8% spy 324.6% n 28 win 54% in 54%
+  EMR rules 37.7% hold 330.7% spy 324.6% n 29 win 38% in 40%
+  MSFT rules 179.6% hold 891.3% spy 324.6% n 32 win 47% in 60%
+top picks: 11 new uptrends, 10 breakout watch, 8 AI picks; issues: 25
+  pk-nu ABNB: close 172.5 vs data 172.43
+  pk-nu DE: close 670.975 vs data 670.03
+  pk-nu DAL: close 83.75 vs data 83.82
+  pk-nu ORLY: close 90.405 vs data 90.44
+  pk-nu LOW: close 216.12 vs data 215.96
+  pk-nu CPRT: close 31.53 vs data 31.48
+  pk-nu PNR: close 70.22 vs data 70.17
+  pk-bo ADSK: close 259.15 vs data 259.31
+  pk-bo EBAY: close 123.85 vs data 123.56
+  pk-bo EBAY: "below it" -0.594
+  pk-bo BBY: close 96.94 vs data 96.81
+  pk-bo AAPL: close 340.995 vs data 340.81
+  pk-bo EXPD: close 197.85 vs data 197.8
+  pk-bo HD: close 338.9951 vs data 338.88
+  pk-bo LOW: close 216.12 vs data 215.96
+  pk-bo GEN: close 30.435 vs data 30.41
+  pk-bo VRSK: close 199.59 vs data 199.23
+  pk-bo VRSK: "below it" -2.253
+  pk-ai SNDK: now 1123.0 vs data 1123.66
+  pk-ai DELL: now 415.065 vs data 416.15
+  pk-ai MPC: now 437.48 vs data 437.36
+  pk-ai MU: now 865.6 vs data 866.24
+  pk-ai VLO: now 385.61 vs data 385.43
+  pk-ai PSX: now 277.71 vs data 277.39
+  pk-ai ILMN: now 228.54 vs data 229.06
+pk-nu calls that fit: 7 of 11, closest shown in grey: 1; none for NWSA (none fits: no call 0.50-0.80 delta with OI over 500), TXT (none fits: no call 0.50-0.80 delta with OI over 500), PNR (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-bo calls that fit: 5 of 10, closest shown in grey: 2; none for PTC (none fits: no call 0.50-0.80 delta with OI over 500), EXPD (none fits: no call 0.50-0.80 delta with OI over 500), VRSK (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-ai calls that fit: 5 of 8, closest shown in grey: 3
+filter setups: 53 rows, 0 wrong
+filter Super: 44 rows, 0 wrong
+filter Regular: 9 rows, 0 wrong
+filter Momentum: 50 rows, 0 wrong
+filter Pullback: 3 rows, 0 wrong
+filter Overbought: 156 rows, 0 wrong
+filter all: 257 rows, 0 wrong
+overbought rule: 53 setups, 156 marked Overbought, 0 oversold, market breadth 66.7; problems: none
+sector Energy: 0 rows ok
+sector Health Care: 0 rows ok
+sector Consumer Staples: 0 rows ok
+sector Materials: 0 rows ok
+sector Utilities: 0 rows ok
+sector Financials: 0 rows ok
+sector Industrials: 19 rows ok
+sector Consumer Discretionary: 13 rows ok
+sector Real Estate: 7 rows ok
+sector Information Technology: 9 rows ok
+sector Communication Services: 5 rows ok
+sorted 28 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: none
+breadth line: 12 groups x 470 days from 2024-12-17, 7 canvases, problems: none
+Plan M list: 8 stocks (summary says 8), 8 new (summary says 8), 0 dropped, the Market box link opens it: true
+opened 314 tickers x 4 timeframes (daily also at 5Y), problems: 0
+paper A Your system: $3,863.88 (updated 2026-10-30 14:28), cash $1,218.49, 2 open, 2 closed, 25 log lines, 11 closes; problems: none
+paper C Your system, after 2 PM: $4,243.55 (updated 2026-10-30 14:28), cash $2,853.55, 2 open, 2 closed, 26 log lines, 11 closes; problems: none
+paper B Claude's picks: $4,922.50 (updated 2026-10-30 14:28), cash $4,371.13, 1 open, 7 closed, 36 log lines, 11 closes; problems: none
+paper D OVTLYR plan: $4,126.31 (updated 2026-10-30 14:28), cash $0.00, 1 open, 8 closed, 37 log lines, 11 closes; problems: none
+page errors overall: none
