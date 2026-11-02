@@ -403,12 +403,13 @@ CSS = """
 #cms .sr>b{max-width:58%}#cms .nt{color:var(--mut);font-size:12px;margin-top:4px}
 #cm .box:has(#cms[open]){overflow:auto}#cm .box:has(#cms[open]) #cms{max-height:none;overflow:visible}#cm .box:has(#cms[open]) #cmbt{max-height:none}
 #cm .box:has(#cms[open]) #cmw{flex:none;height:max(420px,70vh)}#cm .box:has(#cms[open]) .top{position:sticky;top:0;background:var(--bg);z-index:4}
-#cms .sv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin:6px 0 2px;align-items:start}
+#cms .sv{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px;margin:6px 0 2px;align-items:start}
 #cms .sv>div{background:var(--card);border-radius:8px;padding:8px 10px;min-width:0}#cms .sv h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
 #cms .sv .stile{min-height:96px;cursor:default;pointer-events:none}#cms .sv .step{margin:0;padding:0;background:none;border:0;box-shadow:none}#cms .sv .vix{margin:0;border:0;padding:0;background:none;grid-template-columns:minmax(0,1fr)}
 #cms .sv .hm{margin:0}#cms .sv .st{border-top:0;padding:2px 0}#cms .sv .vtl{display:flex;gap:8px;flex-wrap:wrap}#cms .sv .vtl .stile{flex:1 1 150px}
-#cms .gochart{background:none;border:1px solid var(--line);border-radius:999px;color:var(--acc);font-size:12px;padding:2px 10px;cursor:pointer;margin-left:8px}
-@media(max-width:600px){#cms .sg,#cms .sv{grid-template-columns:1fr}}
+#cms .svc{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:8px;margin:6px 0 8px}#cms .svc .ch{margin:0}
+#cms .svw{grid-column:1/-1}#cms .sv2{grid-column:span 2}#cms .sv .step .sp{display:none}#cms .mv.svw .bln{margin:0 0 8px}#cms .sv .cards{margin:0}#cms .gochart{background:none;border:1px solid var(--line);border-radius:999px;color:var(--acc);font-size:12px;padding:2px 10px;cursor:pointer;margin-left:8px}
+@media(max-width:600px){#cms .sg,#cms .sv{grid-template-columns:1fr}#cms .sv2{grid-column:auto}}
 """
 
 TA_JS = r"""
@@ -442,28 +443,44 @@ let SIG=null,sigP=null;
 function sigLoad(){return sigP||(sigP=fetch('data/signals.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>SIG=j).catch(()=>null))}
 function sigCard(c){if(!c)return'';return'<div class="sc"><h4>'+c.t+'</h4>'+c.rows.map(r=>'<div class="sr"><i class="'+(r[0]===1?'ok':r[0]===0?'no':'in')+'">'+(r[0]===1?'✓':r[0]===0?'✗':'·')+'</i><span>'+r[1]+'</span>'+(r[2]?'<b>'+r[2]+'</b>':'')+'</div>').join('')+'</div>'}
 function sigDraw(t,open){const el=document.getElementById('cms');if(!el)return;el.hidden=false;el.open=!!open;
-el.innerHTML='<summary>Loading every signal for '+t+'…</summary>';
+sigRestore();el.innerHTML='<summary>Loading every signal for '+t+'…</summary>';
 sigLoad().then(S=>{if(t!==cmSym)return;if(!S){el.hidden=true;return}const e=S.t[t];let h,x;
 if(!e){h='<b>'+t+'</b> is not tracked by the screener, so only the TradingView chart is here';x=['@mkt']}else{h=e.h;x=e.x}
 const g=e&&e.g&&S.s[e.g];
 const cards=x.map(c=>c==='@sec'?(g?sigCard(g):''):c==='@mkt'?sigCard(S.m):sigCard({t:c[0],rows:c[1]})).join('');
 el.open=!!open&&!!e;el.innerHTML='<summary>'+(e&&e.n?'<span class="mut">'+e.n+'</span> · ':'')+h+'<span class="sml">Show every signal ▾</span></summary>'+sigVis(S,e)+'<div class="sg">'+cards+'</div>'+
 (e?'':'<div class="nt">The screener scans '+(S.mk==='S&P 500'?'S&amp;P 500 and Nasdaq 100 stocks over $10 averaging 1M+ shares a day':'the coins on its list')+'; the market card above is tonight\'s.</div>');
-el.querySelectorAll('.tk').forEach(a=>a.onclick=ev=>{ev.stopPropagation();openChart(a.dataset.tk,true)})})}
+el.querySelectorAll('.sv .tk,.sg .tk').forEach(a=>a.onclick=ev=>{ev.stopPropagation();openChart(a.dataset.tk,true)});sigMount(el)})}
 // the page's own visuals for this ticker, copied from the page (nothing new is drawn): its sector's tile, its score bar,
 // the breadth heatmap rows for the market and its sector, and for the market the Today tab's Step 1 card and the VIX panel
 function sigClone(e){if(!e)return'';const c=e.cloneNode(true);c.removeAttribute('id');c.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));return c.outerHTML}
 function sigHeat(labels){const hm=document.getElementById('hm');if(!hm)return'';const c=hm.cloneNode(true);c.removeAttribute('id');
 c.querySelectorAll('.hmtip,[id]').forEach(x=>x.id==='hmtip'||x.classList.contains('hmtip')?x.remove():x.removeAttribute('id'));
 c.querySelectorAll('.hmr').forEach(r=>{const l=r.querySelector('.hml');if(l&&!labels.includes(l.textContent.trim()))r.remove();else if(l)r.classList.remove('sel')});return c.outerHTML}
-function sigVis(S,e){const box=[],g=e&&e.g,isMk=!e||g===S.mk,hl=S.hl||{};
+function sigVis(S,e){const box=[],g=e&&e.g,isMk=!e||g===S.mk,hl=S.hl||{},big=[];
+// the page's own charts are moved here while the pop-up is open (and put back on close): its sector's ETF chart with the
+// breadth strip, the market's, and the breadth line set to its sector; the rest are copies
+if(g&&!isMk&&document.querySelector('.ch[data-sector="'+CSS.escape(g)+'"]'))big.push('<div class="mv" data-mv="ch:'+g+'"></div>');
+if(document.querySelector('.ch[data-sector="'+CSS.escape(S.mk)+'"]'))big.push('<div class="mv" data-mv="ch:'+S.mk+'"></div>');
+const vis=[];if(big.length)vis.push('<div class="svc">'+big.join('')+'</div>');
+if(document.getElementById('bln'))vis.push('<div class="mv svw" data-mv="bln:'+(g&&!isMk?g:S.mk)+'"></div>');
 const tile=g&&!isMk?document.querySelector('.stile[data-sector="'+CSS.escape(g)+'"]'):null;
-if(tile||(e&&e.v))box.push('<div><h4>'+(e&&e.v?'Strength score':'Its sector')+'</h4>'+(e&&e.v?e.v:'')+(tile?'<div class="vtl">'+sigClone(tile)+'</div>':'')+'</div>');
+if(tile||(e&&e.v))box.push('<div class="sv2"><h4>'+(e&&e.v?'Strength score':'Its sector')+'</h4>'+(e&&e.v?e.v:'')+(tile?'<div class="vtl">'+sigClone(tile)+'</div>':'')+'</div>');
 const labs=[hl[S.mk]||S.mk];if(g&&!isMk&&hl[g])labs.push(hl[g]);const hm=sigHeat(labs);
-if(hm)box.push('<div><h4>Breadth, last 3 months</h4>'+hm+'</div>');
-if(isMk){const st=document.querySelector('#tab-today .step');if(st)box.push('<div>'+sigClone(st)+'</div>');
-const vx=document.querySelector('#tab-market .vix');if(vx)box.push('<div><h4>VIX</h4>'+sigClone(vx)+'</div>')}
-return box.length?'<div class="sv">'+box.join('')+'</div><div class="nt">The same pictures as on the page'+(e&&e.v?' (score bar: light blue = market, blue = sector, green = its own part)':'')+'. <button class="gochart" onclick="const b=document.querySelector(\'#cm .box\');b.scrollTo({top:document.getElementById(\'cmw\').offsetTop-60,behavior:\'smooth\'})">Jump to the chart ↓</button></div>':''}
+if(hm)box.push('<div class="sv2"><h4>Breadth heatmap, last 3 months</h4>'+hm+'</div>');
+const st=document.querySelector('#tab-today .step');if(st)box.push('<div>'+sigClone(st)+'</div>');
+const vx=document.querySelector('#tab-market .vix');if(vx)box.push('<div><h4>VIX</h4>'+sigClone(vx)+'</div>');
+const cd=document.querySelector('#tab-market .cards');if(cd)box.push('<div class="svw"><h4>Market cards</h4>'+sigClone(cd)+'</div>');
+vis.push('<div class="sv">'+box.join('')+'</div>');
+return '<div class="nt">The same charts and pictures as on the page. <button class="gochart" onclick="const b=document.querySelector(\'#cm .box\');b.scrollTo({top:document.getElementById(\'cmw\').offsetTop-60,behavior:\'smooth\'})">Jump to the '+(e?'ticker\'s ':'')+'chart ↓</button></div>'+vis.join('')}
+// move the page's live charts into their slots; sigRestore() puts them back where they were
+let sigMoved=[];
+function sigRestore(){sigMoved.forEach(([el,mk])=>{if(mk.parentNode)mk.parentNode.replaceChild(el,mk)});sigMoved=[]}
+function sigMount(root){root.querySelectorAll('.mv[data-mv]').forEach(slot=>{const k=slot.dataset.mv,i=k.indexOf(':'),kind=k.slice(0,i),n=k.slice(i+1);
+const el=kind==='ch'?document.querySelector('.ch[data-sector="'+CSS.escape(n)+'"]'):document.getElementById('bln');if(!el||root.contains(el))return;
+const mk=document.createComment('sig');el.parentNode.insertBefore(mk,el);slot.appendChild(el);sigMoved.push([el,mk]);
+if(kind==='bln'&&typeof BL!=='undefined'&&BL){const j=BL.g.findIndex(x=>x.n===n),sel=document.getElementById('blg');if(j>=0&&sel){sel.value=String(j);sel.dispatchEvent(new Event('change'))}}});
+requestAnimationFrame(()=>requestAnimationFrame(()=>{const tb=document.querySelector('.bar.tf button.on');if(tb)tb.click();const bb=document.querySelector('.bar.blr button.on');if(bb)bb.click()}))}
 (function(){const f=document.getElementById('srch'),q=document.getElementById('sq');if(!f||typeof SIDX==='undefined')return;
 const ta=sqInit(f,q,SIDX,t=>openChart(t,true)),known=ta.known;
 function find(s){s=s.trim();if(!s)return null;const u=s.toUpperCase();

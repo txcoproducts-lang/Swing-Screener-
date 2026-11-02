@@ -310,9 +310,11 @@ def page_keys(market, cfg, ov):
           f"pop-up with every signal open. A ticker the screener doesn't scan still opens the TradingView chart."),
         R("Suggestions", f"As you type, a list drops down: every ticker that starts with what you typed (S, then SP, then SPY), "
           f"then " + ("" if c else "company names and ") + f"{gs} that start with it. Tap one, or use the arrow keys and Enter."),
-        R("Pictures", f"At the top of the panel, copied from the page: the Today tab's score bar for the {u}, its {g}'s tile, "
-          f"the breadth heatmap rows for the market and its {g} (last 3 months)" + ("" if c else ", and for SPY the Step 1 card and the VIX panel")
-          + ". Same colours as on the page. \"Jump to the chart\" scrolls down to the chart."),
+        R("Charts and pictures", f"At the top of the panel, the page's own charts: its {g}'s chart with its breadth strip, the "
+          f"market's ({b}) chart with the market's breadth strip, and the breadth line set to its {g} (pick another group from its list). "
+          f"Then the Today tab's score bar for the {u}, its {g}'s tile, the breadth heatmap rows for the market and its {g}, the Step 1 "
+          f"market card" + ("" if c else ", the VIX panel") + " and the Market tab's cards. Same colours and keys as on the page. "
+          "\"Jump to the chart\" scrolls down to the ticker's own chart."),
         R("✓ / ✕ / ·", "In the signals panel: ✓ = passes, ✕ = fails, · = information only."),
         R("Verdict line", f"Its setup (Super / Regular, Momentum / Pullback, Overbought, or none and why), its spot on the "
           f"strongest list and in Your system's buying order, and its strength score. Tap it to fold the panel away."),
