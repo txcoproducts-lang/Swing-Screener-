@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-01",
+ "as_of": "2026-11-02",
  "picks": [
   {
    "ticker": "ZEC",
@@ -11,12 +11,6 @@
    "ticker": "QNT",
    "added": "2026-10-10",
    "price": 239.705,
-   "spy": 82912.23
-  },
-  {
-   "ticker": "HYPE",
-   "added": "2026-10-10",
-   "price": 85.402,
    "spy": 82912.23
   },
   {
@@ -60,6 +54,12 @@
    "added": "2026-10-12",
    "price": 6.9682,
    "spy": 81762.56
+  },
+  {
+   "ticker": "NEAR",
+   "added": "2026-11-02",
+   "price": 3.86126,
+   "spy": 76677.3
   }
  ],
  "closed": [
@@ -82,6 +82,16 @@
    "out": 49.0717,
    "spy_out": 81762.56,
    "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "HYPE",
+   "added": "2026-10-10",
+   "price": 85.402,
+   "spy": 82912.23,
+   "dropped": "2026-11-02",
+   "out": 83.983,
+   "spy_out": 76677.3,
+   "why": "no longer passes the liquidity filter"
   }
  ]
 }
