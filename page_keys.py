@@ -502,7 +502,7 @@ def ovtlyr_keys(heat_max=70):
           f"or under 30 (oversold), red = {heat_max}+ (overbought). The sector's badge on the left works the same way."),
         R("▲ / ▼", "Heat rising or falling since yesterday. Plan M wants it rising."),
         R("Outlined tile", "Passes every Plan M rule (Ready)."),
-        R("Buttons", "All stocks · Ready only · Heat rising. Tap a stock to open its chart on TradingView."),
+        R("Buttons", "All stocks · Ready only · Heat rising. Tap a stock to open its chart pop-up on the Stocks page (chart, info, backtest, every signal); close it to come back here."),
         U("Look for outlined green tiles (rising) in a passing sector: warming up but not yet hot. Red tiles are stretched; the deck's "
           "heat targets sell into them."))
     out["stocks"] = key(

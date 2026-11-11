@@ -185,6 +185,19 @@ if (!/crypto\/?$/.test(process.env.PAGE_URL)) for (const [name, vp] of [["deskto
   }
   await p.click('nav.tabs a[data-t="stocks"]'); await p.click('#stk .chip[data-f="99"]');
   const shown = await p.$$eval("#stk tbody tr:not([hidden])", x => x.length);
+  // tapping a ticker opens the Stocks page's chart pop-up (not TradingView); closing it comes back to the OVTLYR page
+  await p.click('nav.tabs a[data-t="stocks"]');
+  const tick = await p.$eval("#stk tbody tr:not([hidden]) a.tk", a => a.textContent);
+  await Promise.all([p.waitForNavigation({ waitUntil: "networkidle" }), p.click("#stk tbody tr:not([hidden]) a.tk")]);
+  await p.waitForTimeout(1500);
+  const pop = await p.evaluate(() => { const cm = document.getElementById("cm"); return { open: !!cm && !cm.hidden, t: (document.getElementById("cmt") || {}).textContent || "", sig: !!document.querySelector("#cms") }; });
+  await p.screenshot({ path: `${out}/${name}-7-ovtlyr-tap-${tick}.png` });
+  await Promise.all([p.waitForNavigation({ waitUntil: "networkidle" }).catch(() => {}), p.click("#cm .x, #cmx, #cm button[aria-label=Close]").catch(() => p.keyboard.press("Escape"))]);
+  await p.waitForTimeout(500);
+  log(`[${name}] OVTLYR tap ${tick}: pop-up ${pop.open ? "open" : "NOT OPEN"} (${pop.t.trim().slice(0, 40)}), signals panel ${pop.sig ? "yes" : "no"}; ` +
+      `after close: ${/\/ovtlyr\/(\?[^#]*)?(#.*)?$/.test(p.url()) ? "back on OVTLYR page" : "NOT back: " + p.url()}`);
+  if (!pop.open) errs.push("OVTLYR ticker tap did not open the pop-up");
+  await p.goto(process.env.PAGE_URL + "ovtlyr/?t=" + Date.now(), { waitUntil: "networkidle" });
   log(`[${name}] OVTLYR page: ${shown} stocks, ${await p.$$eval(".tile", x => x.length)} sector tiles, ` +
       `width ${await p.evaluate(() => document.documentElement.scrollWidth)}, errors: ${errs.length ? errs.join("; ") : "none"}`);
   await p.close();

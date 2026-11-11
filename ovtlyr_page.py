@@ -8,6 +8,7 @@ crossing over / under the 20; breadth = share of stocks with the 10 EMA over the
 """
 import datetime as dt, html, json
 from pathlib import Path
+from urllib.parse import quote
 
 HEAT_MAX, EXCLUDE = 70, ("Health Care",)
 RULES = [("Buy signal", "the 10 EMA crossed over the 20 in the last 5 trading days"), ("Uptrend", "10 / 20 / 50 bullish trend"),
@@ -31,7 +32,9 @@ hb = lambda v, up=True: f'<span class="hb" style="background:{heat(v, up)}">{v:.
 dot = lambda c: '<i class="d dy">✓</i>' if c == "1" else '<i class="d dn">✗</i>' if c == "0" else '<i class="d du" title="not checked">·</i>'
 okb = lambda b: '<i class="d dy">✓</i>' if b else '<i class="d dn">✗</i>'
 md = lambda s: f"{dt.date.fromisoformat(s):%b} {dt.date.fromisoformat(s).day}"
-tk = lambda t: f'<a class="tk" href="https://www.tradingview.com/chart/?symbol={esc(t)}" target="_blank" rel="noopener">{esc(t)}</a>'
+# a ticker opens the Stocks page's chart pop-up (chart, info line, backtest, every signal); closing it comes back here
+tv = lambda t: f'../?q={quote(t)}&amp;from=ov'
+tk = lambda t: f'<a class="tk" href="{tv(t)}">{esc(t)}</a>'
 
 
 def ema(xs, n):
@@ -192,7 +195,7 @@ def build(ov, out_dir):
             v = secs[n]
             st = sorted([r for r in rows if r["sec"] == n], key=lambda r: -r["rsi"])
             cells = "".join(f'<a class="sc{" pick" if not r["miss"] else ""}" data-r="{int(not r["miss"])}" data-u="{int(r["k"][3] == "1")}" '
-                            f'href="https://www.tradingview.com/chart/?symbol={esc(r["t"])}" target="_blank" rel="noopener" '
+                            f'href="{tv(r["t"])}" '
                             f'style="background:{heat(r["rsi"], r["k"][3] == "1")}"><b>{esc(r["t"])}</b><span>{r["rsi"]:.0f}{" ▲" if r["k"][3] == "1" else " ▼"}</span></a>'
                             for r in st)
             ex = n in EXCLUDE
@@ -202,7 +205,7 @@ def build(ov, out_dir):
         scale = (f'<span style="background:{GREEN}">30-70 and rising</span><span style="background:{YELLOW}">falling or under 30</span>'
                  f'<span style="background:{RED}">70+ overbought</span>')
         return (f'<div class="h1">Fear &amp; greed heatmap</div><div class="sub lead">Every stock\'s heat, sectors that pass first. '
-                f'▲ = heat rising. Outlined = passes every Plan M rule. Tap a stock for its chart.</div>'
+                f'▲ = heat rising. Outlined = passes every Plan M rule. Tap a stock for its chart and every signal.</div>'
                 f'<div class="card" id="hmap"><div class="mkt" style="margin-bottom:8px"><button class="chip on" data-h="all">All stocks</button>'
                 f'<button class="chip" data-h="r">Ready only</button><button class="chip" data-h="u">Heat rising</button>'
                 f'<span class="scale">{scale}</span></div>{"".join(out)}</div>')
@@ -226,7 +229,7 @@ def build(ov, out_dir):
         chips = "".join(f'<button class="chip{" on" if k == first else ""}" data-f="{k}">{t}</button>'
                         for k, t in ((0, f"Ready {len(ready)}"), (1, f"1 rule away {len(one)}"), (2, "2 rules away"), (99, f"All {len(rows)}")))
         return (f'<div class="h1">Stocks · 30% of the move</div><div class="sub lead">Every stock with 1M+ shares a day against Plan M\'s '
-                f'stock rules. All of them must pass before position sizing. Tap a ticker for its chart.</div><div class="card" id="stk">'
+                f'stock rules. All of them must pass before position sizing. Tap a ticker for its chart and every signal.</div><div class="card" id="stk">'
                 f'<div class="mkt" style="margin-bottom:10px">{chips}<select id="ssec"><option value="">All sectors</option>{opts}</select></div>'
                 f'<div class="wrap"><table class="tb"><thead><tr><th>Stock</th><th class="num">Close</th><th>Heat</th><th class="num">Signal</th>{head}'
                 f'<th class="num">ATR</th><th class="num">½ ATR stop</th><th class="num">2 ATR exit</th><th class="num">Shares per $10k</th>'
