@@ -42,8 +42,8 @@
    "cci": -122.4
   },
   "breadth": {
-   "pct": 5.1,
-   "ema": 6.7
+   "pct": 5.0,
+   "ema": 6.6
   }
  },
  "sectors": {
@@ -61,10 +61,10 @@
   },
   "DeFi": {
    "ok": false,
-   "n": 17,
+   "n": 18,
    "bull": 0.0,
    "bull_ema": 0.7,
-   "rsi": 39.7,
+   "rsi": 39.6,
    "rsi_prev": 35.8,
    "miss": [
     "breadth 0% not above its 10-day average 1%"
@@ -415,6 +415,14 @@
    "DeFi",
    0.596804,
    45.7,
+   null,
+   "0001-011-"
+  ],
+  [
+   "CAKE",
+   "DeFi",
+   1.86078,
+   37.7,
    null,
    "0001-011-"
   ],
