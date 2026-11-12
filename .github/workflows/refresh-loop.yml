@@ -1,0 +1,47 @@
+name: Refresh loop
+
+# Keeps the published pages fresh: every 30 minutes it starts a refresh run of Crypto screener (always) and of
+# Nightly screener (weekdays, 9:00 AM-4:30 PM New York). Refresh runs republish the pages with the latest prices but
+# save nothing to history/, so the paper accounts and the nightly runs are unchanged.
+# GitHub's own schedules fire only a few times a day on this repo, so this loop does the timing itself: one run
+# waits and starts refreshes for about 5.5 hours, then starts the next loop run before it ends. The schedule below
+# only restarts the loop if the chain ever breaks (only one loop runs at a time).
+# To stop refreshing: Actions tab -> Refresh loop -> "..." -> Disable workflow (and cancel the running one).
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "40 */4 * * *"
+
+permissions:
+  actions: write             # to start the refresh runs and the next loop run
+
+concurrency:
+  group: refresh-loop
+  cancel-in-progress: false
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Start a refresh every 30 minutes for about 5.5 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+        run: |
+          end=$(( $(date +%s) + 330*60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            gh workflow run crypto-nightly.yml -R "$R" -f refresh=true && echo "$(date -u +%H:%M) crypto refresh started" || echo "::warning::couldn't start the crypto refresh"
+            dow=$(TZ=America/New_York date +%u); hm=$(TZ=America/New_York date +%H%M)
+            if [ "$dow" -le 5 ] && [ "$hm" -ge 0900 ] && [ "$hm" -lt 1630 ]; then
+              gh workflow run nightly.yml -R "$R" -f refresh=true && echo "$(date -u +%H:%M) stock refresh started" || echo "::warning::couldn't start the stock refresh"
+            fi
+            sleep 1800
+          done
+
+      - name: Start the next loop run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run refresh-loop.yml -R "${{ github.repository }}"
