@@ -4,6 +4,10 @@ on:
   schedule:
     # 22:15 UTC Mon-Fri = 5:15 PM Central in summer, 4:15 PM Central in winter
     - cron: "15 22 * * 1-5"
+    # Refresh: every 30 minutes on weekdays, 13:20-21:50 UTC (covers the whole trading day, summer and winter time).
+    # These runs rebuild and publish the page with the latest prices but don't save anything to history/, so the
+    # paper accounts and the next night still work from the 22:15 run's files. Delete this line to stop refreshing.
+    - cron: "20,50 13-21 * * 1-5"
   workflow_dispatch: {}      # lets you run it any time from the Actions tab
 
 permissions:
@@ -13,7 +17,9 @@ permissions:
   actions: read              # to fetch the crypto page's files from the last crypto run
 
 concurrency:
-  group: screener
+  # The 30-minute refreshes queue in their own group, so a refresh waiting its turn can never bump the nightly run
+  # (GitHub keeps only the newest waiting run in a group).
+  group: ${{ (github.event_name == 'schedule' && github.event.schedule != '15 22 * * 1-5') && 'refresh' || 'screener' }}
   cancel-in-progress: false
 
 jobs:
@@ -51,6 +57,8 @@ jobs:
           [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n crypto-site -D site/crypto || echo "No crypto page files found; publishing the stock page alone."
 
       - name: Save daily CSVs to history
+        # only the 22:15 run and runs started by hand; the 30-minute refreshes just republish the page
+        if: github.event_name != 'schedule' || github.event.schedule == '15 22 * * 1-5'
         run: |
           mkdir -p history
           cp output/*.csv history/
