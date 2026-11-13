@@ -2363,6 +2363,70 @@ def sector_tiles(df, sws, bh, etfs=None, unit="stock"):
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
+PERF_WIN = (("Day", 1), ("Week", 5), ("Month", 21), ("Quarter", 63), ("Half", 126), ("Year", 252))   # trading days back
+
+
+def sector_perf_html(etf_frames, df, sws, bh):
+    """Sector performance table (user's ask 2026-11-13, an original take on OVTLYR's sector map): one row per SPDR
+    sector ETF with its % change over a day / week / month / quarter / half year / year, each with a small line of the
+    closes over that stretch; Rising (our breadth) with its last month; the ETF's volume; and relative greed = the
+    sector's average stock RSI (14) ÷ SPY's RSI, the same stand-in the OVTLYR page uses."""
+    if not etf_frames or "SPY" not in etf_frames:
+        return ""
+    spy_rsi = float(rsi(etf_frames["SPY"].Close).iloc[-1])
+    sec_rsi = df.groupby("sector").rsi.mean() if "rsi" in df and "sector" in df else {}
+    def sp(vals, col):
+        v = list(vals)
+        if len(v) > 45:                                   # keep the line light: about 45 points at most
+            step = len(v) / 45
+            v = [v[int(i * step)] for i in range(45)] + [v[-1]]
+        return spark(v, 58, 20, col)
+    rows = []
+    for n, etf in SECTOR_ETF.items():
+        d = etf_frames.get(etf)
+        if d is None or len(d) < 260:
+            continue
+        c, cells = d.Close, []
+        for _, k in PERF_WIN:
+            p = (c.iloc[-1] / c.iloc[-1 - k] - 1) * 100
+            col = "var(--up)" if p >= 0 else "var(--dn)"
+            line = [c.iloc[-2], d.Open.iloc[-1], c.iloc[-1]] if k == 1 else c.iloc[-1 - k:]   # day: last close, open, close
+            cells.append(f'<td data-v="{p:.2f}" class="pf"><b style="color:{col}">{p:+.2f}%</b>{sp(line, col)}</td>')
+        w = sws.get(n)
+        if w and n in (bh or {}):
+            bg = {"dn": "#f4a6a0", "up": "#a8e0bf", "wn": "#f7dc7a"}[bcls(w)]
+            cells.append(f'<td data-v="{w["rise"]}" class="pf"><b class="rb" style="background:{bg}">{w["rise"]:.0f}%</b>'
+                         f'{sp(bh[n].rise.iloc[-21:], "#14202e")}</td>')
+        else:
+            cells.append('<td data-v="-1" class="mut">–</td>')
+        v = d.Volume
+        av = float(v.iloc[-21:-1].mean())
+        rv = float(v.iloc[-1]) / av if av else 0
+        mm = lambda x: f"{x / 1e6:.1f}M" if x >= 1e6 else f"{x / 1e3:.0f}K"
+        cells += [f'<td data-v="{av:.0f}">{mm(av)}</td>',
+                  f'<td data-v="{rv:.2f}"><b class="{"up" if rv >= 1 else ""}">{rv:.2f}×</b></td>',
+                  f'<td data-v="{float(v.iloc[-1]):.0f}">{mm(float(v.iloc[-1]))}</td>']
+        if n == "S&P 500":
+            cells.append(f'<td data-v="1"><span class="mut">1.00</span> <span class="mut">RSI {spy_rsi:.0f}</span></td>')
+        elif n in sec_rsi and spy_rsi:
+            g = float(sec_rsi[n]) / spy_rsi
+            cells.append(f'<td data-v="{g:.3f}"><b class="{"up" if g > 1 else "dn"}">{g:.2f}</b> <span class="mut">RSI {float(sec_rsi[n]):.0f}</span></td>')
+        else:
+            cells.append('<td data-v="0" class="mut">–</td>')
+        rows.append(f'<tr{" class=spyr" if n == "S&P 500" else ""}><td data-v="{html_esc(n)}"><b>{html_esc(SHORT_SECTOR.get(n, n))}</b> '
+                    f'<span class="tk mut" data-tk="{etf}">{etf}</span></td>' + "".join(cells) + '</tr>')
+    if not rows:
+        return ""
+    head = ("<th>Sector</th>" + "".join(f"<th>{lbl}</th>" for lbl, _ in PERF_WIN)
+            + "<th>Rising</th><th>Avg volume</th><th>Rel volume</th><th>Volume</th><th>Rel greed</th>")
+    return ('<h2>Sector performance</h2>' + hk("sector_perf")
+            + '<div class="hint">Each sector\'s SPDR ETF: its % change over a day, week, month, quarter, half year and year, '
+              'with a line of its closes over that stretch (green = up, red = down). Rising = the share of its S&amp;P 500 stocks '
+              'with the 10 EMA over the 20 and price over the 50 EMA, in your three colours, line = last month. Tap a header to sort, '
+              'a ticker for its chart.</div>'
+            f'<div class="wrap"><table id="sp"><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
+
+
 def news_html(df, sws, etfs=None, market="stock", suf="", lbl="Strongest stocks"):
     """News tab: TradingView's free news feed, for the whole market or one sector (its ETF) or one of its strongest stocks."""
     etfs = etfs if etfs is not None else SECTOR_ETF
@@ -2378,7 +2442,7 @@ def news_html(df, sws, etfs=None, market="stock", suf="", lbl="Strongest stocks"
             f'<script>const NEWS={json.dumps(dict(lead=lead, market=market, suf=suf, lbl=lbl), separators=(",", ":"))};</script>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None, etf_frames=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -2464,6 +2528,11 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                    '<th>% &gt; 50d</th><th>% &gt; 200d</th><th>Adv / Dec</th><th>52w Hi / Lo</th></tr></thead>'
                    f'<tbody>{"".join(srows)}</tbody></table></div>')
 
+    try:
+        sp_html = sector_perf_html(etf_frames, df, sws, bh)
+    except Exception as e:                 # an extra; never block the page
+        print("  sector performance failed:", e)
+        sp_html = ""
     order = ["S&P 500"] + [n for n in secb.sector if n != "S&P 500"]
     order += [n for n in SECTOR_ETF if n not in order]
     charts = {n: charts[n] for n in order if charts and n in charts}
@@ -2626,7 +2695,7 @@ td:first-child,th:first-child{{position:sticky;left:0;background:var(--card);z-i
 .demo{{background:var(--dn);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}}
 h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12px}}
 .bar2{{height:4px;background:var(--line);border-radius:2px;margin-top:3px;min-width:90px}}.bar2 i{{display:block;height:100%;border-radius:2px}}
-#s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:color-mix(in srgb,var(--acc) 9%,var(--card))}}#s td:nth-child(2){{text-align:left}}
+#sp td{{vertical-align:middle}}#sp td.pf b{{display:block;font-size:12px}}#sp td.pf svg{{display:block;margin-top:1px}}#sp .rb{{display:inline-block!important;border-radius:6px;padding:0 6px;color:#14202e}}#sp tr.spyr td{{background:color-mix(in srgb,var(--acc) 5%,var(--card))}}#sp td:first-child,#sp th:first-child{{position:sticky;left:0;background:var(--card);z-index:1;text-align:left}}#sp tr.spyr td:first-child{{background:color-mix(in srgb,var(--acc) 5%,var(--card))}}@media(max-width:600px){{#sp td:first-child .tk{{display:block}}#sp td.pf svg{{width:46px}}}}#s tbody tr{{cursor:pointer}}#s tbody tr.sel td{{background:color-mix(in srgb,var(--acc) 9%,var(--card))}}#s td:nth-child(2){{text-align:left}}
 .chip{{font-size:12px;font-weight:600;background:var(--card);color:var(--acc);padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px}}
 .note{{color:var(--mut);font-size:12px;margin-top:14px;line-height:1.5}}
 .pkt td:nth-child(2),.pkt th:nth-child(2){{text-align:right}}.pkt td.why,.pkt th.why{{text-align:left;white-space:normal;min-width:240px;color:var(--mut);font-size:12px}}
@@ -2682,7 +2751,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
 <section class="tab" id="tab-market" hidden><h2>Market</h2>{hk('market')}<div class="cards">{cards}</div>{vx_html}{bt_html}</section>
-<section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{hk('tiles')}{sector_tiles(df, sws, bh)}{sector_html}{chart_html}</section>
+<section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{hk('tiles')}{sector_tiles(df, sws, bh)}{sp_html}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
 {hk('stock_table')}{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Super">Super</button><button data-f="Regular">Regular</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>
@@ -2890,7 +2959,7 @@ sortable('t');sortable('s');apply();
 document.querySelectorAll('.bar.pk button').forEach(b=>b.onclick=()=>{{setOn('.bar.pk',b.dataset.pk,'pk');
 document.querySelectorAll('.pkl').forEach(d=>d.hidden=d.dataset.pk!==b.dataset.pk);try{{localStorage.setItem('pk',b.dataset.pk)}}catch(e){{}}}});
 try{{const k=localStorage.getItem('pk'),b=k&&document.querySelector('.bar.pk button[data-pk="'+k+'"]');if(b)b.click()}}catch(e){{}}
-['ss','ssec','pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
+['sp','ss','ssec','pk-nu','pk-bo','pk-ai','ov-m'].forEach(id=>{{if(document.getElementById(id))sortable(id)}});
 (function(){{const d=document.getElementById('ovm');if(!d)return;
 try{{if(localStorage.getItem('ovm')==='1')d.open=true}}catch(e){{}}
 d.addEventListener('toggle',()=>{{try{{localStorage.setItem('ovm',d.open?'1':'0')}}catch(e){{}}}});
@@ -3198,7 +3267,7 @@ def main():
         import traceback
         traceback.print_exc()
         print("  ticker search failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)

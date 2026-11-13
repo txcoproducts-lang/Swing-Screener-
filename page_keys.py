@@ -198,6 +198,23 @@ def page_keys(market, cfg, ov):
         R("Tap a tile", f"Opens the {Us} tab filtered to that {g}."),
         U(f"You want a green tile with a RISING badge and {us} on the list: that's a {g} turning up with room to run. NEAR {ob} is "
           f"getting stretched; FADING {gs} are skipped by your system."))
+    out["sector_perf"] = key(
+        R("Each row", "One sector's SPDR ETF, with SPY on top (shaded) to compare against. Tap the ticker for its chart."),
+        R("Day · Week · Month · Quarter · Half · Year", "The ETF's % change over the last 1, 5, 21, 63, 126 and 252 trading days, "
+          f"{ln(UP)}green when up, {ln(DN)}red when down. The small line under it is its closes over that stretch (Day = "
+          "yesterday's close, today's open, today's close)."),
+        R(f"{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Rising", f"Your breadth: the share of its {w['mem']} with the 10 EMA over the 20 and "
+          f"price over the 50 EMA. Green = {os_}-{ob}% and rising, yellow = {os_}-{ob}% and falling, red = over {ob} or under {os_}. "
+          "Line = its last month."),
+        R("Avg volume", "The ETF's average daily volume over the 20 days before today."),
+        R("Rel volume", "Today's volume ÷ that average. Over 1× (green) = busier than usual."),
+        R("Volume", "The ETF's volume today."),
+        R("Rel greed", f"The average 14-day RSI of the sector's {us} ÷ SPY's RSI, the same stand-in for OVTLYR's private greed "
+          "score that the OVTLYR page uses. Over 1 (green) = hotter than the market, under 1 (red) = cooler. SPY's own RSI is shown on its row."),
+        R("Sort", "Tap any header; tap again to flip the order."),
+        U(f"Sort by Month or Quarter to see who is leading, then check Rising: you want a leader whose Rising is green (turning "
+          f"up, not over {ob}), with Rel volume over 1× showing buyers are there. A sector up big for the year but red or yellow on "
+          "Rising is stretched or fading: wait."))
     out["sector_table"] = key(
         R(G, f"Click a row to filter the {u} list to that {g}. Click any header to sort."),
         R("In uptrend", f"{Us} passing {uptrend}, out of the liquid {us} in it, with the %. The bar is green from 50% up."),
