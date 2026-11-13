@@ -284,7 +284,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                 sectors_rising=len(still) + len(tup))
 
 
-CSS = """.pos{color:var(--up)}.neg{color:var(--dn)}.steps.four{grid-template-columns:repeat(4,1fr)}.step .big{font-size:18px}
+CSS = """.g2>*,.steps>*{min-width:0}.pos{color:var(--up)}.neg{color:var(--dn)}.steps.four{grid-template-columns:repeat(4,1fr)}.step .big{font-size:18px}
 .st{grid-template-columns:62px 1fr 60px minmax(0,1.4fr)}.st .sub:last-child{white-space:normal}
 @media(max-width:1000px){.steps.four{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.steps.four{grid-template-columns:1fr}.st{grid-template-columns:54px 1fr 56px}.st .sub:last-child{display:none}}"""
