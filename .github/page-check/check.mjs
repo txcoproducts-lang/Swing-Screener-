@@ -202,5 +202,20 @@ if (!/crypto\/?$/.test(process.env.PAGE_URL)) for (const [name, vp] of [["deskto
       `width ${await p.evaluate(() => document.documentElement.scrollWidth)}, errors: ${errs.length ? errs.join("; ") : "none"}`);
   await p.close();
 }
+// the Open page (open/): every tab (stock site only)
+if (!/crypto\/?$/.test(process.env.PAGE_URL)) for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+  const p = await b.newPage({ viewport: vp });
+  const errs = [];
+  p.on("pageerror", e => errs.push("pageerror: " + e.message));
+  const r = await p.goto(process.env.PAGE_URL + "open/?t=" + Date.now(), { waitUntil: "networkidle" });
+  if (!r || !r.ok()) { log(`[${name}] Open page: not there (${r && r.status()})`); await p.close(); continue; }
+  for (const t of await p.$$eval("nav.tabs a", as => as.map(a => a.dataset.t))) {
+    await p.click(`nav.tabs a[data-t="${t}"]`); await p.waitForTimeout(200);
+    await p.screenshot({ path: `${out}/${name}-9-open-${t}.png`, fullPage: true });
+  }
+  log(`[${name}] Open page: ${await p.$eval(".asof", e => e.innerText)}; ${await p.$$eval(".step .big", x => x.map(e => e.innerText).join(" | "))}; ` +
+      `width ${await p.evaluate(() => document.documentElement.scrollWidth)}, errors: ${errs.length ? errs.join("; ") : "none"}`);
+  await p.close();
+}
 await b.close();
 fs.writeFileSync(`${out}/report.txt`, report.join("\n") + "\n");
