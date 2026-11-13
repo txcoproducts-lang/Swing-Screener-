@@ -110,6 +110,13 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
       await p.selectOption("#blg", "0"); await p.waitForTimeout(200);
     }
   }
+  if (await at("#sp")) {     // sector performance table: rows, sort by Month
+    log(`[${name}] sector performance: ${await p.$$eval("#sp tbody tr", r => r.map(x => x.cells[0].innerText.replace(/\s+/g, " ") + " " + x.cells[3].innerText.split("\n")[0] + " rising " + x.cells[7].innerText.split("\n")[0]).join(" | "))}`);
+    await p.evaluate(() => { const h = [...document.querySelectorAll("h2")].find(x => x.textContent === "Sector performance"), t = document.querySelector("header.top"); window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - (t ? t.offsetHeight : 0) - 8); });
+    await p.waitForTimeout(300); await p.screenshot({ path: `${out}/${name}-1-sector-perf.png` });
+    await p.click("#sp thead th:nth-child(4)"); await p.click("#sp thead th:nth-child(4)"); await p.waitForTimeout(200);
+    await p.screenshot({ path: `${out}/${name}-1-sector-perf-month.png` });
+  }
   if (await at(".charts")) {
     await p.waitForTimeout(500);
     log(`[${name}] strips: ${await p.$$eval(".ch .bl", bs => bs.map(b => b.closest(".ch").dataset.sector + ": " + b.innerText).join(" | "))}`);
