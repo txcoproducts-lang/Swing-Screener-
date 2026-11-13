@@ -41,15 +41,17 @@ jobs:
         id: clock
         env:
           WAIT: ${{ github.event_name == 'schedule' || inputs.wait }}
+          EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$WAIT" != "true" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; exit 0; fi
-          # seconds until the next weekday 9:35 AM New York; a run that starts 9:35-9:38 goes right away
+          # seconds until the next weekday 9:35 AM New York; only the backup schedule goes right away if it starts 9:35-9:38
+          # (a run the chain starts right after building waits for the next day, so the page isn't built twice)
           secs=$(python3 -c '
-          import datetime as d, zoneinfo
+          import datetime as d, os, zoneinfo
           ny = zoneinfo.ZoneInfo("America/New_York"); now = d.datetime.now(ny)
           t = now.replace(hour=9, minute=35, second=0, microsecond=0)
-          if now.weekday() < 5 and t <= now < t + d.timedelta(minutes=3): print(0); raise SystemExit
+          if os.environ["EVENT"] == "schedule" and now.weekday() < 5 and t <= now < t + d.timedelta(minutes=3): print(0); raise SystemExit
           t = t if now < t else t + d.timedelta(days=1)
           while t.weekday() >= 5: t += d.timedelta(days=1)
           print(int((t.astimezone(d.timezone.utc) - now.astimezone(d.timezone.utc)).total_seconds()))')
