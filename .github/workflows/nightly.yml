@@ -4,12 +4,7 @@ on:
   schedule:
     # 22:15 UTC Mon-Fri = 5:15 PM Central in summer, 4:15 PM Central in winter
     - cron: "15 22 * * 1-5"
-  workflow_dispatch:         # lets you run it any time from the Actions tab
-    inputs:
-      refresh:
-        description: "Refresh only: republish the page with the latest prices, save nothing to history/"
-        type: boolean
-        default: false
+  workflow_dispatch: {}      # lets you run it any time from the Actions tab
 
 permissions:
   contents: write
@@ -18,9 +13,7 @@ permissions:
   actions: read              # to fetch the crypto page's files from the last crypto run
 
 concurrency:
-  # Refreshes (started by the Refresh loop workflow) queue in their own group, so a refresh waiting its turn can
-  # never bump the nightly run (GitHub keeps only the newest waiting run in a group).
-  group: ${{ inputs.refresh && 'refresh' || 'screener' }}
+  group: screener
   cancel-in-progress: false
 
 jobs:
@@ -58,8 +51,6 @@ jobs:
           [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n crypto-site -D site/crypto || echo "No crypto page files found; publishing the stock page alone."
 
       - name: Save daily CSVs to history
-        # only the 22:15 run and runs started by hand; refreshes (Refresh loop workflow) just republish the page
-        if: ${{ !inputs.refresh }}
         run: |
           mkdir -p history
           cp output/*.csv history/

@@ -8,12 +8,7 @@ on:
   schedule:
     # 00:30 UTC every day, half an hour after the day's crypto bar closes (7:30 PM Central in summer, 6:30 PM in winter)
     - cron: "30 0 * * *"
-  workflow_dispatch:         # lets you run it any time from the Actions tab
-    inputs:
-      refresh:
-        description: "Refresh only: republish the page with the latest prices, save nothing to crypto/history/"
-        type: boolean
-        default: false
+  workflow_dispatch: {}      # lets you run it any time from the Actions tab
 
 permissions:
   contents: write
@@ -22,9 +17,7 @@ permissions:
   actions: read              # to fetch the stock page's site files from the last stock run
 
 concurrency:
-  # Refreshes (started by the Refresh loop workflow) queue in their own group, so a refresh waiting its turn can
-  # never bump the nightly run (GitHub keeps only the newest waiting run in a group).
-  group: ${{ inputs.refresh && 'refresh' || 'screener' }}
+  group: screener
   cancel-in-progress: false
 
 jobs:
@@ -47,8 +40,6 @@ jobs:
         run: python crypto/screener.py --out crypto-out
 
       - name: Save daily files to crypto/history
-        # only the 00:30 run and runs started by hand; refreshes (Refresh loop workflow) just republish the page
-        if: ${{ !inputs.refresh }}
         run: |
           mkdir -p crypto/history
           cp crypto-out/*.csv crypto/history/
