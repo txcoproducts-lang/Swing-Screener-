@@ -2414,7 +2414,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {hk_css()}{srch_css}
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Crypto Screener</h1>
-<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a><a href="../ovtlyr/">OVTLYR</a></nav>{srch_box}
+<nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a><a href="../ovtlyr/">OVTLYR</a><a href="../open/">Open</a></nav>{srch_box}
 <span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}

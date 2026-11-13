@@ -2678,7 +2678,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 {hk_css()}{srch_css}
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Swing Screener</h1>
-<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a></nav>{srch_box}
+<nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a><a href="open/">Open</a></nav>{srch_box}
 <span class="reg {rcls}">{reg}</span><span class="asof">{"Prices at " + live_at + " New York time, " + asof if live_at else "Closing data · " + asof}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
@@ -2927,7 +2927,7 @@ el.innerHTML='<div class="btl"><b>Backtest, '+y+'</b> <span class="mut">('+b.sta
 '<details><summary>'+b.n+' trades, '+(b.win==null?'none':b.win+'% winners')+', in the market '+b.inmkt+'% of days'+(b.holding?', in a trade now':'')+'</summary>'+
 '<div class="mut">Buy at the next open after a setup (Momentum or Pullback) that isn’t overbought; sell at the next open after a daily close with EMA10 under EMA20 and the price under EMA50 (your 4-hour exit on daily bars: Yahoo only keeps about 2 years of 4-hour data), or on an 8% drop. Breadth isn’t checked this far back; cash earns nothing while out; no trading costs.</div>'+
 (tr?'<div class="btt"><table><thead><tr><th>Bought</th><th>Sold</th><th>In</th><th>Out</th><th>Return</th><th>Why</th></tr></thead><tbody>'+tr+'</tbody></table></div>':'')+'</details>';el.hidden=false}}).catch(()=>{{}})}}
-function closeChart(){{if(window.sigRestore)sigRestore();cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML='';if(new URLSearchParams(location.search).get('from')==='ov'){{history.replaceState(null,'',location.pathname+location.hash);if(document.referrer.includes('/ovtlyr/'))history.back();else location.href='ovtlyr/'}}}}
+function closeChart(){{if(window.sigRestore)sigRestore();cm.hidden=true;document.body.style.overflow='';document.getElementById('cmw').innerHTML='';const fr=new URLSearchParams(location.search).get('from'),bk={{ov:'ovtlyr/',open:'open/'}}[fr];if(bk){{history.replaceState(null,'',location.pathname+location.hash);if(document.referrer.includes('/'+bk))history.back();else location.href=bk}}}}
 document.querySelectorAll('.tk').forEach(e=>e.onclick=ev=>{{ev.stopPropagation();openChart(e.dataset.tk)}});
 let cmSrc='trend',cmOB=true,cmRng='1Y';const dataCache={{}};
 function draw(){{cmSrc==='trend'?trendDraw():tvDraw();const day=cmSrc==='trend'&&cmIv==='D';

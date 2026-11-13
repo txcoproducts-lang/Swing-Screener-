@@ -300,7 +300,7 @@ def build(ov, out_dir):
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OVTLYR screener</title><style>{CSS}
 {page_keys.CSS}{search_info.CSS}</style></head><body><header><div class="hd"><span class="logo"><i></i>OVTLYR screener</span>
-<nav class="sw" aria-label="Market"><a href="../">Stocks</a><a href="../crypto/">Crypto</a><a class="on" href="./" aria-current="page">OVTLYR</a></nav><form class="srch" action="../" method="get" role="search"><input name="q" placeholder="Search a ticker, sector or SPY" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="Search a ticker: opens it on the Stocks page with every signal"><button>Search</button><div class="sqd" role="listbox" hidden></div></form>
+<nav class="sw" aria-label="Market"><a href="../">Stocks</a><a href="../crypto/">Crypto</a><a class="on" href="./" aria-current="page">OVTLYR</a><a href="../open/">Open</a></nav><form class="srch" action="../" method="get" role="search"><input name="q" placeholder="Search a ticker, sector or SPY" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="Search a ticker: opens it on the Stocks page with every signal"><button>Search</button><div class="sqd" role="listbox" hidden></div></form>
 <span class="asof">{when}</span></div><nav class="tabs">{nav}</nav></header><main>{body}</main><script>{JS}{search_info.OV_JS}</script></body></html>"""
     d = Path(out_dir) / "ovtlyr"
     d.mkdir(parents=True, exist_ok=True)
