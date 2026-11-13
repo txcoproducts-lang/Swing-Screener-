@@ -62,7 +62,7 @@ def scan(fr, sectors, subs, sp500):
     df["ob"] = df.ticker.map(ob).fillna("")
     would = df.setup.notna()
     df["blocked"] = would & ((df.ob != "") | bool(mkt_hot))
-    df["buy"] = would & ~df.blocked & (df.core | df.reg_up)
+    df["buy"] = would & ~df.blocked & df.core            # Super setups only, as the paper accounts buy (rolled back 2026-11-13)
     return df.set_index("ticker"), bh, {g: S.swing_state(b) for g, b in bh.items()}, mkt_hot
 
 
@@ -218,7 +218,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                       K.R("Market", "Still rising / Turned up / Turned down / Still falling = the S&amp;P 500's breadth (share of its stocks with the "
                           "10 EMA over the 20 and price over the 50 EMA) above or below its 10-day average, last night and now. Over 75 blocks every buy (your rule)."),
                       K.R("New buy signal", "A stock that gives a buy signal now and didn't last night: a Momentum or Pullback setup, not blocked by "
-                          "breadth over 75, in your full uptrend (Super) or with EMA10 over EMA20 and price over the 50 EMA (Regular). The same signal the paper accounts buy."),
+                          "breadth over 75, in your full uptrend (a Super setup). The same signal the paper accounts buy."),
                       K.U("Start with the market line. If it turned down or breadth is over 75, the new buy signals aren't buys yet. "
                           "Then look for new signals in the sectors that are still rising.")),
         sectors=K.key(K.R("Breadth", "Share of the sector's S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA. "
