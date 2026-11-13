@@ -1888,8 +1888,11 @@ def heat_html(bh, days=QTR):
         zd = lambda v, on: zc[bzone(round(float(v), 1))] or (" d" if on == 0 else "")   # d = in the green zone but on a downswing: yellow
         cells = "".join(f'<i class="h{min(9, int(v // 10))}{zd(v, on)}"></i>' if v == v else "<i></i>"
                         for v, on in zip(b.rise, b.on))
+        col = {"dn": "var(--dn)", "up": "var(--up)", "wn": "var(--yel)"}[bcls(st)]   # the user's breadth colours
+        tbar = (f'<span class="sbar hmb"><b style="width:{min(st["rise"], 100):.0f}%;background:{col}"></b><i style="left:{min(st["avg"], 100):.0f}%"></i>'
+                f'<u style="left:{CFG["OB_BREADTH"]}%"></u></span>')      # tonight, as on the Today bars: tick = 10-day average, dashed = 75
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
-                    f'<span class="hmc" data-i="{i}">{cells}</span><span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
+                    f'<span class="hmc" data-i="{i}">{cells}</span>{tbar}<span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
         data["rows"].append(dict(n=n, r=r1(b.rise), a=r1(b.avg), u=r1(b.up), s=[None if v != v else int(v) for v in b.on]))
     ticks = [(k, d) for k, d in enumerate(idx) if k == 0 or d.month != idx[k - 1].month]
     if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
@@ -1897,9 +1900,11 @@ def heat_html(bh, days=QTR):
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
     zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
             f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold (red too)</span>'
-            f'<span class="hmz"><i class="g d"></i>30-75% but falling (under its 10-day average): yellow</span>')
-    return (f'<div class="hm" id="hm">{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span></div>'
-            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div id="hmtip" class="hmtip" hidden></div></div>'), data
+            f'<span class="hmz"><i class="g d"></i>30-75% but falling (under its 10-day average): yellow</span>'
+            f'<span class="hmz">Tonight bar: tick = its 10-day average, dashed = your {CFG["OB_BREADTH"]} line</span>')
+    head = '<div class="hmr hmh"><span></span><span>Last 3 months, day by day</span><span>Tonight</span><span></span></div>'
+    return (f'<div class="hm" id="hm">{head}{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span><span></span></div>'
+            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
 
 
 def bcls(w):
@@ -2381,7 +2386,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .ch{{background:var(--card);border-radius:10px;padding:8px 10px}}.chh{{font-size:13px;margin-bottom:4px}}.chg{{float:right;font-weight:600}}.cv{{height:240px}}.bar.tf{{margin-top:8px}}
 .bv{{height:64px}}.bl{{font-size:11px;color:var(--mut);margin-top:2px;min-height:15px}}.bl b{{color:var(--fg)}}.bv[hidden],.bl[hidden]{{display:none}}
 .hm{{position:relative;background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px;font-size:12px}}
-.hmr{{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:6px;margin-bottom:2px}}
+.hmr{{display:grid;grid-template-columns:84px minmax(0,1fr) minmax(56px,22%) 62px;align-items:center;gap:6px;margin-bottom:2px}}.hmb{{height:10px}}.hmh{{color:var(--mut);font-size:10px;font-weight:600;margin-bottom:4px}}@media(max-width:600px){{.hmr{{grid-template-columns:70px minmax(0,1fr) 48px 50px;gap:5px}}.hmv{{font-size:11px}}.hm .obt,.hm .ost{{padding:0 3px;font-size:9px}}}}
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
 .hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
@@ -2555,7 +2560,7 @@ m.k.applyOptions({{priceFormat:PF(s.c[n-1])}});e.textContent=FP(s.c[n-1])+'  '+(
 document.querySelectorAll('.bar.tf button').forEach(b=>b.onclick=()=>{{document.querySelectorAll('.bar.tf button').forEach(x=>x.classList.remove('on'));b.classList.add('on');tf=b.dataset.tf;draw()}});
 draw()}})();
 // breadth heatmap: tap or hover a row for that day's numbers
-(function(){{const hm=document.getElementById('hm');if(!hm||!HM)return;const tip=document.getElementById('hmtip'),n=HM.t.length;
+document.querySelectorAll('.hm').forEach(hm=>{{if(!HM)return;const tip=hm.querySelector('.hmtip'),n=HM.t.length;
 const off=()=>{{tip.hidden=true;hm.querySelectorAll('i.cur').forEach(x=>x.classList.remove('cur'))}};
 function show(e){{const c=e.currentTarget,R=HM.rows[+c.dataset.i],r=c.getBoundingClientRect();
 const i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left)/r.width*n))),v=R.r[i];off();if(v==null)return;
@@ -2567,7 +2572,7 @@ c.children[i].classList.add('cur');tip.hidden=false;const h=hm.getBoundingClient
 tip.style.left=Math.max(0,Math.min(e.clientX-h.left+12,h.width-tip.offsetWidth))+'px';tip.style.top=(r.bottom-h.top+6)+'px'}}
 hm.querySelectorAll('.hmc').forEach(c=>{{c.addEventListener('pointermove',show);c.addEventListener('pointerdown',show);
 c.addEventListener('pointerleave',e=>{{if(e.pointerType==='mouse')off()}})}});
-document.addEventListener('pointerdown',e=>{{if(!e.target.closest('.hmc'))off()}})}})();
+document.addEventListener('pointerdown',e=>{{if(!e.target.closest('.hmc'))off()}})}});
 // breadth line: Rising for the whole market or one category by day, with its 5-day and 10-day averages
 (function(){{const el=document.getElementById('bln');if(!el||!BL)return;
 const box=el.querySelector('.blc'),lg=document.getElementById('blk'),sel=document.getElementById('blg'),N=BL.t.length;

@@ -169,6 +169,8 @@ def page_keys(market, cfg, ov):
         R(f"{sw(YELLOW)} Yellow", f"{os_}-{ob}% but falling (under its 10-day average, a downswing)."),
         R(f"{sw(RED)} Red", f"Over {ob}: overbought (your rule: no upswing then, and nothing in it gets bought), or under {os_}: "
           "oversold, washed out."),
+        R("Tonight bar", f"Next to each row's 3 months: tonight's Rising as a bar, the same bar as on the Today tab. Its colour "
+          f"follows the same rule (green, yellow, red); the tick = its 10-day average; the dashed line = your {ob} line."),
         R("Right column", f"Rising tonight and its state: ▲ upswing, ▼ fading, <b>OB</b> overbought (over {ob}), <b>OS</b> oversold "
           f"(under {os_})."),
         R("Tap or hover", "A cell shows that day's Rising, its 10-day average, the share in your full uptrend and the state. "
