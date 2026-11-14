@@ -17,6 +17,10 @@ on:
         description: "Wait for 9:35 AM New York first (the chain uses this)"
         type: boolean
         default: false
+      preview:
+        description: "On a day with no trading: build a preview from the last trading day instead of republishing the last Open page"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 9 * * 1-5"      # backup starter only
 
@@ -86,11 +90,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BY_HAND: ${{ github.event_name == 'workflow_dispatch' && !inputs.wait }}
+          PREVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
         run: |
           python open_page.py --out open-out
           # started by hand on a day with no trading yet: publish the newest Open page again (the site needs it back after a
           # deploy that left it out); with none saved, build a preview from the last trading day
-          if [ "$BY_HAND" = "true" ] && [ ! -f open-out/open/index.html ]; then
+          if [ "$PREVIEW" = "true" ] && [ ! -f open-out/open/index.html ]; then
+            python open_page.py --out open-out --any-day
+          elif [ "$BY_HAND" = "true" ] && [ ! -f open-out/open/index.html ]; then
             for r in $(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 20 --json databaseId -q '.[].databaseId'); do
               gh run download "$r" -R "$GITHUB_REPOSITORY" -n open-site -D open-out/open 2>/dev/null && { echo "Republishing the Open page from run $r"; break; }
             done

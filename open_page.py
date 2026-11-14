@@ -93,8 +93,12 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         return None
     N, bhN, swN, hotN = scan(now_f, sectors, subs, sp500)
     P, bhP, swP, hotP = scan(prev_f, sectors, subs, sp500)
-    tks = N.index.intersection(P.index)
-    N, P = N.loc[tks], P.loc[tks]
+    prev2_f = {t: d.iloc[:-1] for t, d in prev_f.items()}       # the close before last night, for the last day's drop-outs
+    P2 = scan(prev2_f, sectors, subs, sp500)[0]
+    tks = N.index.intersection(P.index).intersection(P2.index)
+    N, P, P2 = N.loc[tks], P.loc[tks], P2.loc[tks]
+    prev2c = pd.Series({t: float(prev2_f[t]["Close"].iloc[-1]) for t in tks})
+    prev_day2 = pd.Timestamp(next(iter(prev2_f.values())).index[-1]).date()
     prevc = pd.Series({t: float(prev_f[t]["Close"].iloc[-1]) for t in tks})
     opn = pd.Series({t: float(now_f[t]["Open"].iloc[-1]) for t in tks})
     last = N.close
@@ -135,8 +139,30 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     stay = tks[P.core & N.core]
     joined, left = tks[~P.core & N.core], tks[P.core & ~N.core]
     new_buy = tks[N.buy & ~P.buy]
-    lost_buy = tks[P.buy & ~N.buy]
+    lost_buy = tks[P.buy & ~N.buy]                 # lost overnight / at the open
+    lost_day = tks[P2.buy & ~P.buy]                # lost on the last trading day's close
+    nP2, nP, nN = int(P2.buy.sum()), int(P.buy.sum()), int(N.buy.sum())
     gaps = gap[gap >= GAP].sort_values(ascending=False).index
+
+    def why_lost(p, n):
+        """Why a stock that had a buy signal (p) doesn't any more (n), in plain words."""
+        if not n.core:
+            return "fell out of the uptrend" + (" (under the 150 MA)" if n.x1020 and n.vs50 > 0 else " (10 EMA under the 20 or price under the 50 EMA)")
+        if n.blocked:
+            return "blocked: " + (n.ob or "market breadth over 75")
+        if p.setup == "Momentum":
+            if n.rsi > 80:
+                return f"too hot: RSI {n.rsi:.0f} over 80"
+            if n.rsi < 55:
+                return f"lost momentum: RSI {n.rsi:.0f} under 55"
+            if n.ext > 3:
+                return f"stretched: {n.ext:.1f} ATRs over the 20 EMA"
+            return "fell back from its breakout / 52-week high"
+        if p.setup == "Pullback":
+            if n.rsi > 50:
+                return f"bounced: RSI {n.rsi:.0f} back over 50 (pullback over)"
+            return "no longer near the 20 EMA"
+        return "no longer a setup"
 
     def why_new(t):
         p, n = P.loc[t], N.loc[t]
@@ -169,8 +195,12 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     up_tag = lambda t: ("✓ uptrend" if N.loc[t].core else "regular up" if N.loc[t].reg_up else "—")
     nb_rows = [stock_tr(t, f'<td>{esc(tierlbl(N.loc[t]))}</td><td class="sub" style="white-space:normal;min-width:200px">{esc(why_new(t))}</td>')
                for t in sorted(new_buy, key=lambda t: (N.loc[t].tier != "Super", -N.loc[t].score))]
-    lb_rows = [stock_tr(t, f'<td class="sub">{esc(N.loc[t].ob or ("lost the uptrend" if not (N.loc[t].core or N.loc[t].reg_up) else "no longer a setup"))}</td>')
-               for t in lost_buy]
+    lb_rows = [stock_tr(t, f'<td>{esc(tierlbl(P.loc[t]))}</td><td style="white-space:normal;min-width:200px">{esc(why_lost(P.loc[t], N.loc[t]))}</td>')
+               for t in sorted(lost_buy, key=lambda t: day[t])]
+    d1 = (prevc / prev2c - 1) * 100
+    ld_rows = [f'<tr><td>{tk(t)}</td><td class="sub">{esc(sn(N.loc[t].sector))}</td><td class="num">{pc(d1[t])}</td><td class="num">${prevc[t]:,.2f}</td>'
+               f'<td>{esc(tierlbl(P2.loc[t]))}</td><td style="white-space:normal;min-width:200px">{esc(why_lost(P2.loc[t], P.loc[t]))}</td>'
+               f'<td>{"<b class=pos>back now</b>" if N.loc[t].buy else "still out"}</td></tr>' for t in sorted(lost_day, key=lambda t: d1[t])]
     gp_rows = [stock_tr(t, f'<td>{"holding" if since[t] >= 0 else "fading"}</td><td>{up_tag(t)}</td><td>{esc(tierlbl(N.loc[t])) if N.loc[t].buy else ""}</td>')
                for t in gaps]
     st_rows = [stock_tr(t) for t in sorted(stay, key=lambda t: -day[t])]
@@ -192,6 +222,97 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     ind_up = [r for r in ind if r["state"] in ("Still in uptrend", "Joined the uptrend")]
     names = lambda L: ", ".join(sn(s["name"]) for s in L) or "none"
 
+    # ---- every change from last night's close to now, good or bad, for the market and each sector
+    def rules(d):
+        """Your trend rules on one ETF / index: {rule: (passes, detail)}."""
+        c = d["Close"]
+        e10, e20, e50 = S.ema(c, 10).iloc[-1], S.ema(c, 20).iloc[-1], S.ema(c, 50).iloc[-1]
+        m150 = (S.ema(c, 150) if S.CFG["LONG_MA_TYPE"] == "EMA" else c.rolling(150).mean()).iloc[-1]
+        px = c.iloc[-1]
+        return {"10 EMA above the 20 EMA": e10 > e20, "price above the 50 EMA": px > e50, "price above the 150 MA": px > m150,
+                "20 EMA above the 50 EMA": e20 > e50, "price above the 10 EMA": px > e10, "price above the 20 EMA": px > e20}
+
+    def zone_word(z):
+        return {2: "over 75 (overbought)", -1: "under 30 (oversold)", 0: "between 30 and 75"}[z]
+
+    def group_changes(name, a, b, etf, nP_, nN_, hotP_, hotN_):
+        """[(good True / bad False / None, text)] for one group: the market (S&P 500) or a sector."""
+        ch = []
+        add = lambda g, t: ch.append((g, t))
+        e = etfs.get(etf)
+        if e is not None and len(e) > 200 and e.index[-1].date() == today:
+            p = e.iloc[:-1]
+            pc_ = float(p["Close"].iloc[-1]); g_ = (float(e["Open"].iloc[-1]) / pc_ - 1) * 100; d_ = (float(e["Close"].iloc[-1]) / pc_ - 1) * 100
+            if abs(g_) >= 0.05:
+                add(g_ > 0, f"{etf} opened {'up' if g_ > 0 else 'down'} {abs(g_):.1f}% ({pc_:,.2f} → {float(e['Open'].iloc[-1]):,.2f})")
+            add(d_ >= 0 if abs(d_) >= 0.05 else None, f"{etf} is {d_:+.1f}% since last night's close, {'holding above' if d_ >= g_ else 'below'} where it opened")
+            rP, rN = rules(p), rules(e)
+            for k in rP:
+                if rP[k] != rN[k]:
+                    add(bool(rN[k]), f"{etf} {'now' if rN[k] else 'no longer'} {k}")
+            uP, uN = all(rP[k] for k in list(rP)[:3]), all(rN[k] for k in list(rN)[:3])
+            if uP != uN:
+                add(uN, f"{etf} {'entered' if uN else 'left'} your uptrend (10 over 20, over the 50 EMA and the 150 MA)")
+            else:
+                add(None, f"{etf} {'still in' if uN else 'still not in'} your uptrend")
+        if a and b:
+            dr = b["rise"] - a["rise"]
+            add(dr > 0 if abs(dr) >= 0.5 else None, f"Breadth (Rising) {a['rise']:.0f}% → {b['rise']:.0f}% ({dr:+.0f} points)")
+            if a["on"] != b["on"]:
+                add(b["on"], f"Breadth turned {'up: back above' if b['on'] else 'down: fell under'} its 10-day average ({b['avg']:.0f}%)")
+            else:
+                add(None, f"Breadth still {'above' if b['on'] else 'under'} its 10-day average ({b['avg']:.0f}%): {'upswing' if b['on'] else 'fading'}")
+            if a["z"] != b["z"]:
+                add(b["z"] == 0, f"Breadth moved from {zone_word(a['z'])} to {zone_word(b['z'])}")
+            if a.get("up") is not None and b.get("up") is not None and abs(b["up"] - a["up"]) >= 0.5:
+                add(b["up"] > a["up"], f"Stocks in your full uptrend {a['up']:.0f}% → {b['up']:.0f}%")
+        if nP_ != nN_:
+            add(nN_ > nP_, f"Stocks with a buy signal {nP_} → {nN_}")
+        if bool(hotP_) != bool(hotN_):
+            add(not hotN_, "No longer blocked: breadth back under 75" if not hotN_ else f"Now blocked: {hotN_}")
+        return ch
+
+    secN = N.groupby("sector").buy.sum()
+    secP = P.groupby("sector").buy.sum()
+    rankP = {s_["name"]: i + 1 for i, s_ in enumerate(sorted(secs, key=lambda x: -x["P"]["rise"]))}
+    rankN = {s_["name"]: i + 1 for i, s_ in enumerate(secs)}
+    chg = []                                       # (group, [(good, text)])
+    if mk:
+        mc = group_changes("S&P 500", mk["P"], mk["N"], "SPY", nP, nN, hotP, hotN)
+        spy = etfs.get("SPY")
+        if spy is not None and len(spy) > 200 and spy.index[-1].date() == today:
+            cP, cN = S.spy_checks(spy.iloc[:-1], mk["P"], hotP), S.spy_checks(spy, mk["N"], hotN)
+            okP, okN = sum(bool(x[1]) for x in cP), sum(bool(x[1]) for x in cN)
+            mc.insert(0, (okN > okP if okN != okP else None, f"Today checks (the Stocks page's market checklist): {okP} of {len(cP)} → {okN} of {len(cN)}"))
+        v = etfs.get("^VIX")
+        if v is not None and len(v) > 2 and v.index[-1].date() == today:
+            vp, vo, vn = float(v["Close"].iloc[-2]), float(v["Open"].iloc[-1]), float(v["Close"].iloc[-1])
+            mc.append((vn < vp if abs(vn - vp) >= 0.05 else None, f"VIX {vp:.2f} → {vn:.2f} (opened {vo:.2f}); {'calmer' if vn < vp else 'more fear'}"))
+        ups, dns = int((gap >= 0.05).sum()), int((gap <= -0.05).sum())
+        mc.append((ups > dns, f"{ups} stocks opened higher, {dns} lower ({len(gaps)} gapped up {GAP:g}%+, {int((gap <= -GAP).sum())} gapped down {GAP:g}%+)"))
+        mc.append((len(new_buy) >= len(lost_buy) if (new_buy.size or lost_buy.size) else None,
+                   f"Buy signals: {len(new_buy)} new, {len(lost_buy)} lost since last night's close"))
+        mc.append((len(joined) >= len(left) if (joined.size or left.size) else None, f"Uptrend: {len(joined)} stocks joined, {len(left)} left"))
+        chg.append(("Market (S&P 500 / SPY)", mc))
+    for s_ in secs:
+        sc = group_changes(s_["name"], s_["P"], s_["N"], s_["etf"], int(secP.get(s_["name"], 0)), int(secN.get(s_["name"], 0)),
+                           S.breadth_hot(s_["name"], {s_["name"]: s_["P"]["rise"]}), S.breadth_hot(s_["name"], {s_["name"]: s_["N"]["rise"]}))
+        rp, rn = rankP.get(s_["name"]), rankN.get(s_["name"])
+        if rp and rn and rp != rn:
+            sc.insert(0, (rn < rp, f"Rank by breadth #{rp} → #{rn} of {len(secs)}"))
+        else:
+            sc.insert(0, (None, f"Rank by breadth #{rn} of {len(secs)}, unchanged"))
+        chg.append((s_["name"], sc))
+    n_good = sum(g is True for _, L in chg for g, _ in L)
+    n_bad = sum(g is False for _, L in chg for g, _ in L)
+    mark = {True: '<i class="cg">▲</i>', False: '<i class="cb">▼</i>', None: '<i class="cn">•</i>'}
+
+    def chg_card(name, L):
+        g, b_ = sum(x is True for x, _ in L), sum(x is False for x, _ in L)
+        return (f'<div class="card chg"><h3>{esc(sn(name) if name in S.SECTOR_ETF else name)} <span class="pill p-up">{g} better</span>'
+                f'<span class="pill p-dn">{b_} worse</span></h3>' + "".join(f'<div class="cl">{mark[x]}<span>{esc(t)}</span></div>' for x, t in L) + '</div>')
+    changes_html = "".join(chg_card(n, L) for n, L in chg)
+
     m = mk or {}
     mP, mN = m.get("P", {}), m.get("N", {})
     spy_line = (f'SPY opened {pc(m.get("gap"))} vs last night\'s close and is {pc(m.get("day"))} so far today. '
@@ -206,6 +327,15 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         ("Stocks", f'{len(new_buy)} new buy signal{"s" if len(new_buy) != 1 else ""}',
          f'{len(stay)} stayed in uptrend · {len(joined)} joined · {len(left)} left · {len(gaps)} gapped up {GAP:g}%+'),
     ]
+    md_ = lambda x: f"{x:%a %b} {x.day}"
+    chips = lambda L: " ".join(tk(t) for t in L) or '<span class="sub">none</span>'
+    lost_card = (f'<div class="card lost"><h3>Lost buy signals <a data-go="lost">Full lists ›</a></h3>'
+                 f'<div class="lostg"><div><div class="lbig neg">{len(lost_buy)}</div><div class="sub">lost <b>overnight</b>: had a buy signal at '
+                 f'{md_(prev_day)}\'s close, gone at the open</div><div class="lchips">{chips(sorted(lost_buy, key=lambda t: day[t]))}</div></div>'
+                 f'<div><div class="lbig neg">{len(lost_day)}</div><div class="sub">lost on <b>{md_(prev_day)}\'s close</b>: had one at {md_(prev_day2)}\'s close'
+                 f' ({sum(N.loc[t].buy for t in lost_day)} came back at the open)</div><div class="lchips">{chips(sorted(lost_day, key=lambda t: d1[t]))}</div></div>'
+                 f'<div><div class="lbig">{nP2} → {nP} → {nN}</div><div class="sub">stocks with a buy signal: {md_(prev_day2)} close → {md_(prev_day)} close → now'
+                 f' ({len(new_buy)} new at the open)</div></div></div></div>')
     cards = "".join(f'<div class="step"><div class="n">{a}</div><div class="big">{b}</div><div class="sub">{c}</div></div>' for a, b, c in sumcards)
     top_new = "".join(f'<div class="st">{tk(t)}<span class="sub">{esc(sn(N.loc[t].sector))} · {esc(tierlbl(N.loc[t]))}</span><span>{pc(gap[t])}</span>'
                       f'<span class="sub">{esc(why_new(t))}</span></div>' for t in sorted(new_buy, key=lambda t: (N.loc[t].tier != "Super", -N.loc[t].score))[:8])
@@ -235,6 +365,23 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                       K.R("Setup", "Super = price over the 150 MA; Regular = under it. Momentum = breakout or near the 52-week high with RSI 55-80; "
                           "Pullback = a dip to the 20 EMA inside an uptrend."),
                       K.U("These use the open's price, not a close. A gap can fade during the day; the nightly page decides on the close.")),
+        changes=K.key(K.R("What's listed", "For the market and every sector: the ETF's gap and move, each of your trend rules that flipped "
+                          "(10 over 20, over the 50 EMA, over the 150 MA, 20 over 50, over the 10 and 20 EMA), entering or leaving your uptrend, breadth "
+                          "(Rising) and its direction against its 10-day average, the 30 / 75 lines, stocks in your uptrend, buy-signal count, the over-75 block "
+                          "and each sector's rank by breadth. The market adds the Stocks page's Today checks, VIX, how many stocks opened higher or lower, "
+                          "and new vs lost buy signals and uptrends."),
+                      K.R("▲ / ▼", "Better or worse for buying calls on the upswing (your long-only plan). A rising VIX counts as worse."),
+                      K.U("Read the market card first, then the sectors in rank order. A sector with several ▼ (turned down, left its uptrend) is "
+                          "not the strongest sector this morning, whatever last night said.")),
+        lost=K.key(K.R("Lost overnight", "Had a buy signal at last night's close and doesn't now, scored on today's open and latest price. "
+                       "Worst day first."),
+                   K.R("Lost on the last close", "Had a buy signal two closes ago and lost it on last night's close (the full day's move). "
+                       "\"At the open\" says whether it came back this morning."),
+                   K.R("Why it's gone", "The first rule it now fails: out of the uptrend, blocked by breadth over 75, RSI out of the 55-80 momentum range, "
+                       "stretched over 3 ATRs above the 20 EMA, off its breakout / 52-week high, or a pullback that bounced (RSI back over 50)."),
+                   K.R("Buy signals count", "How many stocks had a buy signal two closes ago → last night → now. A falling count means more signals are lost than found."),
+                   K.U("Check these before buying or adding: a stock you hold or were about to buy that shows up here has lost its setup. "
+                       "Many losses at once, with breadth falling, means the market is pulling back.")),
         gaps=K.key(K.R("Gap up", f"Today's open at least {GAP:g}% over last night's close, biggest first."),
                    K.R("Since open", "Holding = trading at or above the open; fading = below it."),
                    K.R("Uptrend", "✓ uptrend = your full rule now; regular up = EMA10 over EMA20 and price over the 50 EMA, under the 150 MA."),
@@ -244,9 +391,19 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     )
     tabs = [
         ("summary", "Rundown", f'<div class="h1">How did the market open?</div><div class="sub lead">{spy_line}</div>{keys["summary"]}'
-         f'<div class="steps four">{cards}</div><div class="g2" style="margin-top:14px">'
+         f'{lost_card}<div class="card" style="margin-top:14px"><h3>What changed overnight <a data-go="changes">Every change ›</a></h3>'
+         f'<div class="sub">{n_good} changes for the better and {n_bad} for the worse across the market and {len(secs)} sectors, from '
+         f'{md_(prev_day)}\'s close to the open.</div>{"".join(f"<div class=cl>{mark[x]}<span>{esc(t)}</span></div>" for x, t in (chg[0][1] if chg else []))}</div>'
+         f'<div class="steps four" style="margin-top:14px">{cards}</div><div class="g2" style="margin-top:14px">'
          f'<div class="card"><h3>New buy signals <a data-go="signals">All {len(new_buy)} ›</a></h3>{top_new or "<div class=sub>None at the open.</div>"}</div>'
          f'<div class="card"><h3>Biggest gap ups <a data-go="gaps">All {len(gaps)} ›</a></h3>{top_gap or "<div class=sub>No gap ups of 1% or more.</div>"}</div></div>'),
+        ("changes", "What changed", f'<div class="h1">Everything that changed overnight</div><div class="sub lead">From {md_(prev_day)}\'s close to '
+         f'the open: {n_good} better, {n_bad} worse. ▲ better for buying, ▼ worse, • no change or neutral.</div>{keys["changes"]}<div class="chgs">{changes_html}</div>'),
+        ("lost", "Lost signals", f'<div class="card"><h3>Lost overnight: buy signal at {md_(prev_day)}\'s close, gone at the open ({len(lost_buy)})</h3>{keys["lost"]}'
+         + table(lb_rows, TH, '<th>Setup last night</th><th>Why it\'s gone</th>', "No buy signals lost at the open.") + '</div>'
+         f'<div class="card" style="margin-top:14px"><h3>Lost on {md_(prev_day)}\'s close: buy signal at {md_(prev_day2)}\'s close, gone at the next close ({len(lost_day)})</h3>'
+         + table(ld_rows, '<th>Ticker</th><th>Sector</th><th class="num">That day</th><th class="num">Close</th>', '<th>Setup before</th><th>Why it\'s gone</th><th>At the open</th>',
+                 "No buy signals lost on that close.") + '</div>'),
         ("sectors", "Sectors", f'<div class="card"><h3>Market and sectors, last night → now</h3>{keys["sectors"]}'
          f'{table([sec_tr(mk)] if mk else [], SEC_TH) if mk else ""}<div style="height:10px"></div>{table([sec_tr(s) for s in secs], SEC_TH)}'
          f'<div class="sub" style="margin-top:8px">ETF still in uptrend: {esc(names(etf_up))}</div></div>'),
@@ -260,8 +417,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
          + '</div>'),
         ("signals", "Buy signals", f'<div class="card"><h3>New buy signals since last night ({len(new_buy)})</h3>{keys["signals"]}'
          + table(nb_rows, TH, '<th>Setup</th><th>Why it\'s new</th>', "No new buy signals at the open.") + '</div>'
-         f'<div class="card" style="margin-top:14px"><h3>Lost buy signals ({len(lost_buy)})</h3>'
-         + table(lb_rows, TH, '<th>Why</th>', "None lost at the open.") + '</div>'),
+         f'<div class="sub" style="margin-top:10px">Lost buy signals have their own tab: <a data-go="lost">Lost signals ›</a></div>'),
         ("gaps", "Gap ups", f'<div class="card"><h3>Gap ups of {GAP:g}% or more ({len(gaps)})</h3>{keys["gaps"]}'
          + table(gp_rows, TH, '<th>Since open</th><th>Uptrend</th><th>Buy signal</th>', "No gap ups this morning.") + '</div>'),
         ("uptrend", "Uptrend list", f'<div class="card"><h3>Stayed in uptrend ({len(stay)})</h3>{keys["uptrend"]}' + table(st_rows) + '</div>'
@@ -284,7 +440,13 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                 sectors_rising=len(still) + len(tup))
 
 
-CSS = """.g2>*,.steps>*{min-width:0}.pos{color:var(--up)}.neg{color:var(--dn)}.steps.four{grid-template-columns:repeat(4,1fr)}.step .big{font-size:18px}
+CSS = """.g2>*,.steps>*{min-width:0}.chgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chg h3{gap:6px}
+.cl{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--line);font-size:13px}.cl:first-of-type{border-top:0}
+.cl i{font-style:normal;font-weight:800;width:14px;flex:none;text-align:center}.cg{color:var(--up)}.cb{color:var(--dn)}.cn{color:var(--mut)}
+@media(max-width:760px){.chgs{grid-template-columns:1fr;gap:10px}}.card.lost{border:2px solid var(--dn);background:#fffafa}
+.lostg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:4px}.lbig{font-size:34px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.lchips{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:13px}
+@media(max-width:760px){.lostg{grid-template-columns:1fr;gap:12px}.lbig{font-size:28px}}.pos{color:var(--up)}.neg{color:var(--dn)}.steps.four{grid-template-columns:repeat(4,1fr)}.step .big{font-size:18px}
 .st{grid-template-columns:62px 1fr 60px minmax(0,1.4fr)}.st .sub:last-child{white-space:normal}
 @media(max-width:1000px){.steps.four{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.steps.four{grid-template-columns:1fr}.st{grid-template-columns:54px 1fr 56px}.st .sub:last-child{display:none}}"""
@@ -328,7 +490,7 @@ def main():
         frames = S.download_with_retry(tickers)
         if len(frames) < 0.8 * len(tickers):
             sys.exit(f"Only got data for {len(frames)} of {len(tickers)} tickers; not publishing a partial page.")
-        etfs = S.yf_batch(list(S.SECTOR_ETF.values()), period="2y", interval="1d")
+        etfs = S.yf_batch(list(S.SECTOR_ETF.values()) + ["^VIX"], period="2y", interval="1d")   # ^VIX for the overnight changes
         today = nowny.date()
     preview = False
     if sum(d.index[-1].date() == today for d in frames.values()) < 0.5 * len(frames):
