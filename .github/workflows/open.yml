@@ -7,7 +7,7 @@ name: Open rundown
 # a run waits (up to ~5 hours at a time, then starts the next run of itself) until 9:35 AM New York on the next weekday,
 # builds and publishes the page, then starts the next run, which waits for the next morning. The schedule below only
 # restarts the chain if it ever breaks; only one run is active at a time. A run started by hand from the Actions tab
-# (leave "wait" unticked) builds the page right away; before today's open it previews the last trading day's open.
+# (leave "wait" unticked) builds the page right away; on a day with no trading yet it publishes the newest Open page again.
 # To stop it: Actions tab -> Open rundown -> "..." -> Disable workflow, and cancel the waiting run.
 
 on:
@@ -27,7 +27,7 @@ permissions:
   actions: write               # to fetch the other pages' files and start the next run
 
 concurrency:
-  group: open-rundown
+  group: open-rundown-${{ (github.event_name == 'workflow_dispatch' && !inputs.wait) && 'by-hand' || 'chain' }}   # a hand run doesn't queue behind the waiting one
   cancel-in-progress: false
 
 jobs:
@@ -83,7 +83,19 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Build the Open page
-        run: python open_page.py --out open-out ${{ (github.event_name == 'workflow_dispatch' && !inputs.wait) && '--any-day' || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BY_HAND: ${{ github.event_name == 'workflow_dispatch' && !inputs.wait }}
+        run: |
+          python open_page.py --out open-out
+          # started by hand on a day with no trading yet: publish the newest Open page again (the site needs it back after a
+          # deploy that left it out); with none saved, build a preview from the last trading day
+          if [ "$BY_HAND" = "true" ] && [ ! -f open-out/open/index.html ]; then
+            for r in $(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 20 --json databaseId -q '.[].databaseId'); do
+              gh run download "$r" -R "$GITHUB_REPOSITORY" -n open-site -D open-out/open 2>/dev/null && { echo "Republishing the Open page from run $r"; break; }
+            done
+            [ -f open-out/open/index.html ] || python open_page.py --out open-out --any-day
+          fi
 
       - name: Add the other pages (stocks + OVTLYR from the last nightly run, crypto from the last crypto run)
         id: site

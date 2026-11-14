@@ -75,8 +75,9 @@ jobs:
           if [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n github-pages -D stock && [ -f stock/artifact.tar ]; then
             tar -xf stock/artifact.tar -C site
             rm -rf site/crypto && cp -r crypto-site site/crypto
-            orun=$(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
-            [ -n "$orun" ] && rm -rf open-new && gh run download "$orun" -R "$GITHUB_REPOSITORY" -n open-site -D open-new && rm -rf site/open && mv open-new site/open || true   # the newest Open page
+            for orun in $(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 20 --json databaseId -q '.[].databaseId' || true); do
+              rm -rf open-new; gh run download "$orun" -R "$GITHUB_REPOSITORY" -n open-site -D open-new 2>/dev/null && { rm -rf site/open; mv open-new site/open; break; }   # the newest Open page (waiting runs have none)
+            done
             echo "ok=1" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::The stock page's site files weren't found, so this run doesn't deploy (that would take the stock page down). The next stock nightly run publishes the crypto page with it."

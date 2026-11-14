@@ -49,8 +49,9 @@ jobs:
         run: |
           run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow crypto-nightly.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
           [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n crypto-site -D site/crypto || echo "No crypto page files found; publishing the stock page alone."
-          orun=$(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
-          [ -n "$orun" ] && gh run download "$orun" -R "$GITHUB_REPOSITORY" -n open-site -D site/open || echo "No Open page files found yet."
+          for orun in $(gh run list -R "$GITHUB_REPOSITORY" --workflow open.yml --status success --limit 20 --json databaseId -q '.[].databaseId' || true); do
+            gh run download "$orun" -R "$GITHUB_REPOSITORY" -n open-site -D site/open 2>/dev/null && break   # the waiting runs have no page; take the newest that does
+          done; [ -f site/open/index.html ] || echo "No Open page files found yet."
 
       - name: Save daily CSVs to history
         run: |
