@@ -1,0 +1,55 @@
+tickers with charts: 299
+order block boxes: 7338 (1012 untouched)
+daily bars per ticker: min 662, median 1260, max 1260 (5 years is about 1,260)
+missing data files: none
+data issues: 0
+table vs data mismatches: 0
+RSI / CCI vs data: 257 stocks checked, 0 off
+rows with an options contract: 16
+10-year backtests: 299 (years covered: min 1.8, median 10); rules beat holding on 20; table stocks without one: none
+  medians: in the market 34% of days, 24 trades, 42% winners; 7142 trades, average 1.67%, median -1.44%; ended by {"exit":6106,"stop":849,"open":187}
+  SPY rules 121% hold 307.8% spy 307.8% n 29 win 55% in 65%
+  XLK rules 139.1% hold 719.7% spy 307.8% n 25 win 56% in 50%
+  AAPL rules 185.3% hold 1367.3% spy 307.8% n 26 win 54% in 43%
+  MSFT rules 137.8% hold 915.1% spy 307.8% n 27 win 52% in 53%
+  EMR rules -9.6% hold 280.4% spy 307.8% n 27 win 33% in 33%
+top picks: 4 new uptrends, 10 breakout watch, 10 AI picks; issues: 7
+  pk-ai MRNA: volume  vs data 7021300
+  pk-ai MRNA: 5-day volume  vs data 54446900
+  pk-ai DELL: volume  vs data 8840300
+  pk-ai DELL: 5-day volume  vs data 40169200
+  pk-ai PSX: volume  vs data 2758200
+  pk-ai PSX: 5-day volume  vs data 15822200
+  AI picks: 4 in Energy (max 3)
+pk-nu calls that fit: 0 of 4, closest shown in grey: 0; none for EOG (none fits: no call 0.50-0.80 delta with OI over 500), VMRK (none fits: no expiry 15-30 days out), BXP (none fits: no expiry 15-30 days out), SBAC (none fits: no expiry 15-30 days out)
+pk-bo calls that fit: 0 of 10, closest shown in grey: 3; none for GEN (none fits: no expiry 15-30 days out), EFX (none fits: no expiry 15-30 days out), VTR (none fits: no expiry 15-30 days out), WM (none fits: no expiry 15-30 days out), CTAS (none fits: no call 0.50-0.80 delta with OI over 500), LIN (none fits: no expiry 15-30 days out), ITW (none fits: no expiry 15-30 days out)
+pk-ai calls that fit: 1 of 10, closest shown in grey: 5; none for APA (none fits: no call 0.50-0.80 delta with OI over 500), MRNA (none fits: no call 0.50-0.80 delta with OI over 500), DELL (none fits: no call 0.50-0.80 delta with OI over 500), PSX (none fits: no call 0.50-0.80 delta with OI over 500)
+filter setups: 48 rows, 0 wrong
+filter Super: 46 rows, 0 wrong
+filter Regular: 2 rows, 0 wrong
+filter Momentum: 40 rows, 0 wrong
+filter Pullback: 8 rows, 0 wrong
+filter Overbought: 160 rows, 0 wrong
+filter all: 257 rows, 0 wrong
+overbought rule: 48 setups, 160 marked Overbought, 2 oversold, market breadth 68.4; problems: none
+sector Health Care: 0 rows ok
+sector Utilities: 0 rows ok
+sector Consumer Staples: 0 rows ok
+sector Financials: 0 rows ok
+sector Industrials: 18 rows ok
+sector Consumer Discretionary: 0 rows ok
+sector Real Estate: 8 rows ok
+sector Communication Services: 4 rows ok
+sector Materials: 3 rows ok
+sector Information Technology: 12 rows ok
+sector Energy: 3 rows ok
+sorted 28 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: strip Real Estate: "Breadth 67% rising, avg 67% · 37% in uptrend · ▲ upswing since Nov 13" vs heatmap 71.4; strip Communication Services: "Breadth 59% rising, avg 49% · 41% in uptrend · ▲ upswing since Nov 2" vs heatmap 71.4
+breadth line: 12 groups x 471 days from 2024-12-30, 7 canvases, problems: none
+Plan M list: 0 stocks (summary says 0), 0 new (summary says 0), 0 dropped, the Market box link opens it: true
+opened 299 tickers x 4 timeframes (daily also at 5Y), problems: 0
+paper A Your system: $2,584.82 (updated 2026-11-13 15:24), cash $200.36, 2 open, 5 closed, 37 log lines, 12 closes; problems: none
+paper C Your system, after 2 PM: $4,946.65 (updated 2026-11-13 15:24), cash $2,081.65, 2 open, 3 closed, 35 log lines, 12 closes; problems: none
+paper B Claude's picks: $4,824.98 (updated 2026-11-13 15:24), cash $3,875.27, 2 open, 10 closed, 48 log lines, 12 closes; problems: none
+paper D OVTLYR plan: $4,120.58 (updated 2026-11-13 15:24), cash $0.00, 1 open, 8 closed, 46 log lines, 12 closes; problems: none
+page errors overall: none
