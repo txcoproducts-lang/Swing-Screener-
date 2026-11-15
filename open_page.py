@@ -144,7 +144,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
             continue
         a, b = P.loc[idx, "core"].mean() * 100, N.loc[idx, "core"].mean() * 100
         st = turn(a >= 50, b >= 50, ("Still in uptrend", "Joined the uptrend", "Left the uptrend", "Not in uptrend"))
-        ind.append(dict(name=name, sector=N.loc[idx, "sector"].mode().iloc[0] if len(idx) else "", n=len(idx), P=a, N=b, state=st,
+        ind.append(dict(tks=list(idx), name=name, sector=N.loc[idx, "sector"].mode().iloc[0] if len(idx) else "", n=len(idx), P=a, N=b, state=st,
                         day=float(day[idx].mean()), gap=float(gap[idx].mean())))
     order = {"Still in uptrend": 0, "Joined the uptrend": 1, "Left the uptrend": 2, "Not in uptrend": 3}
     ind.sort(key=lambda r: (order[r["state"]], -r["N"], -r["day"]))
@@ -435,6 +435,27 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         uptrend=K.key(K.R("Stayed in uptrend", "In your full uptrend last night and still in it now, best day first."),
                       K.R("Joined / Left", "Changed at the open.")),
     )
+    def ind_detail(r):
+        """The hidden row under an industry: each of its stocks and what changed for it, from the close to the open."""
+        def ch(t):
+            p, n = P.loc[t], N.loc[t]
+            w = []
+            if p.core != n.core:
+                w.append("joined the uptrend" if n.core else "left the uptrend")
+            if p.buy != n.buy:
+                w.append("new buy signal" if n.buy else "lost its buy signal: " + why_lost(p, n))
+            if t in gaps:
+                w.append(f"gapped up {gap[t]:.1f}%")
+            return "; ".join(w)
+        tks_ = sorted(r["tks"], key=lambda t: (not ch(t), -day[t]))
+        yn = lambda x: "✓" if x else "✗"
+        rows = "".join(f'<tr><td>{tk(t)}</td><td class="sub" style="white-space:normal;min-width:150px">{esc(ch(t)) or "no change"}</td>'
+                       f'<td class="c">{yn(P.loc[t].core)} → {yn(N.loc[t].core)}</td><td class="c">{yn(P.loc[t].buy)} → {yn(N.loc[t].buy)}</td>'
+                       f'<td class="num">{pc(gap[t])}</td><td class="num">{pc(day[t])}</td></tr>' for t in tks_)
+        return (f'<tr class="ixd" hidden><td colspan="7"><table class="tb ixt"><thead><tr><th>Stock</th><th>What changed</th>'
+                f'<th class="c">Uptrend {PD} close → {NOWT}</th><th class="c">Buy signal {PD} close → {NOWT}</th>'
+                f'<th class="num">Gap {TD}</th><th class="num">{PD} close → {NOWT}</th></tr></thead><tbody>{rows}</tbody></table></td></tr>')
+
     tabs = [
         ("summary", "Rundown", f'<div class="h1">How did the market open on {TD} (8:30 AM CT)?</div><div class="sub lead">{spy_line}</div>{keys["summary"]}'
          f'{new_card}<div style="height:14px"></div>{lost_card}<div class="card" style="margin-top:14px"><h3>What changed from the {CL} to {NOW} <a data-go="changes">Every change ›</a></h3>'
@@ -456,9 +477,10 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         ("industries", "Industries", f'<div class="card"><h3>Industries, last night → now</h3>{keys["industries"]}'
          f'<div class="mkt" style="margin-bottom:8px" id="indf"><button class="chip on" data-f="up">In uptrend ({len(ind_up)})</button>'
          f'<button class="chip" data-f="left">Left ({sum(r["state"] == "Left the uptrend" for r in ind)})</button><button class="chip" data-f="all">All ({len(ind)})</button></div>'
-         + table([f'<tr data-k="{"up" if r["state"] in ("Still in uptrend", "Joined the uptrend") else "left" if r["state"] == "Left the uptrend" else "no"}">'
-                  f'<td style="white-space:normal;min-width:160px"><b>{esc(r["name"])}</b></td><td class="sub">{esc(sn(r["sector"]))}</td><td class="num">{r["n"]}</td>'
-                  f'<td class="num">{r["P"]:.0f}% → {r["N"]:.0f}%</td><td>{pill(r["state"])}</td><td class="num">{pc(r["gap"])}</td><td class="num">{pc(r["day"])}</td></tr>' for r in ind],
+         + '<div class="hint">Tap an industry to see its stocks and what changed for each.</div>'
+         + table([f'<tr class="ixr" data-k="{"up" if r["state"] in ("Still in uptrend", "Joined the uptrend") else "left" if r["state"] == "Left the uptrend" else "no"}">'
+                  f'<td style="white-space:normal;min-width:160px"><b>{esc(r["name"])}</b> <span class="ixa">▸</span></td><td class="sub">{esc(sn(r["sector"]))}</td><td class="num">{r["n"]}</td>'
+                  f'<td class="num">{r["P"]:.0f}% → {r["N"]:.0f}%</td><td>{pill(r["state"])}</td><td class="num">{pc(r["gap"])}</td><td class="num">{pc(r["day"])}</td></tr>' + ind_detail(r) for r in ind],
                  f'<th>Industry</th><th>Sector</th><th class="num">Stocks</th><th class="num">In uptrend {PD} close → {NOWT}</th><th>State</th><th class="num">Avg gap {TD}</th><th class="num">Avg {PD} close → {NOWT}</th>', tid="indt")
          + '</div>'),
         ("signals", "Buy signals", f'<div class="card"><h3>New buy signals since last night ({len(new_buy)})</h3>{keys["signals"]}'
@@ -502,7 +524,9 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                 sectors_rising=len(still) + len(tup))
 
 
-CSS = """.g2>*,.steps>*{min-width:0}.card.newc{border:2px solid var(--up);background:#f7fdfa}
+CSS = """.ixr{cursor:pointer}.ixr:hover td{background:rgba(0,0,0,.03)}.ixa{color:var(--mut);display:inline-block;transition:transform .15s}.ixr.open .ixa{transform:rotate(90deg)}
+.ixd>td{background:#f7f8fa;padding:6px 8px 10px!important;white-space:normal!important}.ixt{width:100%;font-size:12.5px}.ixt th,.ixt td{background:transparent}
+.g2>*,.steps>*{min-width:0}.card.newc{border:2px solid var(--up);background:#f7fdfa}
 .gtag{font-size:10px;font-weight:800;color:var(--up);background:var(--upbg);border-radius:6px;padding:0 4px;margin-left:3px;vertical-align:1px}.gtag.ot{color:var(--fg);background:rgba(0,0,0,.06)}.chgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chg h3{gap:6px}
 .cl{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--line);font-size:13px}.cl:first-of-type{border-top:0}
 .cl i{font-style:normal;font-weight:800;width:14px;flex:none;text-align:center}.cg{color:var(--up)}.cb{color:var(--dn)}.cn{color:var(--mut)}
@@ -514,8 +538,9 @@ CSS = """.g2>*,.steps>*{min-width:0}.card.newc{border:2px solid var(--up);backgr
 @media(max-width:1000px){.steps.four{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.steps.four{grid-template-columns:1fr}.st{grid-template-columns:54px 1fr 56px}.st .sub:last-child{display:none}}"""
 
-JS = """(function(){const box=document.getElementById('indf');if(!box)return;const rows=document.querySelectorAll('#indt tbody tr');
-function draw(f){rows.forEach(tr=>tr.hidden=f!=='all'&&tr.dataset.k!==f)}
+JS = """(function(){const box=document.getElementById('indf');if(!box)return;const rows=document.querySelectorAll('#indt tbody tr.ixr');
+rows.forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;const d=tr.nextElementSibling;d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden)});
+function draw(f){rows.forEach(tr=>{tr.hidden=f!=='all'&&tr.dataset.k!==f;tr.nextElementSibling.hidden=true;tr.classList.remove('open')})}
 box.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{box.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b));draw(b.dataset.f)});draw('up')})();"""
 
 
