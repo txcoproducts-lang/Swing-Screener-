@@ -2447,7 +2447,187 @@ def news_html(df, sws, etfs=None, market="stock", suf="", lbl="Strongest stocks"
             f'<script>const NEWS={json.dumps(dict(lead=lead, market=market, suf=suf, lbl=lbl), separators=(",", ":"))};</script>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None, etf_frames=None):
+# ---------------------------------------------------------------- buy signals gained and lost, close by close
+# The user's ask (2026-11-15): the Open page's New / Lost buy signal boxes on the Stocks page, going back 20 closes.
+SIG_DAYS = 20
+
+
+def _sig_day(fr, sectors, bh, k):
+    """Every stock's row on one past close (k closes back, 0 = the latest), scored exactly as the page scores tonight:
+    a buy signal = a Momentum or Pullback setup, not blocked by breadth over 75, in the full uptrend (Super)."""
+    df = pd.DataFrame([r for r in (analyze(t, d) for t, d in fr.items()) if r])
+    if df.empty:
+        return df
+    br = {g: round(float(b.rise.iloc[-1 - k]), 1) for g, b in bh.items() if len(b) > k}
+    mkt_hot = breadth_hot(None, br)
+    obr = overbought(fr, sectors, br)
+    ob = {t: " and ".join(own + ([sec] if sec else [])) for t, (own, sec) in obr.items()}
+    df["sector"] = df.ticker.map(sectors).fillna("")
+    df["ob"] = df.ticker.map(ob).fillna("")
+    would = df.setup.notna()
+    df["blocked"] = would & ((df.ob != "") | bool(mkt_hot))
+    df["buy"] = would & ~df.blocked & df.core
+    df["mkt_hot"] = mkt_hot or ""
+    return df.set_index("ticker")
+
+
+def sig_why_lost(p, n):
+    """Why a stock that had a buy signal on one close (p) doesn't on the next (n), in plain words."""
+    if n is None:
+        return "dropped under the price / volume filter"
+    if not n.core:
+        return "fell out of the uptrend" + (" (under the 150 MA)" if n.x1020 and n.vs50 > 0 else " (10 EMA under the 20 or price under the 50 EMA)")
+    if n.blocked:
+        return "blocked: " + (n.ob or "market breadth over 75")
+    if p.setup == "Momentum":
+        if n.rsi > 80:
+            return f"too hot: RSI {n.rsi:.0f} over 80"
+        if n.rsi < 55:
+            return f"lost momentum: RSI {n.rsi:.0f} under 55"
+        if n.ext > 3:
+            return f"stretched: {n.ext:.1f} ATRs over the 20 EMA"
+        return "fell back from its breakout / 52-week high"
+    if p.setup == "Pullback":
+        return f"bounced: RSI {n.rsi:.0f} back over 50 (pullback over)" if n.rsi > 50 else "no longer near the 20 EMA"
+    return "no longer a setup"
+
+
+def sig_cause(p, n):
+    """What put a new buy signal there, in a few words."""
+    if p is None:
+        return "passed the price / volume filter"
+    if not p.core:
+        return "joined the uptrend"
+    if p.blocked:
+        return "breadth back under 75"
+    if n.setup == "Momentum" and n.brk20 and not p.brk20:
+        return "broke its 20-day high"
+    if n.setup == "Momentum":
+        return "momentum setup"
+    return "pulled back into a setup"
+
+
+def signal_history(frames, sectors, bh, days=SIG_DAYS):
+    """[{date, n, new: [(ticker, sector, cause, move %, gap %)], lost: [(ticker, sector, why, move %)]}] for the last
+    `days` closes, newest first; each close compared with the one before it."""
+    if not frames:
+        return []
+    cal = max(frames.values(), key=len).index
+    cal = cal[cal <= max(d.index[-1] for d in frames.values())][-(days + 1):]
+    rows = {}
+    for k, day in enumerate(reversed(cal)):
+        fr = {t: d.loc[:day] for t, d in frames.items() if len(d) and day in d.index}
+        rows[day] = (_sig_day(fr, sectors, bh, k), fr)
+    out = []
+    for i in range(len(cal) - 1, 0, -1):
+        day, prev = cal[i], cal[i - 1]
+        N, fr = rows[day]
+        P = rows[prev][0]
+        if N.empty or P.empty:
+            continue
+
+        def mv(t):
+            d = fr.get(t)
+            if d is None or len(d) < 2:
+                return 0.0, 0.0
+            return float(d.Close.iloc[-1] / d.Close.iloc[-2] - 1) * 100, float(d.Open.iloc[-1] / d.Close.iloc[-2] - 1) * 100
+        nb, pb = set(N.index[N.buy]), set(P.index[P.buy])
+        new = [(t, N.loc[t].sector, sig_cause(P.loc[t] if t in P.index else None, N.loc[t]), *mv(t)) for t in nb - pb]
+        lost = [(t, P.loc[t].sector, sig_why_lost(P.loc[t], N.loc[t] if t in N.index else None), mv(t)[0]) for t in pb - nb]
+        out.append(dict(date=day.date(), n=len(nb), new=sorted(new, key=lambda x: -x[3]), lost=sorted(lost, key=lambda x: x[3]),
+                        hot=N.mkt_hot.iloc[0] if len(N) else ""))
+    return out
+
+
+def signals_html(hist):
+    """The Signal changes tab: the newest close's New and Lost boxes, then every close of the last 20, tap for its names."""
+    if not hist:
+        return '<h2>Signal changes</h2><div class="hint">Not enough closes yet.</div>'
+    import page_keys as K
+    lbl = lambda d: f"{d:%a %b} {d.day}, 3:00 PM CT close"
+    sh = lambda n: html_esc(SHORT_SECTOR.get(n, n))
+    tk = lambda t: f'<span class="tk" data-tk="{t}">{t}</span>'
+    tag = lambda t, w, good: f'<span class="sgw">{tk(t)}<span class="sgt{"" if good else " bad"}">{html_esc(w)}</span></span>'
+    h0, h1 = hist[0], hist[1] if len(hist) > 1 else None
+    before = f"the {lbl(h1['date'])}" if h1 else "the close before"
+    tot_new, tot_lost = sum(len(h["new"]) for h in hist), sum(len(h["lost"]) for h in hist)
+    box = (f'<div class="sgbox"><div class="sgc sgn"><div class="sgh">New buy signals on the {lbl(h0["date"])}</div>'
+           f'<div class="sgbig up">{len(h0["new"])}</div><div class="sub">no buy signal at {before}, one at this close</div>'
+           f'<div class="sgl">{" ".join(tag(x[0], x[2], True) for x in h0["new"]) or "<span class=sub>none</span>"}</div></div>'
+           f'<div class="sgc sgx"><div class="sgh">Lost buy signals on the {lbl(h0["date"])}</div>'
+           f'<div class="sgbig dn">{len(h0["lost"])}</div><div class="sub">had a buy signal at {before}, gone at this close</div>'
+           f'<div class="sgl">{" ".join(tag(x[0], x[2], False) for x in h0["lost"]) or "<span class=sub>none</span>"}</div></div></div>')
+    mx = max([len(h["new"]) for h in hist] + [len(h["lost"]) for h in hist] + [1])
+
+    def det(L, good):
+        return "".join(
+            f'<div class="sgi"><div>{tk(x[0])} <b class="{"up" if x[3] >= 0 else "dn"}">{x[3]:+.1f}%</b> <span class="sub">{sh(x[1])}</span></div>'
+            f'<div>{html_esc(x[2])}' + (f' <span class="sub">(opened {x[4]:+.1f}%)</span>' if good and abs(x[4]) >= 1 else "") + '</div></div>'
+            for x in L) or '<div class="sub">none</div>'
+    trs = []
+    for i, h in enumerate(hist):
+        prev = hist[i + 1]["date"] if i + 1 < len(hist) else None
+        bn = f'<span class="sgb"><i class="up" style="width:{len(h["new"]) / mx * 100:.0f}%"></i></span>'
+        bl = f'<span class="sgb"><i class="dn" style="width:{len(h["lost"]) / mx * 100:.0f}%"></i></span>'
+        trs.append(f'<tr class="sgr{" open" if i == 0 else ""}"><td><b>{h["date"]:%a %b} {h["date"].day}</b> <span class="sga">▸</span><div class="sub">3:00 PM CT close</div></td><td class="num">{h["n"]}</td><td class="num up">+{len(h["new"])} {bn}</td>'
+                   f'<td class="num dn">−{len(h["lost"])} {bl}</td><td class="num">{len(h["new"]) - len(h["lost"]):+d}</td>'
+                   f'<td class="sub sgh6">{"breadth over 75: no buys" if h["hot"] else ""}</td></tr>')
+        trs.append(f'<tr class="sgd"{"" if i == 0 else " hidden"}><td colspan="6"><div class="sg2">'
+                   f'<div><div class="sgh up">New on the {lbl(h["date"])} ({len(h["new"])})</div><div class="sgt2">{det(h["new"], True)}</div></div>'
+                   f'<div><div class="sgh dn">Lost on the {lbl(h["date"])} ({len(h["lost"])})</div><div class="sgt2">{det(h["lost"], False)}</div></div>'
+                   f'</div><div class="sub" style="margin-top:6px">Compared with the {lbl(prev) if prev else "close before"}.</div></td></tr>')
+    first, last = hist[-1]["date"], hist[0]["date"]
+    key = K.key(K.R("Buy signal", "A Momentum or Pullback setup, in your full uptrend (a Super setup: 10 EMA over the 20, price over the 50 EMA "
+                    "and the 150 MA), not blocked by breadth over 75. The same signal the paper accounts buy."),
+                K.R("New / Lost", "Each close compared with the close before it: new = a buy signal at this close and none at the one before; "
+                    "lost = the other way round. The tag says what put it there or why it's gone."),
+                K.R("Why it's new", "joined the uptrend, breadth back under 75, broke its 20-day high, a momentum setup (RSI 55-80 near the "
+                    "52-week high), or pulled back into a setup (a dip to the 20 EMA). \"Opened\" = that day's gap, when 1% or more."),
+                K.R("Why it's gone", "fell out of the uptrend, blocked by breadth over 75, RSI out of the 55-80 momentum range, stretched over "
+                    "3 ATRs above the 20 EMA, off its breakout / 52-week high, or a pullback that bounced (RSI back over 50)."),
+                K.R("Rows", "One row per close, newest first. Tap a row for its names; tap a ticker for its chart. "
+                    "Buy signals = how many stocks had one at that close."))
+    css = ('<style>.sgbox{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0 16px}.sgc{background:var(--card);border-radius:14px;padding:14px 16px;min-width:0}'
+           '.sgn{border:2px solid var(--up);background:#f7fdfa}.sgx{border:2px solid var(--dn);background:#fffafa}.sgh{font-weight:700;font-size:13px}'
+           '.sgbig{font-size:32px;font-weight:800;line-height:1.15}.sgl{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:13px}'
+           '.sgw{white-space:normal;min-width:0;overflow-wrap:anywhere}.sgw>.tk{white-space:nowrap}.sgt{font-size:10px;font-weight:800;color:var(--up);background:rgba(18,147,107,.1);border-radius:6px;padding:0 4px;margin-left:3px}'
+           '.sgt.bad{color:var(--dn);background:rgba(214,69,61,.1)}#tab-signals .up{color:var(--up)}#tab-signals .dn{color:var(--dn)}'
+           '.sgtab{border-collapse:collapse}.sgtab th{text-align:left;font-size:12px;color:var(--mut);padding:6px;border-bottom:1px solid var(--line)}'
+           '.sgtab td{padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}.sgtab .num{text-align:right}'
+           '.sgr{cursor:pointer}.sgr:hover td{background:rgba(0,0,0,.025)}.sga{color:var(--mut);display:inline-block;transition:transform .15s}.sgr.open .sga{transform:rotate(90deg)}'
+           '.sgb{display:inline-block;width:60px;height:7px;background:var(--line);border-radius:4px;vertical-align:1px;margin-left:6px;overflow:hidden}'
+           '.sgb i{display:block;height:100%}.sgb i.up{background:var(--up)}.sgb i.dn{background:var(--dn)}'
+           '.sgd>td{background:#f7f8fa;white-space:normal!important}.sg2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.sg2>*{min-width:0}'
+           '.sgt2{font-size:12.5px;text-align:left}.sgi{padding:5px 0;border-bottom:1px solid var(--line);white-space:normal}.sgi>div:last-child{color:var(--fg)}'
+           '.sgd>td{text-align:left}.sgtab td.sgx2,.sgtab th.sgx2{width:1%}'
+           '@media(max-width:760px){.sgbox,.sg2{grid-template-columns:1fr}.sgb{display:none}.sgtab .sgh6{display:none}}</style>')
+    js = ("<script>document.querySelectorAll('tr.sgr').forEach(tr=>tr.addEventListener('click',e=>{if(e.target.closest('.tk'))return;"
+          "const d=tr.nextElementSibling;d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden)}))</script>")
+    return (f'{css}<h2>Buy signals gained and lost, last {len(hist)} closes</h2>{key}'
+            f'<div class="meta">{first:%a %b} {first.day} to {last:%a %b} {last.day}, {last.year}, each at the 3:00 PM CT close: '
+            f'{tot_new} new and {tot_lost} lost in all.</div>{box}'
+            f'<div class="tcard" style="padding:8px 10px"><div style="overflow-x:auto"><table class="sgtab" style="width:100%">'
+            f'<thead><tr><th>Close</th><th class="num">Buy signals</th><th class="num">New</th><th class="num">Lost</th><th class="num">Net</th><th class="sgh6"></th></tr></thead>'
+            f'<tbody>{"".join(trs)}</tbody></table></div></div>{js}')
+
+
+def signals_card(hist):
+    """A short card for the first tab: the newest close's new and lost buy signals, with a link to the last 20 closes."""
+    if not hist:
+        return ""
+    h = hist[0]
+    tk = lambda t: f'<span class="tk" data-tk="{t}">{t}</span>'
+    more = lambda L: " …" if len(L) > 12 else ""
+    return (f'<div class="tcard" style="margin-top:14px"><div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)">'
+            f'Buy signals on the {h["date"]:%a %b} {h["date"].day}, 3:00 PM CT close</div>'
+            f'<div style="font-size:18px;font-weight:800;margin:4px 0"><span style="color:var(--up)">{len(h["new"])} new</span> · '
+            f'<span style="color:var(--dn)">{len(h["lost"])} lost</span> · {h["n"]} in all</div>'
+            f'<div class="sub">New: {" ".join(tk(x[0]) for x in h["new"][:12]) or "none"}{more(h["new"])}</div>'
+            f'<div class="sub">Lost: {" ".join(tk(x[0]) for x in h["lost"][:12]) or "none"}{more(h["lost"])}</div>'
+            f'<div style="margin-top:6px"><a href="#signals">Every close for the last {len(hist)} ›</a></div></div>')
+
+
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None, etf_frames=None, sigh=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -2619,12 +2799,13 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {dt.date.fromisoformat(asof):%a %b} {dt.date.fromisoformat(asof).day}, {asof[:4]}" + (f", {dt.datetime.strptime(live_at, '%H:%M') - dt.timedelta(hours=1):%-I:%M %p} CT (market open, so prices are not closes)" if live_at else ", 3:00 PM CT close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
+    today += signals_card(sigh)
     pinfo = popup_info(df, sws, spy, mkt_hot, charts)
     import search_info                     # the ticker search bar (signals in data/signals.json)
     srch_box, srch_alias = search_info.box(sig), search_info.alias_js(sig)
     srch_css, srch_js = (search_info.CSS, search_info.JS) if sig else ("", "")
     news = news_html(df, sws)
-    tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + (
+    tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + ([("signals", "Signal changes")] if sigh else []) + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
         [("paper", "Paper trading")] if paper_js else []) + ([("backtests", "Backtests")] if bt_js else []) + [("news", "News")]
     tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
@@ -2768,6 +2949,7 @@ Your overbought rule: a stock whose sector's breadth is over the {CFG["OB_BREADT
 call nearest {CFG["TARGET_DELTA"]} delta, ~{CFG["TARGET_DTE"]} DTE, OI ≥ {CFG["MIN_OI"]}, spread ≤ {CFG["MAX_SPREAD_PCT"]:.0f}%. Greeks are Black-Scholes from Yahoo's IV (Yahoo IV can be unreliable; confirm in your broker). When Yahoo has no live bid/ask (after hours, weekends) the last trade is shown and IV is solved from it. Click any ticker for a 4H / daily / weekly / monthly chart (the daily chart has 1Y and 5Y buttons): the Trend view shades uptrends green (EMA10 &gt; EMA20, price &gt; EMA50 and &gt; 150 MA) and downtrends red (all three reversed), with arrows where each trend starts; the Indicators view shows RSI, MACD and Bollinger Bands (the free chart allows about 3 studies at once; swap them from its Indicators menu).
 Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last down candle before a rise of 2+ ATR within 3 bars; orange boxes are bearish blocks, the last up candle before a drop of 2+ ATR. A box ends where price first came back to it; bright boxes haven't been revisited yet. This was the best of 18 versions in a 10-year test on 1,000 stocks, but as support it did no better than random price zones, while bearish blocks held as resistance slightly better than random.
 10y rules vs hold: each stock's last 10 years (less for newer stocks) traded on your rules, minus just holding it, in percentage points (rules +60% and holding +20% shows +40 pts). Buy at the next open after a close with a Momentum or Pullback setup on the strongest sector, strongest stock list, as Your system buys: in your uptrend, its sector in an upswing and not over the {CFG["OB_BREADTH"]} line, the market not over it; sell at the next open after a close with EMA10 under EMA20 and the price under EMA50, or on an {BT["STOP"]:.0%} drop. That is your 4-hour exit on daily bars, since Yahoo only keeps about 2 years of 4-hour data. Click a ticker for the full numbers, SPY over the same years and every trade. Cash earns nothing while out, no trading costs; past results don't promise future ones. Not financial advice.</div></section>
+<section class="tab" id="tab-signals" hidden>{signals_html(sigh) if sigh else ""}</section>
 <section class="tab" id="tab-picks" hidden>{picks_html(lists, earn, calls)}</section>
 <section class="tab" id="tab-ovtlyr" hidden>{ov_html(ov)}</section>
 <section class="tab" id="tab-paper" hidden>{paper_html}</section>
@@ -3276,7 +3458,15 @@ def main():
         import traceback
         traceback.print_exc()
         print("  ticker search failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames)
+    sigh = None
+    try:                                   # buy signals gained and lost on each of the last 20 closes (user's ask, 2026-11-15)
+        sigh = signal_history(frames, sectors, bh)
+        print(f"  signal changes: {len(sigh)} closes, latest {len(sigh[0]['new'])} new / {len(sigh[0]['lost'])} lost" if sigh else "  signal changes: none")
+    except Exception as e:                 # an extra; never block the page
+        import traceback
+        traceback.print_exc()
+        print("  signal changes failed:", e)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames, sigh)
     html = dated.stamp(html, DL)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")

@@ -47,6 +47,13 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
     log(`[${name}] backtests, 10-year view: ${await p.$eval("#btx .bx-card .bx-num", e => e.innerText).catch(() => "?")}`);
     await p.screenshot({ path: `${out}/${name}-6-backtests-10y.png` });
   }
+  if (await p.$('nav.tabs a[data-tab="signals"]')) {      // buy signals gained and lost, last 20 closes (stocks)
+    await click0('nav.tabs a[data-tab="signals"]'); await p.waitForTimeout(400);
+    log(`[${name}] signal changes: ${await p.$$eval("#tab-signals tr.sgr", r => r.length)} closes; ` +
+        `${await p.$eval("#tab-signals .sgbox", e => e.innerText.replace(/\n/g, " | ").slice(0, 300)).catch(() => "no boxes")}; ` +
+        `width ${await p.evaluate(() => document.documentElement.scrollWidth)}`);
+    await p.screenshot({ path: `${out}/${name}-8-signals.png`, fullPage: true });
+  }
   if (await p.$("nav.tabs")) { await click0('nav.tabs a[data-tab="today"]'); await p.waitForTimeout(300); }
   // paper trading tiles and each account's breakdown
   await p.waitForSelector(".pp-tile", { timeout: 15000 }).catch(() => {});
