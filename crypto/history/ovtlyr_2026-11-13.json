@@ -43,7 +43,7 @@
   },
   "breadth": {
    "pct": 4.0,
-   "ema": 5.2
+   "ema": 5.1
   }
  },
  "sectors": {
@@ -144,13 +144,13 @@
   },
   "Payments": {
    "ok": false,
-   "n": 8,
+   "n": 9,
    "bull": 0.0,
-   "bull_ema": 10.6,
-   "rsi": 31.3,
-   "rsi_prev": 33.2,
+   "bull_ema": 9.5,
+   "rsi": 30.6,
+   "rsi_prev": 32.8,
    "miss": [
-    "breadth 0% not above its 10-day average 11%",
+    "breadth 0% not above its 10-day average 9%",
     "RSI 31 not rising (was 33)"
    ]
   }
@@ -522,6 +522,14 @@
    "DeFi",
    19.2609,
    38.2,
+   null,
+   "0000-011-"
+  ],
+  [
+   "BTC",
+   "Payments",
+   68249.3,
+   25.0,
    null,
    "0000-011-"
   ],
