@@ -472,7 +472,7 @@ const st=document.querySelector('#tab-today .step');if(st)box.push('<div>'+sigCl
 const vx=document.querySelector('#tab-market .vix');if(vx)box.push('<div><h4>VIX</h4>'+sigClone(vx)+'</div>');
 const cd=document.querySelector('#tab-market .cards');if(cd)box.push('<div class="svw"><h4>Market cards</h4>'+sigClone(cd)+'</div>');
 vis.push('<div class="sv">'+box.join('')+'</div>');
-return '<div class="nt">The same charts and pictures as on the page. <button class="gochart" onclick="const b=document.querySelector(\'#cm .box\');b.scrollTo({top:document.getElementById(\'cmw\').offsetTop-60,behavior:\'smooth\'})">Jump to the '+(e?'ticker\'s ':'')+'chart ↓</button></div>'+vis.join('')}
+return '<div class="nt">Its sector and the market, the same charts and pictures as on the page. <button class="gochart" onclick="const b=document.querySelector(\'#cm .box\');b.scrollTo({top:document.getElementById(\'cmw\').offsetTop-60,behavior:\'smooth\'})">Back up to the '+(e?'ticker\'s ':'')+'chart ↑</button></div>'+vis.join('')}
 // move the page's live charts into their slots; sigRestore() puts them back where they were
 let sigMoved=[];
 function sigRestore(){sigMoved.forEach(([el,mk])=>{if(mk.parentNode)mk.parentNode.replaceChild(el,mk)});sigMoved=[]}

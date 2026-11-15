@@ -2961,7 +2961,7 @@ Order blocks (Trend view, daily chart): blue boxes are bullish blocks, the last 
 <div class="bar iv rng"><button class="on" data-rng="1Y">1Y</button><button data-rng="5Y">5Y</button></div>
 <div class="bar iv obb"><button class="on" id="obt" title="Show or hide order blocks">Order blocks</button></div>
 <span class="sp"></span><a id="cml" target="_blank" rel="noopener">Open on TradingView ↗</a><button class="x" aria-label="Close">×</button></div>
-<div id="cmi" hidden></div><details id="cms" hidden></details><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmk">{hk('chart')}</div><div id="cmw"><div id="cmc"></div></div></div></div>
+<div id="cmi" hidden></div><div id="cmbt" class="hint" hidden></div><div id="cmlg" class="hint"></div><div id="cmk">{hk('chart')}</div><div id="cmw"><div id="cmc"></div></div><details id="cms" hidden></details></div></div>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---- tabs: one section at a time; the address keeps the tab (#stocks) so a reload or a shared link opens it
@@ -3161,7 +3161,7 @@ tvLib().then(()=>new TradingView.widget({{container_id:'cmc',autosize:true,symbo
 theme:dark?'dark':'light',style:'1',locale:'en',allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,
 studies:['RSI@tv-basicstudies','MACD@tv-basicstudies','BB@tv-basicstudies']}}))
 .catch(()=>{{document.getElementById('cmw').innerHTML='<div class="hint" style="padding:16px">Chart could not load. Use “Open on TradingView” above.</div>'}})}}
-function openChart(t,all){{cmSym=t;document.getElementById('cmt').textContent=t;if(window.sigDraw)sigDraw(t,all);
+function openChart(t,all){{cmSym=t;document.getElementById('cmt').textContent=t;if(window.sigDraw)sigDraw(t,true);
 document.getElementById('cml').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSym(t));
 cm.hidden=false;document.body.style.overflow='hidden';cmInfo(t);draw();btDraw(t)}}
 function cmInfo(t){{const el=document.getElementById('cmi');if(!PINFO){{el.hidden=true;return}}const sec=PINFO.t[t];
