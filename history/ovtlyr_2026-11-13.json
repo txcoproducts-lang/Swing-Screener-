@@ -21,12 +21,12 @@
    {
     "k": "breadth",
     "ok": true,
-    "text": "Market breadth: 73% of stocks have the 10 EMA above the 20, above its 10-day average of 70%"
+    "text": "Market breadth: 70.0% of stocks have the 10 EMA above the 20, above its 10-day average of 69.6%"
    },
    {
     "k": "hot",
     "ok": true,
-    "text": "Your overbought rule: 68% of S&P 500 stocks rising, not over the 75 line"
+    "text": "Your overbought rule: 65% of S&P 500 stocks rising, not over the 75 line"
    }
   ],
   "spy": {
@@ -42,26 +42,26 @@
    "cci": -46.6
   },
   "breadth": {
-   "pct": 73.2,
-   "ema": 70.2
+   "pct": 70.0,
+   "ema": 69.6
   }
  },
  "sectors": {
   "Communication Services": {
    "ok": true,
    "n": 22,
-   "bull": 71.4,
-   "bull_ema": 55.2,
-   "rsi": 52.0,
+   "bull": 59.1,
+   "bull_ema": 53.0,
+   "rsi": 53.4,
    "rsi_prev": 51.8,
    "miss": []
   },
   "Consumer Discretionary": {
    "ok": false,
    "n": 47,
-   "bull": 85.7,
-   "bull_ema": 83.3,
-   "rsi": 55.5,
+   "bull": 85.1,
+   "bull_ema": 83.1,
+   "rsi": 55.6,
    "rsi_prev": 55.2,
    "miss": [
     "overbought by your rule: 81% of its S&P 500 stocks rising, over the 75 line"
@@ -70,9 +70,9 @@
   "Consumer Staples": {
    "ok": false,
    "n": 32,
-   "bull": 83.9,
-   "bull_ema": 86.9,
-   "rsi": 60.1,
+   "bull": 84.4,
+   "bull_ema": 87.0,
+   "rsi": 60.2,
    "rsi_prev": 57.5,
    "miss": [
     "overbought by your rule: 81% of its S&P 500 stocks rising, over the 75 line",
@@ -82,42 +82,42 @@
   "Energy": {
    "ok": false,
    "n": 21,
-   "bull": 5.6,
-   "bull_ema": 22.7,
-   "rsi": 48.7,
+   "bull": 4.8,
+   "bull_ema": 22.5,
+   "rsi": 49.1,
    "rsi_prev": 46.6,
    "miss": [
-    "breadth 6% not above its 10-day average 23%"
+    "breadth 5% not above its 10-day average 23%"
    ]
   },
   "Financials": {
    "ok": false,
    "n": 76,
-   "bull": 87.0,
-   "bull_ema": 80.4,
-   "rsi": 58.6,
+   "bull": 84.2,
+   "bull_ema": 79.9,
+   "rsi": 58.7,
    "rsi_prev": 56.8,
    "miss": [
-    "overbought by your rule: 81% of its S&P 500 stocks rising, over the 75 line"
+    "overbought by your rule: 78% of its S&P 500 stocks rising, over the 75 line"
    ]
   },
   "Health Care": {
    "ok": false,
    "n": 60,
-   "bull": 92.5,
-   "bull_ema": 91.5,
-   "rsi": 58.7,
+   "bull": 93.3,
+   "bull_ema": 91.6,
+   "rsi": 58.6,
    "rsi_prev": 57.9,
    "miss": [
     "excluded in the plan",
-    "overbought by your rule: 91% of its S&P 500 stocks rising, over the 75 line"
+    "overbought by your rule: 92% of its S&P 500 stocks rising, over the 75 line"
    ]
   },
   "Industrials": {
    "ok": false,
    "n": 81,
-   "bull": 70.0,
-   "bull_ema": 65.2,
+   "bull": 67.9,
+   "bull_ema": 64.8,
    "rsi": 54.9,
    "rsi_prev": 55.1,
    "miss": [
@@ -127,46 +127,46 @@
   "Information Technology": {
    "ok": false,
    "n": 76,
-   "bull": 32.8,
-   "bull_ema": 34.9,
-   "rsi": 46.5,
+   "bull": 30.3,
+   "bull_ema": 34.4,
+   "rsi": 46.3,
    "rsi_prev": 47.5,
    "miss": [
-    "breadth 33% not above its 10-day average 35%",
-    "RSI 46.5 not above SPY's 47.1",
-    "RSI 47 not rising (was 48)"
+    "breadth 30% not above its 10-day average 34%",
+    "RSI 46 not above SPY's 47",
+    "RSI 46 not rising (was 48)"
    ]
   },
   "Materials": {
    "ok": false,
    "n": 24,
-   "bull": 71.4,
-   "bull_ema": 74.1,
-   "rsi": 52.4,
+   "bull": 70.8,
+   "bull_ema": 74.0,
+   "rsi": 52.2,
    "rsi_prev": 52.4,
    "miss": [
     "breadth 71% not above its 10-day average 74%",
-    "RSI 52.4 not rising (was 52.4)"
+    "RSI 52.2 not rising (was 52.4)"
    ]
   },
   "Real Estate": {
    "ok": true,
    "n": 30,
-   "bull": 89.3,
-   "bull_ema": 85.4,
-   "rsi": 56.6,
+   "bull": 86.7,
+   "bull_ema": 85.0,
+   "rsi": 56.8,
    "rsi_prev": 56.2,
    "miss": []
   },
   "Utilities": {
    "ok": false,
    "n": 31,
-   "bull": 93.1,
-   "bull_ema": 88.5,
-   "rsi": 62.1,
+   "bull": 90.3,
+   "bull_ema": 88.0,
+   "rsi": 62.0,
    "rsi_prev": 60.0,
    "miss": [
-    "overbought by your rule: 90% of its S&P 500 stocks rising, over the 75 line"
+    "overbought by your rule: 87% of its S&P 500 stocks rising, over the 75 line"
    ]
   }
  },
@@ -203,7 +203,7 @@
     {
      "k": "hot",
      "ok": true,
-     "text": "Your overbought rule: 68% of S&P 500 stocks rising, not over the 75 line"
+     "text": "Your overbought rule: 65% of S&P 500 stocks rising, not over the 75 line"
     }
    ],
    "sell": [
@@ -252,7 +252,7 @@
     {
      "k": "hot",
      "ok": true,
-     "text": "Your overbought rule: 68% of S&P 500 stocks rising, not over the 75 line"
+     "text": "Your overbought rule: 65% of S&P 500 stocks rising, not over the 75 line"
     }
    ],
    "sell": [
@@ -272,7 +272,7 @@
  },
  "setups": [],
  "funnel": {
-  "signal": 14,
+  "signal": 20,
   "rules": 3,
   "sector": 0,
   "hot": 0,
@@ -355,6 +355,16 @@
    null
   ],
   [
+   "FOXA",
+   "Communication Services",
+   68.42,
+   57.0,
+   8,
+   "011111111",
+   2.48,
+   null
+  ],
+  [
    "RMD",
    "Health Care",
    239.53,
@@ -433,6 +443,16 @@
    "011111111",
    8.82,
    "2027-02-09"
+  ],
+  [
+   "VICI",
+   "Real Estate",
+   25.01,
+   58.5,
+   15,
+   "011111111",
+   0.5,
+   null
   ],
   [
    "WY",
@@ -535,6 +555,16 @@
    null
   ],
   [
+   "ABNB",
+   "Consumer Discretionary",
+   186.78,
+   60.9,
+   21,
+   "01111011-",
+   6.73,
+   null
+  ],
+  [
    "ADP",
    "Industrials",
    309.93,
@@ -565,6 +595,16 @@
    null
   ],
   [
+   "ABBV",
+   "Health Care",
+   295.03,
+   62.9,
+   44,
+   "01111011-",
+   6.88,
+   null
+  ],
+  [
    "HST",
    "Real Estate",
    25.5,
@@ -572,6 +612,16 @@
    32,
    "01101111-",
    0.59,
+   null
+  ],
+  [
+   "VLTO",
+   "Industrials",
+   118.25,
+   79.9,
+   26,
+   "01111011-",
+   2.71,
    null
   ],
   [
@@ -602,6 +652,16 @@
    7,
    "01111011-",
    1.07,
+   null
+  ],
+  [
+   "XYZ",
+   "Financials",
+   84.58,
+   57.4,
+   7,
+   "01111011-",
+   3.33,
    null
   ],
   [
@@ -645,6 +705,16 @@
    null
   ],
   [
+   "ANET",
+   "Information Technology",
+   197.29,
+   55.2,
+   1,
+   "11101011-",
+   11.99,
+   null
+  ],
+  [
    "BAX",
    "Health Care",
    25.81,
@@ -662,6 +732,16 @@
    14,
    "01111011-",
    6.81,
+   null
+  ],
+  [
+   "ALLE",
+   "Industrials",
+   191.98,
+   70.1,
+   20,
+   "01111011-",
+   4.44,
    null
   ],
   [
@@ -755,6 +835,16 @@
    null
   ],
   [
+   "GDDY",
+   "Information Technology",
+   114.12,
+   56.1,
+   26,
+   "01111011-",
+   4.44,
+   null
+  ],
+  [
    "DHR",
    "Health Care",
    233.02,
@@ -762,6 +852,16 @@
    41,
    "01111011-",
    6.39,
+   null
+  ],
+  [
+   "FTV",
+   "Industrials",
+   67.92,
+   71.2,
+   28,
+   "01111011-",
+   1.61,
    null
   ],
   [
@@ -812,6 +912,16 @@
    23,
    "01111011-",
    2.51,
+   null
+  ],
+  [
+   "GEHC",
+   "Health Care",
+   83.02,
+   68.1,
+   23,
+   "01111011-",
+   2.34,
    null
   ],
   [
@@ -935,6 +1045,16 @@
    null
   ],
   [
+   "PYPL",
+   "Financials",
+   59.28,
+   57.7,
+   25,
+   "01111011-",
+   1.54,
+   null
+  ],
+  [
    "PRU",
    "Financials",
    123.55,
@@ -993,6 +1113,16 @@
    "011111110",
    2.37,
    "2026-11-17"
+  ],
+  [
+   "SOLV",
+   "Health Care",
+   89.08,
+   55.3,
+   5,
+   "01111011-",
+   2.83,
+   null
   ],
   [
    "BF-B",
@@ -1255,6 +1385,16 @@
    null
   ],
   [
+   "KHC",
+   "Consumer Staples",
+   25.11,
+   58.9,
+   16,
+   "01111011-",
+   0.7,
+   null
+  ],
+  [
    "BRO",
    "Financials",
    71.93,
@@ -1312,6 +1452,16 @@
    16,
    "01111011-",
    1.31,
+   null
+  ],
+  [
+   "CVNA",
+   "Consumer Discretionary",
+   72.37,
+   57.2,
+   10,
+   "01111011-",
+   3.82,
    null
   ],
   [
@@ -1422,6 +1572,26 @@
    11,
    "01111011-",
    1.91,
+   null
+  ],
+  [
+   "APP",
+   "Communication Services",
+   409.1,
+   72.6,
+   6,
+   "01110111-",
+   21.94,
+   null
+  ],
+  [
+   "CFG",
+   "Financials",
+   65.26,
+   53.0,
+   4,
+   "10111011-",
+   1.51,
    null
   ],
   [
@@ -1605,6 +1775,16 @@
    null
   ],
   [
+   "OTIS",
+   "Industrials",
+   77.5,
+   62.3,
+   21,
+   "01111011-",
+   1.71,
+   null
+  ],
+  [
    "AON",
    "Financials",
    338.31,
@@ -1662,6 +1842,16 @@
    25,
    "01111011-",
    0.58,
+   null
+  ],
+  [
+   "ARES",
+   "Financials",
+   134.61,
+   59.0,
+   13,
+   "01111011-",
+   4.72,
    null
   ],
   [
@@ -1732,6 +1922,16 @@
    25,
    "01111011-",
    1.37,
+   null
+  ],
+  [
+   "CEG",
+   "Utilities",
+   280.2,
+   56.5,
+   1,
+   "11101011-",
+   13.46,
    null
   ],
   [
@@ -1832,6 +2032,16 @@
    18,
    "01111011-",
    1.39,
+   null
+  ],
+  [
+   "UBER",
+   "Industrials",
+   69.69,
+   52.5,
+   3,
+   "10111011-",
+   2.05,
    null
   ],
   [
@@ -1955,6 +2165,26 @@
    null
   ],
   [
+   "PSX",
+   "Energy",
+   264.9,
+   48.6,
+   null,
+   "00111011-",
+   10.31,
+   null
+  ],
+  [
+   "CDW",
+   "Information Technology",
+   171.65,
+   61.8,
+   23,
+   "01101011-",
+   7.55,
+   null
+  ],
+  [
    "SWKS",
    "Information Technology",
    89.94,
@@ -1992,6 +2222,16 @@
    27,
    "01101011-",
    3.25,
+   null
+  ],
+  [
+   "IQV",
+   "Health Care",
+   265.12,
+   46.5,
+   4,
+   "11001011-",
+   9.1,
    null
   ],
   [
@@ -2205,6 +2445,16 @@
    null
   ],
   [
+   "HLT",
+   "Consumer Discretionary",
+   373.09,
+   64.7,
+   33,
+   "01110011-",
+   8.27,
+   null
+  ],
+  [
    "CSX",
    "Industrials",
    52.05,
@@ -2242,6 +2492,16 @@
    10,
    "01011011-",
    4.34,
+   null
+  ],
+  [
+   "WDAY",
+   "Information Technology",
+   196.45,
+   51.4,
+   null,
+   "00111011-",
+   7.08,
    null
   ],
   [
@@ -2405,6 +2665,16 @@
    null
   ],
   [
+   "DOW",
+   "Materials",
+   33.04,
+   58.6,
+   21,
+   "01101011-",
+   1.1,
+   null
+  ],
+  [
    "PNW",
    "Utilities",
    107.0,
@@ -2505,6 +2775,16 @@
    null
   ],
   [
+   "META",
+   "Communication Services",
+   641.69,
+   47.8,
+   null,
+   "00110111-",
+   22.78,
+   null
+  ],
+  [
    "ETR",
    "Utilities",
    111.15,
@@ -2545,6 +2825,16 @@
    null
   ],
   [
+   "IR",
+   "Industrials",
+   85.06,
+   62.7,
+   10,
+   "01101011-",
+   2.56,
+   null
+  ],
+  [
    "IVZ",
    "Financials",
    28.92,
@@ -2572,6 +2862,26 @@
    90,
    "01101011-",
    0.05,
+   null
+  ],
+  [
+   "FANG",
+   "Energy",
+   184.93,
+   44.1,
+   null,
+   "00111011-",
+   5.98,
+   null
+  ],
+  [
+   "NWSA",
+   "Communication Services",
+   26.97,
+   39.3,
+   null,
+   "00011111-",
+   0.84,
    null
   ],
   [
@@ -2635,6 +2945,16 @@
    null
   ],
   [
+   "NWS",
+   "Communication Services",
+   29.89,
+   41.1,
+   null,
+   "00011111-",
+   0.94,
+   null
+  ],
+  [
    "IRM",
    "Real Estate",
    113.75,
@@ -2652,6 +2972,16 @@
    16,
    "01011011-",
    5.33,
+   null
+  ],
+  [
+   "NCLH",
+   "Consumer Discretionary",
+   17.96,
+   58.2,
+   25,
+   "01101011-",
+   0.77,
    null
   ],
   [
@@ -2685,6 +3015,16 @@
    null
   ],
   [
+   "ZTS",
+   "Health Care",
+   83.82,
+   59.3,
+   24,
+   "01111010-",
+   2.55,
+   null
+  ],
+  [
    "MCD",
    "Consumer Discretionary",
    271.97,
@@ -2692,6 +3032,16 @@
    17,
    "01101011-",
    6.22,
+   null
+  ],
+  [
+   "INVH",
+   "Real Estate",
+   26.85,
+   47.8,
+   null,
+   "00011111-",
+   0.52,
    null
   ],
   [
@@ -2845,6 +3195,26 @@
    null
   ],
   [
+   "EXE",
+   "Energy",
+   88.53,
+   49.0,
+   null,
+   "00111011-",
+   2.42,
+   null
+  ],
+  [
+   "GOOG",
+   "Communication Services",
+   292.52,
+   39.5,
+   null,
+   "00101111-",
+   10.13,
+   null
+  ],
+  [
    "CHRW",
    "Industrials",
    134.46,
@@ -2905,6 +3275,26 @@
    null
   ],
   [
+   "MRNA",
+   "Health Care",
+   223.37,
+   49.7,
+   65,
+   "01001011-",
+   19.84,
+   null
+  ],
+  [
+   "OKTA",
+   "Information Technology",
+   182.87,
+   43.5,
+   null,
+   "00011011-",
+   13.15,
+   null
+  ],
+  [
    "CRL",
    "Health Care",
    337.97,
@@ -2942,6 +3332,16 @@
    133,
    "01001011-",
    7.51,
+   null
+  ],
+  [
+   "VEEV",
+   "Health Care",
+   301.53,
+   48.5,
+   97,
+   "01001011-",
+   8.89,
    null
   ],
   [
@@ -3275,6 +3675,26 @@
    null
   ],
   [
+   "SYF",
+   "Financials",
+   72.25,
+   43.9,
+   null,
+   "00011011-",
+   2.25,
+   null
+  ],
+  [
+   "Q",
+   "Information Technology",
+   118.36,
+   47.8,
+   2,
+   "10001011-",
+   6.26,
+   null
+  ],
+  [
    "ON",
    "Information Technology",
    71.06,
@@ -3385,6 +3805,26 @@
    null
   ],
   [
+   "NOW",
+   "Information Technology",
+   102.25,
+   31.9,
+   null,
+   "00011011-",
+   6.23,
+   null
+  ],
+  [
+   "VST",
+   "Utilities",
+   133.01,
+   46.1,
+   null,
+   "00101011-",
+   7.86,
+   null
+  ],
+  [
    "MKC",
    "Consumer Staples",
    46.96,
@@ -3465,6 +3905,26 @@
    null
   ],
   [
+   "RDDT",
+   "Communication Services",
+   98.45,
+   33.8,
+   null,
+   "00001111-",
+   8.07,
+   null
+  ],
+  [
+   "DELL",
+   "Information Technology",
+   344.53,
+   36.1,
+   null,
+   "00001011-",
+   35.85,
+   null
+  ],
+  [
    "AMD",
    "Information Technology",
    534.06,
@@ -3472,6 +3932,26 @@
    null,
    "00100011-",
    41.94,
+   null
+  ],
+  [
+   "CRWD",
+   "Information Technology",
+   226.61,
+   42.1,
+   null,
+   "00001011-",
+   14.14,
+   null
+  ],
+  [
+   "HPE",
+   "Information Technology",
+   48.29,
+   39.2,
+   null,
+   "00001011-",
+   3.71,
    null
   ],
   [
@@ -3492,6 +3972,26 @@
    null,
    "00001011-",
    10.65,
+   null
+  ],
+  [
+   "PANW",
+   "Information Technology",
+   322.24,
+   38.6,
+   null,
+   "00001011-",
+   19.36,
+   null
+  ],
+  [
+   "TWLO",
+   "Information Technology",
+   211.21,
+   38.6,
+   null,
+   "00001011-",
+   14.89,
    null
   ],
   [
@@ -3532,6 +4032,16 @@
    null,
    "00001011-",
    17.17,
+   null
+  ],
+  [
+   "P",
+   "Information Technology",
+   107.99,
+   43.0,
+   null,
+   "00001011-",
+   9.14,
    null
   ],
   [
@@ -3595,6 +4105,26 @@
    null
   ],
   [
+   "KEYS",
+   "Information Technology",
+   297.68,
+   43.1,
+   null,
+   "00001011-",
+   16.1,
+   null
+  ],
+  [
+   "PLTR",
+   "Information Technology",
+   167.99,
+   39.5,
+   null,
+   "00001011-",
+   8.83,
+   null
+  ],
+  [
    "SNPS",
    "Information Technology",
    455.2,
@@ -3612,6 +4142,26 @@
    null,
    "00001011-",
    4.27,
+   null
+  ],
+  [
+   "BE",
+   "Industrials",
+   191.99,
+   43.5,
+   null,
+   "00001011-",
+   21.69,
+   null
+  ],
+  [
+   "AMCR",
+   "Materials",
+   43.8,
+   43.7,
+   null,
+   "00001011-",
+   1.28,
    null
   ],
   [
@@ -3642,6 +4192,16 @@
    8,
    "00001011-",
    5.19,
+   null
+  ],
+  [
+   "SW",
+   "Materials",
+   42.35,
+   47.3,
+   8,
+   "00001011-",
+   1.45,
    null
   ],
   [
@@ -3685,6 +4245,16 @@
    null
   ],
   [
+   "DDOG",
+   "Information Technology",
+   184.16,
+   31.5,
+   null,
+   "00001011-",
+   14.44,
+   null
+  ],
+  [
    "KLAC",
    "Information Technology",
    152.32,
@@ -3692,6 +4262,16 @@
    null,
    "00001011-",
    9.54,
+   null
+  ],
+  [
+   "DASH",
+   "Consumer Discretionary",
+   171.51,
+   41.1,
+   null,
+   "00001011-",
+   9.44,
    null
   ],
   [
@@ -3745,6 +4325,16 @@
    null
   ],
   [
+   "CARR",
+   "Industrials",
+   54.2,
+   46.5,
+   null,
+   "00001011-",
+   1.66,
+   null
+  ],
+  [
    "BKNG",
    "Consumer Discretionary",
    159.58,
@@ -3772,6 +4362,16 @@
    null,
    "00001011-",
    14.13,
+   null
+  ],
+  [
+   "HOOD",
+   "Financials",
+   77.86,
+   33.2,
+   null,
+   "00001011-",
+   5.17,
    null
   ],
   [
@@ -3835,6 +4435,16 @@
    null
   ],
   [
+   "VRT",
+   "Industrials",
+   202.07,
+   45.1,
+   null,
+   "00001011-",
+   17.25,
+   null
+  ],
+  [
    "NVDA",
    "Information Technology",
    162.85,
@@ -3885,6 +4495,16 @@
    null
   ],
   [
+   "COIN",
+   "Financials",
+   127.65,
+   32.4,
+   null,
+   "00001011-",
+   9.55,
+   null
+  ],
+  [
    "ALB",
    "Materials",
    93.53,
@@ -3915,6 +4535,16 @@
    null
   ],
   [
+   "SNDK",
+   "Information Technology",
+   885.01,
+   33.9,
+   null,
+   "00000011-",
+   106.8,
+   null
+  ],
+  [
    "ADI",
    "Information Technology",
    397.97,
@@ -3922,6 +4552,16 @@
    null,
    "00000011-",
    18.71,
+   null
+  ],
+  [
+   "LITE",
+   "Information Technology",
+   596.62,
+   37.4,
+   null,
+   "00000011-",
+   74.25,
    null
   ],
   [
@@ -3962,6 +4602,16 @@
    null,
    "00000011-",
    15.35,
+   null
+  ],
+  [
+   "GEV",
+   "Industrials",
+   803.13,
+   41.5,
+   null,
+   "00000011-",
+   57.27,
    null
   ],
   [
@@ -4135,7 +4785,7 @@
     70.0,
     71.0,
     71.0,
-    73.2
+    70.0
    ],
    [
     66.1,
@@ -4200,7 +4850,7 @@
     70.1,
     70.4,
     70.6,
-    71.5
+    70.4
    ],
    [
     65.9,
@@ -4265,7 +4915,7 @@
     68.8,
     69.2,
     69.5,
-    70.2
+    69.6
    ]
   ],
   "spy": [
@@ -4399,7 +5049,7 @@
       93.3,
       93.3,
       91.7,
-      92.5
+      93.3
      ],
      [
       84.0,
@@ -4464,7 +5114,7 @@
       92.5,
       92.8,
       92.4,
-      92.4
+      92.7
      ],
      [
       82.7,
@@ -4529,7 +5179,7 @@
       90.7,
       91.2,
       91.3,
-      91.5
+      91.6
      ]
     ],
     "heat": [
@@ -4595,7 +5245,7 @@
      60.3,
      60.2,
      57.9,
-     58.7
+     58.6
     ]
    },
    "Information Technology": {
@@ -4663,7 +5313,7 @@
       30.3,
       31.6,
       34.2,
-      32.8
+      30.3
      ],
      [
       72.7,
@@ -4728,7 +5378,7 @@
       32.4,
       32.1,
       32.8,
-      32.8
+      32.0
      ],
      [
       67.3,
@@ -4793,7 +5443,7 @@
       36.5,
       35.6,
       35.4,
-      34.9
+      34.4
      ]
     ],
     "heat": [
@@ -4859,7 +5509,7 @@
      44.6,
      48.2,
      47.5,
-     46.5
+     46.3
     ]
    },
    "Consumer Discretionary": {
@@ -4927,7 +5577,7 @@
       87.2,
       89.4,
       89.4,
-      85.7
+      85.1
      ],
      [
       62.6,
@@ -4992,7 +5642,7 @@
       84.8,
       86.3,
       87.3,
-      86.8
+      86.6
      ],
      [
       63.1,
@@ -5057,7 +5707,7 @@
       79.4,
       81.2,
       82.7,
-      83.3
+      83.1
      ]
     ],
     "heat": [
@@ -5123,7 +5773,7 @@
      59.9,
      58.8,
      55.2,
-     55.5
+     55.6
     ]
    },
    "Financials": {
@@ -5191,7 +5841,7 @@
       81.6,
       82.9,
       82.9,
-      87.0
+      84.2
      ],
      [
       76.0,
@@ -5256,7 +5906,7 @@
       81.8,
       82.1,
       82.4,
-      83.9
+      83.0
      ],
      [
       77.8,
@@ -5321,7 +5971,7 @@
       76.9,
       78.0,
       78.9,
-      80.4
+      79.9
      ]
     ],
     "heat": [
@@ -5387,7 +6037,7 @@
      58.8,
      59.6,
      56.8,
-     58.6
+     58.7
     ]
    },
    "Consumer Staples": {
@@ -5455,7 +6105,7 @@
       87.5,
       87.5,
       87.5,
-      83.9
+      84.4
      ],
      [
       61.7,
@@ -5520,7 +6170,7 @@
       89.3,
       88.7,
       88.3,
-      86.8
+      87.0
      ],
      [
       64.4,
@@ -5585,7 +6235,7 @@
       87.6,
       87.6,
       87.5,
-      86.9
+      87.0
      ]
     ],
     "heat": [
@@ -5651,7 +6301,7 @@
      59.0,
      59.4,
      57.5,
-     60.1
+     60.2
     ]
    },
    "Industrials": {
@@ -5719,7 +6369,7 @@
       65.4,
       67.9,
       67.9,
-      70.0
+      67.9
      ],
      [
       66.2,
@@ -5784,7 +6434,7 @@
       63.9,
       65.3,
       66.1,
-      67.4
+      66.7
      ],
      [
       65.9,
@@ -5849,7 +6499,7 @@
       62.2,
       63.2,
       64.1,
-      65.2
+      64.8
      ]
     ],
     "heat": [
@@ -5983,7 +6633,7 @@
       87.1,
       87.1,
       90.3,
-      93.1
+      90.3
      ],
      [
       12.5,
@@ -6048,7 +6698,7 @@
       87.9,
       87.6,
       88.5,
-      90.1
+      89.1
      ],
      [
       16.7,
@@ -6113,7 +6763,7 @@
       86.8,
       86.8,
       87.5,
-      88.5
+      88.0
      ]
     ],
     "heat": [
@@ -6179,7 +6829,7 @@
      60.7,
      60.8,
      60.0,
-     62.1
+     62.0
     ]
    },
    "Materials": {
@@ -6247,7 +6897,7 @@
       75.0,
       75.0,
       75.0,
-      71.4
+      70.8
      ],
      [
       68.9,
@@ -6312,7 +6962,7 @@
       75.9,
       75.6,
       75.4,
-      74.1
+      73.9
      ],
      [
       69.1,
@@ -6377,7 +7027,7 @@
       74.6,
       74.7,
       74.7,
-      74.1
+      74.0
      ]
     ],
     "heat": [
@@ -6443,7 +7093,7 @@
      54.9,
      55.3,
      52.4,
-     52.4
+     52.2
     ]
    },
    "Real Estate": {
@@ -6511,7 +7161,7 @@
       96.7,
       96.7,
       90.0,
-      89.3
+      86.7
      ],
      [
       34.9,
@@ -6576,7 +7226,7 @@
       89.1,
       91.6,
       91.1,
-      90.5
+      89.6
      ],
      [
       41.1,
@@ -6641,7 +7291,7 @@
       80.4,
       83.4,
       84.6,
-      85.4
+      85.0
      ]
     ],
     "heat": [
@@ -6707,7 +7357,7 @@
      59.5,
      58.6,
      56.2,
-     56.6
+     56.8
     ]
    },
    "Energy": {
@@ -6775,7 +7425,7 @@
       0.0,
       0.0,
       0.0,
-      5.6
+      4.8
      ],
      [
       87.6,
@@ -6840,7 +7490,7 @@
       19.8,
       13.2,
       8.8,
-      7.7
+      7.4
      ],
      [
       82.2,
@@ -6905,7 +7555,7 @@
       39.5,
       32.3,
       26.5,
-      22.7
+      22.5
      ]
     ],
     "heat": [
@@ -6971,7 +7621,7 @@
      39.7,
      44.3,
      46.6,
-     48.7
+     49.1
     ]
    },
    "Communication Services": {
@@ -7039,7 +7689,7 @@
       59.1,
       59.1,
       59.1,
-      71.4
+      59.1
      ],
      [
       68.7,
@@ -7104,7 +7754,7 @@
       53.7,
       55.5,
       56.7,
-      61.6
+      57.5
      ],
      [
       66.4,
@@ -7169,7 +7819,7 @@
       47.9,
       50.0,
       51.6,
-      55.2
+      53.0
      ]
     ],
     "heat": [
@@ -7235,7 +7885,7 @@
      53.2,
      55.0,
      51.8,
-     52.0
+     53.4
     ]
    }
   }
