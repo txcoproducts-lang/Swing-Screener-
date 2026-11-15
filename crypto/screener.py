@@ -18,6 +18,16 @@ What differs from the stock version, because crypto is different:
 import argparse, datetime as dt, json, math, sys
 from collections import Counter
 from pathlib import Path
+import zoneinfo
+
+
+def CRYPTO_CLOSE(asof, short=False, day=False):
+    """When a daily crypto bar closes, in Central time: midnight UTC after its day (6 PM CT in winter, 7 PM in summer)."""
+    t = (dt.datetime.fromisoformat(asof[:10]) + dt.timedelta(days=1)).replace(tzinfo=dt.timezone.utc).astimezone(zoneinfo.ZoneInfo("America/Chicago"))
+    tm = f"{t:%-I:%M %p} CT"
+    if short:
+        return f"{t:%a} {tm}" if day else tm
+    return f"{t:%a %b} {t.day}, {t.year}, {tm} close"
 import numpy as np
 import pandas as pd
 
@@ -2286,7 +2296,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
     bt_sec, bt_js = bt_tab(picks)
-    meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof} (daily bars close at midnight UTC) · "
+    meta = ((f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {CRYPTO_CLOSE(asof)} (daily bars close at midnight UTC) · "
             + f"""{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f" · {n_ob} left out as overbought" if n_ob else ""} · coins trading {fusd(CFG["MIN_AVG_VOL"])}+ a day · about 100 of the largest coins, stablecoins left out""")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     pinfo = popup_info(df, sws, spy, mkt_hot, charts)
@@ -2418,7 +2428,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Crypto Screener</h1>
 <nav class="mkt" aria-label="Market"><a href="../">Stocks</a><a class="on" href="./" aria-current="page">Crypto</a><a href="../ovtlyr/">OVTLYR</a><a href="../open/">Open</a></nav>{srch_box}
-<span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {asof}</span></div>
+<span class="reg {rcls}">{reg}</span><span class="asof">Daily bars to midnight UTC · {CRYPTO_CLOSE(asof)}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
@@ -2876,6 +2886,12 @@ def main():
         ov["charted"] = [r[0] for r in ov.get("screen") or [] if (out / "data" / f"{r[0]}.json").exists()]
     for k in ("rules", "hold", "bench", "start"):
         picks[f"bt_{k}"] = picks.ticker.map({t: b[k] for t, b in bts.items()})
+    if str(Path(__file__).resolve().parent.parent) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import dated                           # a date and time on every label (user's rule, 2026-11-15)
+    d0 = dt.date.fromisoformat(asof)
+    DL = dated.labels(asof, d0 - dt.timedelta(days=1), close=CRYPTO_CLOSE(asof, short=True),
+                      open_=CRYPTO_CLOSE((d0 - dt.timedelta(days=1)).isoformat(), short=True, day=True))
     sig = None
     try:                                   # the search bar: every signal per coin, in data/signals.json
         root = str(Path(__file__).resolve().parent.parent)
@@ -2888,13 +2904,14 @@ def main():
                                 spy=etf_frames.get(BENCH), mkt_hot=mkt_hot, lists=lists, ov=ov, picks=picks, secb=secb,
                                 breadth=breadth, skipped=skipped)
         sig["asof"] = asof
-        search_info.write(sig, out)
+        search_info.write(dated.stamp_obj(sig, DL), out)
         print(f"  search: {len(sig['t'])} coins and indexes")
     except Exception as e:                 # an extra; never block the page
         import traceback
         traceback.print_exc()
         print("  search failed:", e)
     html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, {}, {}, None, ov, bh, sw, etf_frames.get(BENCH), sig)
+    html = dated.stamp(html, DL)
     (out / "latest.html").write_text(html, encoding="utf-8")
     picks.to_csv(out / f"screener_{asof}.csv", index=False)
     secb.round(1).to_csv(out / f"sectors_{asof}.csv", index=False)

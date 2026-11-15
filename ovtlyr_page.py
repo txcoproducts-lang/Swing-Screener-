@@ -295,8 +295,8 @@ def build(ov, out_dir):
         i = h.find("</div>", i) + 6 if i >= 0 else 0
         return h[:i] + keys.get(k, "") + h[i:]
     body = "".join(f'<section class="tab" id="p-{k}" hidden>{with_key(k, f())}</section>' for k, _, f in tabs)
-    when = (f'Prices at {ov["live_at"]}' if ov.get("live_at") else f'Close of {dt.date.fromisoformat(ov["asof"]):%a %b} '
-            f'{dt.date.fromisoformat(ov["asof"]).day}')
+    when = (f'Prices at {dt.datetime.strptime(ov["live_at"], "%H:%M") - dt.timedelta(hours=1):%-I:%M %p} CT, {dt.date.fromisoformat(ov["asof"]):%a %b} {dt.date.fromisoformat(ov["asof"]).day} (not a close)' if ov.get("live_at") else f'Close of {dt.date.fromisoformat(ov["asof"]):%a %b} '
+            f'{dt.date.fromisoformat(ov["asof"]).day}, 3:00 PM CT')
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OVTLYR screener</title><style>{CSS}
 {page_keys.CSS}{search_info.CSS}</style></head><body><header><div class="hd"><span class="logo"><i></i>OVTLYR screener</span>
@@ -304,6 +304,9 @@ def build(ov, out_dir):
 <span class="asof">{when}</span></div><nav class="tabs">{nav}</nav></header><main>{body}</main><script>{JS}{search_info.OV_JS}</script></body></html>"""
     d = Path(out_dir) / "ovtlyr"
     d.mkdir(parents=True, exist_ok=True)
+    import dated                           # a date and time on every label (user's rule, 2026-11-15)
+    lv = ov.get("live_at")
+    doc = dated.stamp(doc, dated.labels(ov["asof"], live=(f"{dt.datetime.strptime(lv, '%H:%M') - dt.timedelta(hours=1):%-I:%M %p} CT" if lv else None)))
     (d / "index.html").write_text(doc, encoding="utf-8")
     return dict(ready=len(ready), one=len(one), rows=len(rows))
 

@@ -2616,7 +2616,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                + '</div>') if n_ob or mkt_hot else ""
     paper_js = PAPER_JS.read_text(encoding="utf-8") if PAPER_JS.exists() else ""
     bt_sec, bt_js = bt_tab(picks)
-    meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {asof}" + (f" {live_at} New York time (market open, so prices are not closes)" if live_at else " close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
+    meta = (f'<span class="reg {rcls}">{reg}</span> ' if reg else "") + f"Data as of {dt.date.fromisoformat(asof):%a %b} {dt.date.fromisoformat(asof).day}, {asof[:4]}" + (f", {dt.datetime.strptime(live_at, '%H:%M') - dt.timedelta(hours=1):%-I:%M %p} CT (market open, so prices are not closes)" if live_at else ", 3:00 PM CT close") + " · " + (f"{n_sup} super · {n_reg} regular · {n_m} momentum · {n_p} pullback{f' · {n_ob} left out as overbought' if n_ob else ''} · stocks averaging 1M+ shares/day · "
             "S&amp;P 500 + Nasdaq 100")
     today = today_html(df, sws, spy, lists, ov, mkt_hot, meta)
     pinfo = popup_info(df, sws, spy, mkt_hot, charts)
@@ -2751,7 +2751,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Swing Screener</h1>
 <nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a><a href="open/">Open</a></nav>{srch_box}
-<span class="reg {rcls}">{reg}</span><span class="asof">{"Prices at " + live_at + " New York time, " + asof if live_at else "Closing data · " + asof}</span></div>
+<span class="reg {rcls}">{reg}</span><span class="asof">{f"Prices at {dt.datetime.strptime(live_at, '%H:%M') - dt.timedelta(hours=1):%-I:%M %p} CT, {dt.date.fromisoformat(asof):%a %b} {dt.date.fromisoformat(asof).day}, {asof[:4]} (not a close)" if live_at else "Closing data · " + f"{dt.date.fromisoformat(asof):%a %b} {dt.date.fromisoformat(asof).day}, {asof[:4]}, 3:00 PM CT close"}</span></div>
 <nav class="tabs" aria-label="Sections">{tabs_nav}</nav></header>
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
@@ -3257,6 +3257,10 @@ def main():
             import traceback
             traceback.print_exc()
             print("  OVTLYR page failed:", e)
+    import dated                           # a date and time on every label (user's rule, 2026-11-15)
+    spy_ix = etf_frames["SPY"].index if "SPY" in etf_frames else None
+    DL = dated.labels(asof, spy_ix[-2].date() if spy_ix is not None and len(spy_ix) > 1 else None,
+                      live=f"{now.tz_convert(dated.CT):%-I:%M %p} CT" if live_at else None)
     sig = None
     try:                                   # the ticker search: every signal per ticker, in data/signals.json
         import search_info
@@ -3266,13 +3270,14 @@ def main():
                                 spy=etf_frames.get("SPY"), mkt_hot=mkt_hot, lists=lists, ov=ov, calls=calls, earn=earn,
                                 picks=picks, secb=secb, breadth=breadth, vix=vix, skipped=skipped, names=NAMES)
         sig["asof"] = asof
-        search_info.write(sig, out)
+        search_info.write(dated.stamp_obj(sig, DL), out)
         print(f"  ticker search: {len(sig['t'])} tickers")
     except Exception as e:                 # an extra; never block the page
         import traceback
         traceback.print_exc()
         print("  ticker search failed:", e)
     html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames)
+    html = dated.stamp(html, DL)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
     picks.drop(columns=["opt"]).to_csv(out / f"screener_{asof}.csv", index=False)

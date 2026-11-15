@@ -181,7 +181,7 @@ function drawChart(wrap, a) {
     if (i && n - 1 - i < every / 2) continue;
     s.append(svg('text', {class: 'pm-ax', x: X(i), y: H - 6, 'text-anchor': i ? 'middle' : 'start'}, md(pts[i].d)));
   }
-  s.append(svg('text', {class: 'pm-ax', x: X(n - 1), y: H - 6, 'text-anchor': 'end'}, pts[n - 1].now ? 'Now' : md(pts[n - 1].d)));
+  s.append(svg('text', {class: 'pm-ax', x: X(n - 1), y: H - 6, 'text-anchor': 'end'}, pts[n - 1].now ? md(pts[n - 1].now) + ', ' + tm(pts[n - 1].now) + ' ET' : md(pts[n - 1].d)));
   const path = k => pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(p[k]).toFixed(1)).join('');
   s.append(svg('path', {class: 'pm-spy', d: path('spy')}));
   s.append(svg('path', {class: 'pm-acct', d: path('v')}));
@@ -205,7 +205,7 @@ function drawChart(wrap, a) {
     [cross, da, ds].forEach(e => e.setAttribute('visibility', 'visible'));
     cross.setAttribute('x1', x); cross.setAttribute('x2', x);
     da.setAttribute('cx', x); da.setAttribute('cy', Y(p.v)); ds.setAttribute('cx', x); ds.setAttribute('cy', Y(p.spy));
-    tip.replaceChildren(el('b', {text: p.now ? 'Now (' + tm(p.now) + ' ET)' : i === 0 ? md(p.d) + ' close (start)' : md(p.d) + ' close'}),
+    tip.replaceChildren(el('b', {text: p.now ? md(p.now) + ', ' + tm(p.now) + ' ET (last update)' : i === 0 ? md(p.d) + ' close (start)' : md(p.d) + ' close'}),
       el('div', {}, el('i', {style: 'background:var(--acc)'}), a.name + ' ' + money(p.v) + ' (' + pct((p.v / a.start_cash - 1) * 100) + ')'),
       el('div', {}, el('i', {style: 'background:var(--mut)'}), 'BTC ' + money(p.spy) + ' (' + pct((p.spy / a.start_cash - 1) * 100) + ')'));
     tip.hidden = false;
@@ -223,7 +223,7 @@ function chartBlock(a) {
   const wrap = el('div', {class: 'pm-chart'});
   const pts = series(a);
   const rows = pts.map((p, i) => el('tr', {},
-    el('td', {text: p.now ? 'Now (' + tm(p.now) + ' ET)' : md(p.d) + (i ? '' : ' (start)')}),
+    el('td', {text: p.now ? md(p.now) + ', ' + tm(p.now) + ' ET (last update)' : md(p.d) + (i ? '' : ' (start)')}),
     el('td', {text: money(p.v)}), el('td', {class: i ? cls(p.v - pts[i - 1].v) : '', text: i ? pct((p.v / pts[i - 1].v - 1) * 100) : ''}),
     el('td', {text: money(p.spy)})));
   const table = el('details', {class: 'pm-tbl'}, el('summary', {text: 'Show these numbers as a table'}),
@@ -243,7 +243,7 @@ function posCard(p) {
     el('div', {class: 'pm-row'}, tkr(p.ticker), el('span', {text: what}), el('span', {class: 'sp'}),
        el('b', {class: cls(pnl), text: arrow(pnl) + smoney(pnl) + ' (' + pct(pnl / p.buy.cost * 100) + ')'})),
     el('div', {class: 'pm-why', text: `Bought ${md(p.buy.t)}, ${tm(p.buy.t)} ET at ${cpx(p.buy.price)} for ${money(p.buy.cost)}. ` +
-       `Now ${cpx(p.last.price)}${now}, worth ${money(val)} (${md(p.last.t)}, ${tm(p.last.t)} ET).`}),
+       `Last price ${cpx(p.last.price)}${now}, worth ${money(val)} (${md(p.last.t)}, ${tm(p.last.t)} ET).`}),
     el('div', {class: 'pm-why'}, el('b', {text: 'Plan: '}), p.plan.text),
     p.exit ? el('div', {class: 'pm-why'}, el('b', {text: 'Selling: '}), p.exit) : null,
     el('div', {class: 'pm-why'}, el('b', {text: 'Why I bought it: '}), p.buy.why));
@@ -304,7 +304,7 @@ function openAcct(id, from) {
         card('Closed trades', String(a.closed.length), a.closed.length ? `${st.wins} won, ${a.closed.length - st.wins} lost, ${smoney(st.real)} in all` : 'None yet')),
       chart,
       el('h3', {text: 'Open positions'}),
-      a.positions.length ? a.positions.map(posCard) : el('div', {class: 'pm-none', text: started ? 'None right now, all cash.' : 'None yet.'}),
+      a.positions.length ? a.positions.map(posCard) : el('div', {class: 'pm-none', text: started ? (a.mark ? 'None as of ' + md(a.mark.t) + ', ' + tm(a.mark.t) + ' ET, all cash.' : 'None, all cash.') : 'None yet.'}),
       el('h3', {text: 'Closed trades, newest first'}),
       closed.length ? closed.map(tradeRow) : el('div', {class: 'pm-none', text: 'None yet.'}),
       el('h3', {text: 'Daily log (New York time)'}), logBlock(a),
@@ -345,7 +345,7 @@ function load() {
     .then(res => {
       const list = res.filter(r => r.status === 'fulfilled').map(r => r.value);   // an account that fails to load is skipped
       if (!list.length) {
-        if (!Object.keys(accts).length) box.replaceChildren(el('div', {class: 'hint', text: 'The paper trading accounts could not be loaded right now. Try again in a few minutes.'}));
+        if (!Object.keys(accts).length) box.replaceChildren(el('div', {class: 'hint', text: 'The paper trading accounts could not be loaded. Try again in a few minutes.'}));
         return;
       }
       accts = {};

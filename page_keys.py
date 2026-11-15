@@ -120,7 +120,7 @@ def page_keys(market, cfg, ov):
           f"filtered to that {g}."),
         R(f"Strongest {us}", f"The top 10 of the strongest list, same bars as Step 3. \"All N ›\" opens the full list."),
         R("Top picks", "The first names on New uptrends, Breakout watch and AI picks. \"Open ›\" goes to the Top picks tab."),
-        R("Paper trading", "Each paper account's value right now. Tap one for every trade."),
+        R("Paper trading", "Each paper account's value at its last update (the date and time are on the tile). Tap one for every trade."),
         R("OVTLYR plan", "Whether Plan M is on, which market checks fail, and whether Plan ETF is set up."),
         R("Blue tickers", "Any ticker with a dotted underline opens its chart (trend, order blocks and its 10-year backtest)."),
         U(f"Read it top to bottom, the way you pick: the market first, then the {g}, then the {u}. Only look for a buy when "
@@ -419,15 +419,15 @@ def page_keys(market, cfg, ov):
     out["paper"] = key(
         H("Each tile"),
         R("Name and time", "The account, and when it last updated (New York time)."),
-        R("Big number", f"What the account is worth now (started at {w['cash']})."),
+        R("Big number", f"What the account is worth at its last update (the date and time are on the tile) (started at {w['cash']})."),
         R(f"{sw(UP)}{sw(DN)} Change", f"Dollars and % since the start (green up, red down), and {b} over the same days to compare."),
         R("Line", "The account's value since the start; the flat line is the starting cash."),
         R("Footer", "Open positions and closed trades. Tap the tile for the full breakdown."),
         H("The breakdown"),
-        R("Value / Return / Cash / Closed trades", f"Worth now, % vs {b}, cash not invested, and wins vs losses."),
+        R("Value / Return / Cash / Closed trades", f"Worth at its last update (the date and time are on the tile), % vs {b}, cash not invested, and wins vs losses."),
         R(f"{ln(ACC)}{ln(MUT)}{ln(MUT, 'd')} Chart", f"The account vs the same money put in {b}, and the starting line. \"Show these "
           "numbers as a table\" lists every close."),
-        R("Open positions", "What it holds, what it paid, its value now, the Plan (stop and exits) and why it was bought."),
+        R("Open positions", "What it holds, what it paid, its value at its last update (the date and time are on the tile), the Plan (stop and exits) and why it was bought."),
         R("Closed trades / Daily log", "Every finished trade (tap for both reasons) and every decision, newest first."),
         R("How this account trades", "Its full rules, written out."),
         H("The four accounts"),
@@ -447,7 +447,7 @@ def page_keys(market, cfg, ov):
         H("The summary strip"),
         R("Backtests on this page", "How many plans and research tests are below."),
         R(f"Plans that beat {b}", f"How many of the four plans ended ahead of holding {b} over 10 years."),
-        R("Paper trial / Leading the trial", "Which day of the live paper trial it is, and the account ahead right now."),
+        R("Paper trial / Leading the trial", "Which day of the live paper trial it is, and the account ahead at its last update (the date and time are on the tile)."),
         H("Plans side by side"),
         R("Paper trial / 10-year backtest", f"Switch between the live trial and the 10-year test. "
           f"{ln('#2f6fed')}Your system {ln('#12936b')}after 2 PM {ln('#d6453d')}Claude's picks {ln('#8e44c9')}OVTLYR "
@@ -455,7 +455,7 @@ def page_keys(market, cfg, ov):
         R("Log scale", "The 10-year chart uses equal spacing for equal % moves, so early years aren't squashed. Hover or tap for the values."),
         H("Each plan's card"),
         R(f"Beat / Trailed {b}", f"Whether its 10-year test ended ahead of {b}."),
-        R("Two charts", "Left: its 10-year backtest. Right: its paper trial so far."),
+        R("Two charts", "Left: its 10-year backtest. Right: its paper trial from its start to its last update."),
         R("Worst drop / In the market", f"The biggest fall from a high (and {b}'s), and how much of the time it held something."),
         R("With calls (modeled)", "The same plan with calls priced by a model: a rough guide, since there's no free option history."),
         R("Full backtest", "Its rules, year by year vs " + b + " (green = it won that year), trades, win rate and average trade."),
@@ -543,7 +543,7 @@ def ovtlyr_keys(heat_max=70):
         R("Value zone bar", "Green band = the 20 EMA up to 2 ATR above it; the black mark = the last close. The deck buys only "
           "inside the zone."),
         R("✓ ✗ checks", f"Heat under {heat_max}, a buy signal, the uptrend, in the value zone, no order block 30+ days old within 2%."),
-        R(f"<span style='color:{DN}'>Sell signal</span>", "Any exit firing now, in red."),
+        R(f"<span style='color:{DN}'>Sell signal</span>", "Any exit firing on the close the page was built on, in red."),
         R("Exit signals card", "What ends a Plan ETF trade, then where the cash goes (SGOV)."),
         U("Plan ETF is for cash with no Plan M setups. When neither fund is set up, the deck parks cash in SGOV."))
     out["rules"] = key(
