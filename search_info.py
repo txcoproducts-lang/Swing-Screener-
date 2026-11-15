@@ -401,7 +401,7 @@ CSS = """
 #cms .sr{display:flex;gap:6px;font-size:12px;padding:1px 0;align-items:baseline}#cms .sr>i{font-style:normal;width:12px;flex:none;text-align:center;font-weight:700}
 #cms .sr>i.ok{color:var(--up)}#cms .sr>i.no{color:var(--dn)}#cms .sr>i.in{color:var(--mut);font-weight:400}#cms .sr>span{flex:1}#cms .sr>b{font-weight:600;text-align:right}
 #cms .sr>b{max-width:58%}#cms .nt{color:var(--mut);font-size:12px;margin-top:4px}
-#cm .box:has(#cms[open]){overflow:auto}#cm .box:has(#cms[open]) #cms{max-height:none;overflow:visible}#cm .box:has(#cms[open]) #cmbt{max-height:none}
+#cm .box:has(#cms[open]){overflow:auto}#cm .box:has(#cms[open]) #cms{max-height:none;overflow:visible}#cm .box:has(#cms[open]) #cmbt{max-height:none}#cm .box:has(#cms[open])>*{flex-shrink:0}
 #cm .box:has(#cms[open]) #cmw{flex:none;height:max(420px,70vh)}#cm .box:has(#cms[open]) .top{position:sticky;top:0;background:var(--bg);z-index:4}
 #cms .sv{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px;margin:6px 0 2px;align-items:start}
 #cms .sv>div{background:var(--card);border-radius:8px;padding:8px 10px;min-width:0}#cms .sv h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
