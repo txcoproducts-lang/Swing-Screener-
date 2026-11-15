@@ -2157,6 +2157,44 @@ def heat_html(bh, days=63):
             f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
 
 
+def breadth20_html(bh, days=20):
+    """Each sector's breadth (Rising) at each of the last 20 closes, newest first, in the user's colours: the Open page's
+    "breadth before -> after" pills going back 20 closes (user's ask, 2026-11-15)."""
+    if not bh or "S&P 500" not in bh:
+        return ""
+    import page_keys as K
+    names = ["S&P 500"] + sorted((n for n in bh if n != "S&P 500"), key=lambda n: -bh[n].rise.iloc[-1])
+    idx = bh["S&P 500"].index[-days:][::-1]
+    col = lambda v, on: K.RED if bzone(v) != 0 else K.GREEN if on else K.YELLOW
+    th = "".join(f'<th class="c">{d:%a}<br>{d:%b} {d.day}</th>' for d in idx)
+    rows = []
+    for n in names:
+        b = bh[n].reindex(idx)
+        cells = "".join(f'<td class="c"><span class="b20" style="background:{col(round(float(v), 1), on)}" title="{d:%a %b} {d.day}, 3:00 PM CT close">{v:.0f}%</span></td>'
+                        if v == v else '<td class="c mut">—</td>' for d, v, on in zip(idx, b.rise, b.on))
+        a, z = b.rise.iloc[-1], b.rise.iloc[0]
+        ch = f'<b class="{"up" if z >= a else "dn"}">{z - a:+.0f}</b>' if a == a and z == z else ""
+        rows.append(f'<tr><th class="b20n">{html_esc(SHORT_SECTOR.get(n, n))}</th><td class="num">{ch}</td>{cells}</tr>')
+    first, last = idx[-1], idx[0]
+    key = K.key(K.R("Each cell", f"The share of the sector's S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA (Rising) "
+                    "at that day's 3:00 PM CT close, newest on the left."),
+                K.R("Colours", f"{K.sw(K.GREEN)}{CFG['OS_BREADTH']}-{CFG['OB_BREADTH']}% and rising (above its 10-day average) "
+                    f"{K.sw(K.YELLOW)}{CFG['OS_BREADTH']}-{CFG['OB_BREADTH']}% and falling {K.sw(K.RED)}over {CFG['OB_BREADTH']} (overbought, no buys) "
+                    f"or under {CFG['OS_BREADTH']} (oversold)."),
+                K.R("20-close change", f"Points of Rising from the {first:%a %b} {first.day} close to the {last:%a %b} {last.day} close."),
+                K.U("Read a row right to left to see how a sector got where it is: green days in a row = a steady upswing; "
+                    "yellow after green = it turned down; red on the right edge = it just went over 75."))
+    return (f'<h2>Sector breadth, last {len(idx)} closes</h2>{key}'
+            f'<div class="meta">{first:%a %b} {first.day} to {last:%a %b} {last.day}, {last.year}, each at the 3:00 PM CT close. Scroll sideways for older closes.</div>'
+            f'<div class="tcard" style="padding:6px 0"><div style="overflow-x:auto"><table class="b20t"><thead><tr><th class="b20n">Sector</th>'
+            f'<th class="num">20-close change</th>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div></div>'
+            '<style>.b20t{border-collapse:collapse;font-size:12.5px}.b20t th,.b20t td{padding:5px 4px;border-bottom:1px solid var(--line);white-space:nowrap}'
+            '.b20t thead th{font-size:11px;color:var(--mut);font-weight:600;line-height:1.2}.b20t .c{text-align:center}.b20t .num{text-align:right;padding-right:8px}'
+            '.b20n{position:sticky;left:0;background:var(--card);text-align:left;padding-left:12px!important;z-index:1;font-weight:700}'
+            '.b20{display:inline-block;min-width:34px;border-radius:7px;padding:2px 5px;font-weight:800;color:#14202e}'
+            '#tab-sectors .b20t .up{color:var(--up)}#tab-sectors .b20t .dn{color:var(--dn)}</style>')
+
+
 def bcls(w):
     """The user's breadth colours (2026-10-31): under 30 or over 75 = red, 30-75 and rising (above its 10-day average) =
     green, the only time it's green; 30-75 and falling = yellow. Returns the text class: dn / up / wn."""
@@ -2937,7 +2975,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
 <section class="tab" id="tab-market" hidden><h2>Market</h2>{hk('market')}<div class="cards">{cards}</div>{vx_html}{bt_html}</section>
-<section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{hk('tiles')}{sector_tiles(df, sws, bh)}{sp_html}{sector_html}{chart_html}</section>
+<section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{hk('tiles')}{sector_tiles(df, sws, bh)}{sp_html}{breadth20_html(bh)}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
 {hk('stock_table')}{ob_html}<div class="bar"><button class="on" data-f="setups">Setups</button><button data-f="Super">Super</button><button data-f="Regular">Regular</button><button data-f="Momentum">Momentum</button><button data-f="Pullback">Pullback</button><button data-f="Overbought">Overbought</button><button data-f="all">All uptrend</button></div>

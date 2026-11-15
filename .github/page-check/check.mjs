@@ -54,6 +54,12 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
         `width ${await p.evaluate(() => document.documentElement.scrollWidth)}`);
     await p.screenshot({ path: `${out}/${name}-8-signals.png`, fullPage: true });
   }
+  if (await p.$(".b20t")) {                                // sector breadth, last 20 closes (Sectors tab)
+    await click0('nav.tabs a[data-tab="sectors"]'); await p.waitForTimeout(400);
+    await p.evaluate(() => { const e = document.querySelector(".b20t"); window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 160); });
+    log(`[${name}] sector breadth 20 closes: ${await p.$$eval(".b20t tbody tr", r => r.length)} rows, ${await p.$$eval(".b20t thead th.c", r => r.length)} closes`);
+    await p.screenshot({ path: `${out}/${name}-8-breadth20.png` });
+  }
   if (await p.$("nav.tabs")) { await click0('nav.tabs a[data-tab="today"]'); await p.waitForTimeout(300); }
   // paper trading tiles and each account's breakdown
   await p.waitForSelector(".pp-tile", { timeout: 15000 }).catch(() => {});
