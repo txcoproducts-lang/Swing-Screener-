@@ -220,6 +220,11 @@ if (!/crypto\/?$/.test(process.env.PAGE_URL)) for (const [name, vp] of [["deskto
     await p.click(`nav.tabs a[data-t="${t}"]`); await p.waitForTimeout(200);
     await p.screenshot({ path: `${out}/${name}-9-open-${t}.png`, fullPage: true });
   }
+  await p.click('nav.tabs a[data-t="summary"]');
+  const box = async sel => p.$eval(sel, e => [...e.querySelectorAll(".lbig")].map(x => x.innerText).join(" / ")).catch(() => "MISSING");
+  log(`[${name}] Open page boxes: new buy signals ${await box(".card.newc")}; lost buy signals ${await box(".card.lost")}; ` +
+      `new-signal causes shown: ${await p.$$eval(".card.newc .gtag", x => x.length)}`);
+  if (!(await p.$(".card.newc")) || !(await p.$(".card.lost"))) errs.push("Open page: new or lost buy-signal box missing");
   log(`[${name}] Open page: ${await p.$eval(".asof", e => e.innerText)}; ${await p.$$eval(".step .big", x => x.map(e => e.innerText).join(" | "))}; ` +
       `width ${await p.evaluate(() => document.documentElement.scrollWidth)}, errors: ${errs.length ? errs.join("; ") : "none"}`);
   await p.close();

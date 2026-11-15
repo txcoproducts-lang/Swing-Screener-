@@ -95,8 +95,14 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     P, bhP, swP, hotP = scan(prev_f, sectors, subs, sp500)
     prev2_f = {t: d.iloc[:-1] for t, d in prev_f.items()}       # the close before last night, for the last day's drop-outs
     P2 = scan(prev2_f, sectors, subs, sp500)[0]
-    tks = N.index.intersection(P.index).intersection(P2.index)
-    N, P, P2 = N.loc[tks], P.loc[tks], P2.loc[tks]
+    open_f = {}                                    # today's bar cut off at the opening price: what the gap alone did
+    for t, d in now_f.items():
+        d = d.copy(); o = d["Open"].iloc[-1]
+        d.iloc[-1, d.columns.get_loc("Close")] = o; d.iloc[-1, d.columns.get_loc("High")] = o; d.iloc[-1, d.columns.get_loc("Low")] = o
+        open_f[t] = d
+    O = scan(open_f, sectors, subs, sp500)[0]
+    tks = N.index.intersection(P.index).intersection(P2.index).intersection(O.index)
+    N, P, P2, O = N.loc[tks], P.loc[tks], P2.loc[tks], O.loc[tks]
     prev2c = pd.Series({t: float(prev2_f[t]["Close"].iloc[-1]) for t in tks})
     prev_day2 = pd.Timestamp(next(iter(prev2_f.values())).index[-1]).date()
     prevc = pd.Series({t: float(prev_f[t]["Close"].iloc[-1]) for t in tks})
@@ -141,6 +147,9 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     new_buy = tks[N.buy & ~P.buy]
     lost_buy = tks[P.buy & ~N.buy]                 # lost overnight / at the open
     lost_day = tks[P2.buy & ~P.buy]                # lost on the last trading day's close
+    new_day = tks[~P2.buy & P.buy]                 # new on the last trading day's close
+    gap_made = tks[~P.buy & O.buy & (gap > 0)]     # the overnight gap up alone (at the opening price) made the buy signal
+    gap_kept, gap_faded = gap_made[N.loc[gap_made].buy], gap_made[~N.loc[gap_made].buy]
     nP2, nP, nN = int(P2.buy.sum()), int(P.buy.sum()), int(N.buy.sum())
     gaps = gap[gap >= GAP].sort_values(ascending=False).index
 
@@ -166,7 +175,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
 
     def why_new(t):
         p, n = P.loc[t], N.loc[t]
-        w = []
+        w = [f"the {gap[t]:+.1f}% gap up opened it into a buy signal"] if t in gap_made else []
         if not (p.core or p.reg_up):
             w.append("joined the uptrend" if n.core else "10 EMA crossed over the 20 / price back over the 50 EMA")
         if p.blocked:
@@ -193,7 +202,8 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         return f'<div class="wrap"><table class="tb"{f" id={tid}" if tid else ""}><thead><tr>{head}{extra_th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
 
     up_tag = lambda t: ("✓ uptrend" if N.loc[t].core else "regular up" if N.loc[t].reg_up else "—")
-    nb_rows = [stock_tr(t, f'<td>{esc(tierlbl(N.loc[t]))}</td><td class="sub" style="white-space:normal;min-width:200px">{esc(why_new(t))}</td>')
+    nb_rows = [stock_tr(t, f'<td>{esc(tierlbl(N.loc[t]))}</td><td class="c">{"<b class=pos>✓ gap</b>" if t in gap_made else ""}</td>'
+                           f'<td class="sub" style="white-space:normal;min-width:200px">{esc(why_new(t))}</td>')
                for t in sorted(new_buy, key=lambda t: (N.loc[t].tier != "Super", -N.loc[t].score))]
     lb_rows = [stock_tr(t, f'<td>{esc(tierlbl(P.loc[t]))}</td><td style="white-space:normal;min-width:200px">{esc(why_lost(P.loc[t], N.loc[t]))}</td>')
                for t in sorted(lost_buy, key=lambda t: day[t])]
@@ -329,6 +339,31 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     ]
     md_ = lambda x: f"{x:%a %b} {x.day}"
     chips = lambda L: " ".join(tk(t) for t in L) or '<span class="sub">none</span>'
+    gtag = lambda t: f'<span style="white-space:nowrap">{tk(t)}<span class="gtag">▲{gap[t]:.1f}%</span></span>' if t in gap_made else tk(t)
+    new_sorted = sorted(new_buy, key=lambda t: (t not in gap_made, -gap[t]))
+    def cause(t):
+        """What put the buy signal there, in a word or two, for the box."""
+        p, n = P.loc[t], N.loc[t]
+        if t in gap_made:
+            return f"gap up ▲{gap[t]:.1f}%"
+        if p.blocked:
+            return "breadth back under 75"
+        if not (p.core or p.reg_up):
+            return "joined the uptrend"
+        if n.setup == "Momentum" and n.brk20 and not p.brk20:
+            return "broke 20-day high"
+        if n.setup == "Momentum":
+            return "momentum setup"
+        return "pulled back into setup"
+    ctag = lambda t: f'<span style="white-space:nowrap">{tk(t)}<span class="gtag{"" if t in gap_made else " ot"}">{esc(cause(t))}</span></span>'
+    new_card = (f'<div class="card newc"><h3>New buy signals <a data-go="signals">Full list ›</a></h3>'
+                f'<div class="lostg"><div><div class="lbig pos">{len(new_buy)}</div><div class="sub">new <b>overnight</b>: no buy signal at '
+                f'{md_(prev_day)}\'s close, one now ({len(gap_kept)} from the gap up)</div><div class="lchips">{" ".join(ctag(t) for t in new_sorted) or "<span class=sub>none</span>"}</div></div>'
+                f'<div><div class="lbig pos">{len(gap_made)}</div><div class="sub">made by the <b>gap up</b>: the open alone was high enough for a buy signal'
+                + (f' ({len(gap_faded)} faded out of it since the open: {", ".join(gap_faded)})' if len(gap_faded) else "")
+                + f'</div><div class="lchips">{" ".join(gtag(t) for t in sorted(gap_made, key=lambda t: -gap[t])) or "<span class=sub>none</span>"}</div></div>'
+                f'<div><div class="lbig pos">{len(new_day)}</div><div class="sub">new on <b>{md_(prev_day)}\'s close</b>: none at {md_(prev_day2)}\'s close'
+                f' ({sum(N.loc[t].buy for t in new_day)} still have it at the open)</div><div class="lchips">{chips(sorted(new_day, key=lambda t: -d1[t]))}</div></div></div></div>')
     lost_card = (f'<div class="card lost"><h3>Lost buy signals <a data-go="lost">Full lists ›</a></h3>'
                  f'<div class="lostg"><div><div class="lbig neg">{len(lost_buy)}</div><div class="sub">lost <b>overnight</b>: had a buy signal at '
                  f'{md_(prev_day)}\'s close, gone at the open</div><div class="lchips">{chips(sorted(lost_buy, key=lambda t: day[t]))}</div></div>'
@@ -361,6 +396,9 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                          K.R("In uptrend", "Half or more of its stocks in your full uptrend. Still in uptrend = last night and now; Joined / Left = it changed at the open."),
                          K.R("Gap / Today", "The average gap and move of its stocks.")),
         signals=K.key(K.R("New buy signals", "Not a buy signal last night, a buy signal now, because of the overnight move. \"Why it's new\" says what changed."),
+                      K.R("From the gap / ▲%", "The gap up alone made it: scored at today's opening price (as if the day's candle were just the open), "
+                          "it already gives a buy signal. The % is the gap over last night's close."),
+                      K.R("New on the last close", "No buy signal two closes ago, one at last night's close (the full day's move)."),
                       K.R("Lost buy signals", "A buy signal last night, gone now."),
                       K.R("Setup", "Super = price over the 150 MA; Regular = under it. Momentum = breakout or near the 52-week high with RSI 55-80; "
                           "Pullback = a dip to the 20 EMA inside an uptrend."),
@@ -391,7 +429,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     )
     tabs = [
         ("summary", "Rundown", f'<div class="h1">How did the market open?</div><div class="sub lead">{spy_line}</div>{keys["summary"]}'
-         f'{lost_card}<div class="card" style="margin-top:14px"><h3>What changed overnight <a data-go="changes">Every change ›</a></h3>'
+         f'{new_card}<div style="height:14px"></div>{lost_card}<div class="card" style="margin-top:14px"><h3>What changed overnight <a data-go="changes">Every change ›</a></h3>'
          f'<div class="sub">{n_good} changes for the better and {n_bad} for the worse across the market and {len(secs)} sectors, from '
          f'{md_(prev_day)}\'s close to the open.</div>{"".join(f"<div class=cl>{mark[x]}<span>{esc(t)}</span></div>" for x, t in (chg[0][1] if chg else []))}</div>'
          f'<div class="steps four" style="margin-top:14px">{cards}</div><div class="g2" style="margin-top:14px">'
@@ -416,8 +454,11 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                  '<th>Industry</th><th>Sector</th><th class="num">Stocks</th><th class="num">In uptrend</th><th>State</th><th class="num">Avg gap</th><th class="num">Avg today</th>', tid="indt")
          + '</div>'),
         ("signals", "Buy signals", f'<div class="card"><h3>New buy signals since last night ({len(new_buy)})</h3>{keys["signals"]}'
-         + table(nb_rows, TH, '<th>Setup</th><th>Why it\'s new</th>', "No new buy signals at the open.") + '</div>'
-         f'<div class="sub" style="margin-top:10px">Lost buy signals have their own tab: <a data-go="lost">Lost signals ›</a></div>'),
+         + table(nb_rows, TH, '<th>Setup</th><th class="c">From the gap</th><th>Why it\'s new</th>', "No new buy signals at the open.") + '</div>'
+         + (f'<div class="card" style="margin-top:14px"><h3>Made by the gap up, gone since the open ({len(gap_faded)})</h3>'
+            '<div class="hint">The open alone was high enough for a buy signal, but the price has slipped back since.</div>'
+            + table([stock_tr(t) for t in gap_faded]) + '</div>' if len(gap_faded) else "")
+         + f'<div class="sub" style="margin-top:10px">Lost buy signals have their own tab: <a data-go="lost">Lost signals ›</a></div>'),
         ("gaps", "Gap ups", f'<div class="card"><h3>Gap ups of {GAP:g}% or more ({len(gaps)})</h3>{keys["gaps"]}'
          + table(gp_rows, TH, '<th>Since open</th><th>Uptrend</th><th>Buy signal</th>', "No gap ups this morning.") + '</div>'),
         ("uptrend", "Uptrend list", f'<div class="card"><h3>Stayed in uptrend ({len(stay)})</h3>{keys["uptrend"]}' + table(st_rows) + '</div>'
@@ -440,7 +481,8 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                 sectors_rising=len(still) + len(tup))
 
 
-CSS = """.g2>*,.steps>*{min-width:0}.chgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chg h3{gap:6px}
+CSS = """.g2>*,.steps>*{min-width:0}.card.newc{border:2px solid var(--up);background:#f7fdfa}
+.gtag{font-size:10px;font-weight:800;color:var(--up);background:var(--upbg);border-radius:6px;padding:0 4px;margin-left:3px;vertical-align:1px}.gtag.ot{color:var(--fg);background:rgba(0,0,0,.06)}.chgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chg h3{gap:6px}
 .cl{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--line);font-size:13px}.cl:first-of-type{border-top:0}
 .cl i{font-style:normal;font-weight:800;width:14px;flex:none;text-align:center}.cg{color:var(--up)}.cb{color:var(--dn)}.cn{color:var(--mut)}
 @media(max-width:760px){.chgs{grid-template-columns:1fr;gap:10px}}.card.lost{border:2px solid var(--dn);background:#fffafa}
