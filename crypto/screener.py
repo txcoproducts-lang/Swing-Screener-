@@ -68,6 +68,7 @@ CFG = dict(
     CCI_N=20,                # 20-day CCI; it swings around 0 (most days between -100 and +100), so its levels are +-100
     OB_CCI=100, OS_CCI=-100,
     OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of coins with the 10 EMA over the 20 and price over the 50 EMA), market or category
+    RED_BREADTH=85,                 # colour only (user, 2026-11-16): red starts over 85, buys still stop over OB_BREADTH (75)
 )
 YEAR, HALF, Q3, QTR, MONTH = 365, 182, 273, 91, 30   # coins trade every day: a year is 365 daily bars, not 252
 
@@ -1894,11 +1895,11 @@ def heat_html(bh, days=QTR):
     data, rows = dict(t=[d.strftime("%Y-%m-%d") for d in idx], rows=[]), []
     for i, n in enumerate(names):
         b, st = bh[n].reindex(idx), swing_state(bh[n])
-        zc = {2: " o", -1: " u", 0: ""}
-        zd = lambda v, on: zc[bzone(round(float(v), 1))] or (" d" if on == 0 else "")   # d = in the green zone but on a downswing: yellow
+        zd = lambda v, on: ((" o" if v > CFG["OS_BREADTH"] else " u") if bred(v) else " d" if on == 0 else
+                            " p" if round(float(v), 1) <= CFG["OB_BREADTH"] else "")   # o/u red, d falling = yellow, p prime dark green, else 75-85 light green
         cells = "".join(f'<i class="h{min(9, int(v // 10))}{zd(v, on)}"></i>' if v == v else "<i></i>"
                         for v, on in zip(b.rise, b.on))
-        col = {"dn": "var(--dn)", "up": "var(--up)", "wn": "var(--yel)"}[bcls(st)]   # the user's breadth colours
+        col = bbar(st)   # the user's breadth colours
         tbar = (f'<span class="sbar hmb"><b style="width:{min(st["rise"], 100):.0f}%;background:{col}"></b><i style="left:{min(st["avg"], 100):.0f}%"></i>'
                 f'<u style="left:{CFG["OB_BREADTH"]}%"></u></span>')      # tonight, as on the Today bars: tick = 10-day average, dashed = 75
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
@@ -1908,19 +1909,42 @@ def heat_html(bh, days=QTR):
     if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
-    zkey = (f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]}: overbought</span>'
-            f'<span class="hmz"><i class="u"></i>under {CFG["OS_BREADTH"]}: oversold (red too)</span>'
-            f'<span class="hmz"><i class="g d"></i>30-75% but falling (under its 10-day average): yellow</span>'
+    zkey = (f'<span class="hmz"><i class="g"></i>{CFG["OB_BREADTH"]}-{CFG["RED_BREADTH"]}% and rising: light green (over {CFG["OB_BREADTH"]} still blocks buys)</span>'
+            f'<span class="hmz"><i class="o"></i>over {CFG["RED_BREADTH"]} or under {CFG["OS_BREADTH"]}: red</span>'
+            f'<span class="hmz"><i class="g d"></i>falling (under its 10-day average): yellow</span>'
             f'<span class="hmz">Tonight bar: tick = its 10-day average, dashed = your {CFG["OB_BREADTH"]} line</span>')
     head = '<div class="hmr hmh"><span></span><span>Last 3 months, day by day</span><span>Tonight</span><span></span></div>'
     return (f'<div class="hm" id="hm">{head}{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span><span></span></div>'
-            f'<div class="hmk"><span class="hmz"><i class="g"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: green</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
+            f'<div class="hmk"><span class="hmz"><i class="p"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: dark green, the prime zone</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
+
+
+PRIME, LIGHT_G, RED_F, YEL_F = "#5cc08c", "#a8e0bf", "#f4a6a0", "#f7dc7a"   # breadth fills: prime dark green / 75-85 light green / red / yellow
+
+
+def bred(v):
+    """Red by the user's colour rule (2026-11-16): over 85 or under 30. Colour only: the over-75 buy block is bzone()."""
+    v = round(float(v), 1)
+    return v > CFG["RED_BREADTH"] or v < CFG["OS_BREADTH"]
+
+
+def bfill(v, on):
+    """The user's breadth fill colours (2026-11-16): red over 85 or under 30; rising (above its 10-day average) and
+    30-75 = dark green, the prime zone; rising and 75-85 = light green; falling = yellow."""
+    if bred(v):
+        return RED_F
+    return YEL_F if not on else PRIME if round(float(v), 1) <= CFG["OB_BREADTH"] else LIGHT_G
+
+
+def bbar(w):
+    """The Today / heatmap bar colour for a group's state: the same rule, in the stronger bar shades."""
+    return ("var(--dn)" if bred(w["rise"]) else "var(--yel)" if not w["on"] else
+            "var(--up)" if w["rise"] <= CFG["OB_BREADTH"] else "#7fd1a8")
 
 
 def bcls(w):
-    """The user's breadth colours (2026-10-31): under 30 or over 75 = red, 30-75 and rising (above its 10-day average) =
-    green, the only time it's green; 30-75 and falling = yellow. Returns the text class: dn / up / wn."""
-    return "dn" if w["z"] != 0 else "up" if w["on"] else "wn"
+    """The user's breadth text colours (2026-10-31, red moved to 85 on 2026-11-16): under 30 or over 85 = red, rising
+    (above its 10-day average) = green, falling = yellow. Returns the text class: dn / up / wn."""
+    return "dn" if bred(w["rise"]) else "up" if w["on"] else "wn"
 
 
 def swing_tag(w, since=True):
@@ -2032,7 +2056,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     # step 2: the strongest sector
     def srow(i, n, short=False):
         x = sws[n]
-        col = {"dn": "var(--dn)", "up": "var(--up)", "wn": "var(--yel)"}[bcls(x)]   # the user's breadth colours
+        col = bbar(x)   # the user's breadth colours
         tag = ('<span class="pill p-dn">Over 75</span>' if x["z"] == 2 else
                '<span class="pill p-dn">Under 30</span>' if x["z"] == -1 else
                '<span class="pill p-w">Near 75</span>' if x["rise"] >= CFG["OB_BREADTH"] - 5 and n_on[n] == 0 else
@@ -2079,8 +2103,8 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
                  '<div class="hint">Share of each category\'s coins with the 10 EMA over the 20 and price over the 50 EMA · tick = its 10-day '
                  f'average · dashed = your {CFG["OB_BREADTH"]} line. Tap a category to see its coins.</div>'
                  + "".join(srow(i, n) for i, n in enumerate(secs))
-                 + f'<div class="lgd"><span><i style="background:var(--up)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising</span><span><i style="background:var(--yel)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and falling</span>'
-                 f'<span><i style="background:var(--dn)"></i>Over {CFG["OB_BREADTH"]} overbought or under {CFG["OS_BREADTH"]} oversold</span></div></div>') if secs else ""
+                 + f'<div class="lgd"><span><i style="background:var(--up)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising</span><span><i style="background:#7fd1a8"></i>{CFG["OB_BREADTH"]}-{CFG["RED_BREADTH"]}% and rising (no buys over {CFG["OB_BREADTH"]})</span><span><i style="background:var(--yel)"></i>Falling</span>'
+                 f'<span><i style="background:var(--dn)"></i>Over {CFG["RED_BREADTH"]} or under {CFG["OS_BREADTH"]}</span></div></div>') if secs else ""
     st_card = ('<div class="tcard"><h3>Strongest coins in the strongest categories <a data-go="stocks">All ' + str(len(ss)) + ' ›</a></h3>'
                '<div class="hint">Score out of 100 = market 40% + sector 40% + the coin\'s strength in its category 20%</div>'
                + ("".join(strow(r) for r in ss.head(10).itertuples()) or '<div class="hint pke">No coin passes tonight.</div>')
@@ -2117,14 +2141,14 @@ def sector_tiles(df, sws, bh, etfs=None, unit="coin"):
     for n in secs:
         w, k = sws[n], int((ss.sector == n).sum())
         r = w["rise"]
-        bg, dark = {"dn": "#f4a6a0", "up": "#a8e0bf", "wn": "#f7dc7a"}[bcls(w)], 1   # the user's 3 colours: over 75 or under 30 / 30-75 rising / 30-75 falling
+        bg, dark = bfill(w["rise"], w["on"]), 1   # the user's colours: red over 85 or under 30 / dark green 30-75 rising / light green 75-85 rising / yellow falling
         tag = ("OVER 75" if w["z"] == 2 else "UNDER 30" if w["z"] == -1 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
         line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
         sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Red = overbought (over 75% of coins rising) or oversold (under 30%), green = 30-75% and rising (above its 10-day average), yellow = 30-75% and falling, strongest first · line = the last 5 days. '
+    return ('<div class="hint">Dark green = 30-75% of coins rising and climbing (above its 10-day average), the prime zone; light green = 75-85% and climbing (over 75 still blocks buys); yellow = falling; red = over 85% or under 30%. strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2211,7 +2235,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2>' + hk("breadth") + '<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
-                      'and the close above the 50 EMA (your rule), by day for the last 3 months; green = 30-75% and rising (above its 10-day average), the only time it is green; yellow = 30-75% and falling (under its 10-day average); red = over 75 (overbought) or under 30 (oversold). ▲ = an upswing (Rising '
+                      'and the close above the 50 EMA (your rule), by day for the last 3 months; dark green = 30-75% and rising (above its 10-day average), the prime zone; light green = 75-85% and rising (over 75 still blocks buys); yellow = falling (under its 10-day average); red = over 85 or under 30 (oversold). ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2400,11 +2424,11 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 .hml{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}}.hmv{{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}}
 .hmc{{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:18px;border-radius:3px;overflow:hidden;cursor:crosshair;touch-action:pan-y}}
 .hmc i{{display:block;background:var(--line)}}.hmc i.cur{{box-shadow:inset 0 0 0 2px var(--fg)}}
-.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f4a6a0}}.hmz i.g{{background:#a8e0bf}}.hmz i.d{{background:#f7dc7a}}
+.hmz{{display:inline-flex;align-items:center;gap:4px}}.hmz i{{width:14px;height:8px;background:var(--line)}}.hmz i.o{{background:#f4a6a0}}.hmz i.u{{background:#f4a6a0}}.hmz i.g{{background:#a8e0bf}}.hmz i.p{{background:#5cc08c}}.hmz i.d{{background:#f7dc7a}}
 .hmt{{position:relative;height:13px;color:var(--mut);font-size:10px}}.hmt b{{position:absolute;top:0;font-weight:400}}
 .hmk{{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;margin-top:6px;color:var(--mut);font-size:10px}}.hmk i{{display:block;width:14px;height:8px}}.hmk span{{margin:0 6px}}.hmk span:first-child{{margin-left:0}}
 .hmtip{{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.45;box-shadow:0 2px 10px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}}.hmtip[hidden]{{display:none}}
-.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f4a6a0}}.hm .hmc i.d{{background:#f7dc7a}}
+.hm .hmc i[class^=h]{{background:#a8e0bf}}.hm .hmc i.o{{background:#f4a6a0}}.hm .hmc i.u{{background:#f4a6a0}}.hm .hmc i.d{{background:#f7dc7a}}.hm .hmc i.p{{background:#5cc08c}}
 .hml{{cursor:pointer}}.hmr.sel .hml{{color:var(--acc);font-weight:700}}
 .bln{{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 6px}}
 .blh{{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}}.blh>b{{font-size:13px}}
@@ -2502,7 +2526,7 @@ showTab(location.hash.slice(1)||'today');
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
 const PINFO={pinfo};      // the pop-up's info line: m = the market, s = each category, t = each coin's category
-const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]};
+const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]},RDL={CFG["RED_BREADTH"]};
 // coin prices run from $100,000 to $0.00001: decimals by size, for labels and the chart's price axis
 const PREC=v=>{{const a=Math.abs(v);return a>=1||!a?2:Math.min(10,Math.max(2,3-Math.floor(Math.log10(a))))}};
 const FP=v=>v==null?'–':Math.abs(v)>=1?v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}):v.toFixed(PREC(v));
@@ -2512,13 +2536,13 @@ const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',d
 if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
 const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();
 const UP=V('--up'),DN=V('--dn'),WARN=V('--warn'),YEL=V('--yel'),PW=60;let tf='D';
-// shading behind the strip (the user's breadth colours): green = 30-75 and rising, yellow = 30-75 and falling, red = over 75 or under 30
+// shading behind the strip (the user's breadth colours): dark green = 30-75 and rising, light green = 75-85 and rising, yellow = falling, red = over 85 or under 30
 function bandPrim(){{let ch,runs=[],rs=[];
 const rend={{draw:tg=>tg.useBitmapCoordinateSpace(sc=>{{const x=sc.context,hr=sc.horizontalPixelRatio,H=sc.bitmapSize.height;
 rs.forEach(r=>{{x.fillStyle=r.col;x.fillRect(Math.round(r.x1*hr),0,Math.max(1,Math.round(r.x2*hr)-Math.round(r.x1*hr)),H)}})}})}};
 const view={{zOrder:()=>'bottom',renderer:()=>rend}};
 return {{attached:p=>{{ch=p.chart}},paneViews:()=>[view],set:v=>{{runs=v}},updateAllViews:()=>{{if(!ch)return;const ts=ch.timeScale(),sp=ts.options().barSpacing/2;rs=[];
-runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?DN+'3d':z===1?UP+'3d':YEL+'4d'}})}})}}}}}}
+runs.forEach(([a,b,z])=>{{const x1=ts.timeToCoordinate(a),x2=ts.timeToCoordinate(b);if(x1==null||x2==null)return;rs.push({{x1:x1-sp,x2:x2+sp,col:z===2?DN+'3d':z===1?UP+'52':z===3?UP+'22':YEL+'4d'}})}})}}}}}}
 // breadth line under a chart: the bar's (or tonight's) Rising, its 10-day average, Uptrend and the upswing state
 function leg(m,i){{if(!m.bl)return;const s=m.d[tf];if(!s||!s.br){{m.bl.textContent='';return}}
 const L=s.br.length,last=i==null||i<0||i>=L-1||s.br[i]==null;if(last)i=L-1;
@@ -2560,7 +2584,7 @@ m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}
 m.c.timeScale().fitContent();
 if(m.st){{const has=!!s.br;m.bv.hidden=m.bl.hidden=!has;
 if(has){{const f=a=>s.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
-const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL||s.br[i]<OSL?2:s.bs[i]===1?1:0,r=runs[runs.length-1];
+const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>RDL||s.br[i]<OSL?2:s.bs[i]!==1?0:s.br[i]>OBL?3:1,r=runs[runs.length-1];
 if(r&&r[2]===z&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,z,i])}});m.st.band.set(runs);
 m.st.bu.setData(f(s.bu));m.st.br.setData(f(s.br));m.st.bc.timeScale().fitContent();
 requestAnimationFrame(()=>requestAnimationFrame(()=>m.st.bc.timeScale().fitContent()))}}}}

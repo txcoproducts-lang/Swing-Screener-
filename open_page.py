@@ -75,8 +75,9 @@ def etf_trend(d):
 
 
 def bcol(rise, on):
-    """The user's breadth colours: over 75 or under 30 red, 30-75 rising green (the only green), 30-75 falling yellow."""
-    return RED if rise > S.CFG["OB_BREADTH"] or rise < S.CFG["OS_BREADTH"] else GREEN if on else YELLOW
+    """The user's breadth colours (red moved to 85 on 2026-11-16): over 85 or under 30 red, 30-75 rising dark green,
+    75-85 rising light green, falling yellow."""
+    return S.bfill(rise, on)
 
 
 def turn(a, b, words=("Still rising", "Turned up", "Turned down", "Still falling")):
@@ -395,7 +396,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                       K.U("Start with the market line. If it turned down or breadth is over 75, the new buy signals aren't buys yet. "
                           "Then look for new signals in the sectors that are still rising.")),
         sectors=K.key(K.R("Breadth", "Share of the sector's S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA. "
-                          f'{K.sw(GREEN)}30-75 and rising (above its 10-day average) {K.sw(YELLOW)}30-75 and falling {K.sw(RED)}over 75 or under 30.'),
+                          + K.zones(S.CFG)),
                       K.R("Direction", "Still rising = above its 10-day average last night and now. Turned up / Turned down = it crossed since last night."),
                       K.R("Stocks in uptrend", "Share of the sector's stocks in your full uptrend (EMA10 over EMA20, price over the 50 EMA and the 150 MA)."),
                       K.R("ETF uptrend", "Your uptrend rule on the sector's SPDR ETF, last night → now."),
