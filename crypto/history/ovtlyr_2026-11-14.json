@@ -26,7 +26,7 @@
    {
     "k": "hot",
     "ok": true,
-    "text": "Your overbought rule: 1% of coins rising, not over the 75 line"
+    "text": "Your overbought rule: 1% of coins rising, not over the 85 line"
    }
   ],
   "spy": {
@@ -61,11 +61,11 @@
   },
   "DeFi": {
    "ok": false,
-   "n": 17,
+   "n": 18,
    "bull": 0.0,
    "bull_ema": 0.3,
-   "rsi": 28.3,
-   "rsi_prev": 34.2,
+   "rsi": 27.9,
+   "rsi_prev": 33.8,
    "miss": [
     "breadth 0.0% not above its 10-day average 0.3%",
     "RSI 28 not rising (was 34)"
@@ -190,7 +190,7 @@
     {
      "k": "hot",
      "ok": true,
-     "text": "Your overbought rule: 1% of coins rising, not over the 75 line"
+     "text": "Your overbought rule: 1% of coins rising, not over the 85 line"
     }
    ],
    "sell": [
@@ -239,7 +239,7 @@
     {
      "k": "hot",
      "ok": true,
-     "text": "Your overbought rule: 1% of coins rising, not over the 75 line"
+     "text": "Your overbought rule: 1% of coins rising, not over the 85 line"
     }
    ],
    "sell": [
