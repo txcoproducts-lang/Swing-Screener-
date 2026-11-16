@@ -206,6 +206,14 @@ function btLines(ids) {
   lines.push({name: BENCH, color: COL.bench, dash: true, vals: any.curve.map(c => c[2])});
   return {dates, lines};
 }
+// a plan's backtest card: its line on the overbought rule as it is now (85), the same plan on the old 75 line (lighter), and the benchmark
+const ruleName = (id, p, lim) => p.alt ? `${NAME[id]}, ${lim} rule` : NAME[id];
+function btCard(id, p) {
+  const l = [{name: ruleName(id, p, p.lim), color: COL[id], vals: p.curve.map(c => c[1])}];
+  if (p.alt) l.push({name: ruleName(id, p, p.alt.lim), color: COL[id] + '73', vals: p.alt.vals});
+  l.push({name: BENCH, color: COL.bench, dash: true, vals: p.curve.map(c => c[2])});
+  return l;
+}
 const trialVal = a => a.mark ? a.mark.v : a.equity.length ? a.equity[a.equity.length - 1].v : a.start_cash;
 
 // ---------------------------------------------------------------- the page
@@ -259,13 +267,13 @@ function render(accts) {
     // an account that lost nearly everything can't afford another trade, so its line goes flat: say so on the card
     const lastSell = p && p.last_trades.length ? p.last_trades[p.last_trades.length - 1].sell : null;
     const broke = p && lastSell && p.final < 0.05 * BT_CASH && day(p.end) - day(lastSell) > 365 * 864e5 ? lastSell : null;
-    const btHead = p ? `${money(p.final)} · ${pct(p.cagr)} a year vs ${BENCH} ${pct(p.bench_cagr)}` +
+    const btHead = p ? (p.alt ? `${p.lim} rule ` : '') + `${money(p.final)} · ${pct(p.cagr)} a year vs ${BENCH} ${pct(p.bench_cagr)}` +
+      (p.alt ? ` · ${p.alt.lim} rule ${money(p.alt.final)}, ${pct(p.alt.cagr)} a year, worst drop ${pct(p.alt.maxdd, 0)}` : '') +
       (broke ? ` · lost almost all of it by ${mdy(broke)}, too little left to trade, so the line goes flat` : '') : 'Not run yet';
     const tv = a ? trialVal(a) : null;
     const trHead = a ? `${money(tv)} ${pct((tv / a.start_cash - 1) * 100)} vs ${BENCH} ${pct(benchRet(a))}` : 'Loading…';
     cards.push(() => {
-      if (p) lineChart(btw, p.curve.map(c => c[0]), [{name: NAME[id], color: COL[id], vals: p.curve.map(c => c[1])},
-        {name: BENCH, color: COL.bench, dash: true, vals: p.curve.map(c => c[2])}], {h: 180, base: BT_CASH, label: yr});
+      if (p) lineChart(btw, p.curve.map(c => c[0]), btCard(id, p), {h: 180, base: BT_CASH, label: yr});
       else btw.replaceChildren(el('div', {class: 'bx-none', text: 'The 10-year backtest is on its way.'}));
       if (a) { const t = trialSeries(a); lineChart(trw, t.map(x => x.d), [{name: NAME[id], color: COL[id], vals: t.map(x => x.v)},
         {name: BENCH, color: COL.bench, dash: true, vals: t.map(x => x.b)}], {h: 180, base: a.start_cash}); }
@@ -284,7 +292,7 @@ function render(accts) {
       el('div', {class: 'bx-ph'}, el('span', {class: 'bx-dot', style: 'background:' + COL[id]}), el('b', {text: NAME[id]}), pill),
       el('div', {class: 'bx-rules', text: (p ? p.rules : a && a.rules ? a.rules[0] : '').split('. ')[0].replace(/\.$/, '') + '.'}),
       el('div', {class: 'bx-two'},
-        el('div', {}, el('div', {class: 'bx-tag', text: p ? `Backtest ${p.start.slice(0, 4)}-${p.end.slice(0, 4)}` : 'Backtest'}), el('div', {class: 'bx-bh', text: btHead}), btw),
+        el('div', {}, el('div', {class: 'bx-tag', text: p ? `Backtest ${p.start.slice(0, 4)}-${p.end.slice(0, 4)}` : 'Backtest'}), el('div', {class: 'bx-bh', text: btHead}), p && p.alt ? legend(btCard(id, p)) : '', btw),
         el('div', {}, el('div', {class: 'bx-tag', text: a ? 'Paper trial since ' + md(a.start) : 'Paper trial'}), el('div', {class: 'bx-bh', text: trHead}), trw)),
       p ? el('div', {class: 'bx-stats'}, stat('Worst drop', pct(p.maxdd, 0)), stat(`${BENCH}'s worst`, pct(p.bench_maxdd, 0)),
         stat('Trades', p.trades.toLocaleString('en-US')), stat('In the market', p.invested + '% of the time'),

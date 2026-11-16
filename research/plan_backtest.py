@@ -555,6 +555,17 @@ def breadth_json(M, F):
                 groups={(mkt if g == "_mkt" else g): dict(rise=r1(F["rise"][g]), avg=r1(F["ravg"][g])) for g in F["rise"]})
 
 
+def set_lim(M, F, lim):
+    """Point the overbought (breadth) rule at another line: the market's and each sector's block, and the strongest list."""
+    M.cfg["OB_BREADTH"] = lim
+    F["mkt_hot"] = F["rise"]["_mkt"] > lim
+    F["sec_hot"] = F["sec_rise"] > lim
+    F["ss_ok"] = F["ok"] & F["core"] & F["sec_on"] & ~F["sec_hot"] & np.isfinite(F["strength"])
+
+
+ALT_LIM = 75     # the old overbought line: every plan's backtest also runs on it, as a second line (user, 2026-11-16)
+
+
 def run_all(M):
     t0 = time.time()
     F = feats(M)
@@ -592,6 +603,17 @@ def run_all(M):
             sh["with_calls"]["peak"] = round(max(c[1] for c in s["curve"]), 2)
             out[k] = sh
             print(f"    shown with shares: ${sh['final']:,.0f} ({sh['cagr']:+.1f}%/yr, worst drop {sh['maxdd']:.0f}%)", flush=True)
+    # the same plans on the old 75 line, for the second line on each card (the page's rule is now 85)
+    lim = M.cfg["OB_BREADTH"]
+    if lim != ALT_LIM:
+        set_lim(M, F, ALT_LIM)
+        for k, fn in (("A", lambda: run_system(M, F, "open", False)), ("C", lambda: run_system(M, F, "close", False)),
+                      ("B", lambda: run_ai(M, F, False)), ("D", lambda: run_ov(M, F, False))):
+            s = summary(M, fn(), desc[k])
+            out[k]["lim"] = lim
+            out[k]["alt"] = dict(lim=ALT_LIM, vals=[c[1] for c in s["curve"]], **{x: s[x] for x in ("final", "total", "cagr", "maxdd", "trades", "win", "invested")})
+            print(f"  {k} on the {ALT_LIM} line: ${s['final']:,.0f} ({s['cagr']:+.1f}%/yr, worst drop {s['maxdd']:.0f}%) ({time.time() - t0:.0f}s)", flush=True)
+        set_lim(M, F, lim)
     M.breadth = breadth_json(M, F)
     return dict(market=M.kind, bench=bn, cash=CASH, asof=M.idx[-1].strftime("%Y-%m-%d"), built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 universe=(f"{int(M.member[M.t0:].sum(1).mean())} S&P 500 stocks a day, as the index was each day" if unit == "stock"
