@@ -60,12 +60,11 @@ def key(*parts, title="How to read this"):
 
 
 def zones(cfg):
-    """The user's breadth colour rule in one sentence (2026-11-16: red moved from over 75 to over 85, prime zone dark green)."""
-    ob, os_, rd = cfg["OB_BREADTH"], cfg["OS_BREADTH"], cfg.get("RED_BREADTH", 85)
-    return (f"{sw(PRIME)}{os_}-{ob}% and rising (above its 10-day average): dark green, the prime zone "
-            f"{sw(GREEN)}{ob}-{rd}% and rising: light green (over {ob} still blocks every buy) "
-            f"{sw(YELLOW)}falling (under its 10-day average): yellow {sw(RED)}over {rd} or under {os_}: red. "
-            f"Red at {rd} is colour only: your overbought rule still stops buys over {ob}.")
+    """The user's breadth colour rule in one sentence (2026-11-16: red moved from over 85 to over 85, prime zone dark green)."""
+    ob, os_, pr = cfg["OB_BREADTH"], cfg["OS_BREADTH"], cfg.get("PRIME_BREADTH", 75)
+    return (f"{sw(PRIME)}{os_}-{pr}% and rising (above its 10-day average): dark green, the prime zone "
+            f"{sw(GREEN)}{pr}-{ob}% and rising: light green "
+            f"{sw(YELLOW)}falling (under its 10-day average): yellow {sw(RED)}over {ob} (overbought: no buys) or under {os_} (oversold): red.")
 
 
 def words(market):
@@ -86,7 +85,7 @@ def page_keys(market, cfg, ov):
     w = words(market)
     c = w["crypto"]
     ob, os_, ma = cfg["OB_BREADTH"], cfg["OS_BREADTH"], cfg["LONG_MA_TYPE"]
-    rd = cfg.get("RED_BREADTH", 85)
+    pr = cfg.get("PRIME_BREADTH", 75)
     u, us, U_, Us, g, gs, G, Gs, b, mk, Mk = (w[k] for k in ("u", "us", "U", "Us", "g", "gs", "G", "Gs", "b", "mk", "Mk"))
     rising = (f"<b>Rising</b> = the share of {w['mem']} with the 10 EMA over the 20 EMA and the close over the 50 EMA "
               "(your rule). The page's main breadth number.")
@@ -115,8 +114,8 @@ def page_keys(market, cfg, ov):
         H(f"Step 2 · Strongest {g}"),
         R(f"Strongest {g}", f"The {g} with the most {us} Rising that also has at least one {u} on the strongest list. If the "
           f"top {g} by Rising is skipped, the line under it says why (over {ob}, fading, or no {u} in your uptrend)."),
-        R(f"{sw(UP)}{sw(YEL)}{sw(DN)} Bars", f"Bar length = Rising %. Dark green = {os_}-{ob}% and rising (upswing), the prime zone; "
-          f"light green = {ob}-{rd}% and rising (over your {ob} line: no buys); yellow = falling; red = over {rd} or under {os_} (oversold). The small tick = its 10-day average; the faint mark = the {ob} line."),
+        R(f"{sw(UP)}{sw(YEL)}{sw(DN)} Bars", f"Bar length = Rising %. Dark green = {os_}-{pr}% and rising (upswing), the prime zone; "
+          f"light green = {pr}-{ob}% and rising; yellow = falling; red = over your {ob} line (overbought, no buys) or under {os_} (oversold). The small tick = its 10-day average; the faint mark = the {ob} line."),
         R("Pills", f"\"3 {us}\" = how many of its {us} are on the strongest list · \"Over {ob}\" = overbought, nothing bought · "
           f"\"Under {os_}\" = oversold · \"Near {ob}\" = within 5 points of it with no {u} on the list · \"fading\" / \"none pass\" = no {u} qualifies."),
         H(f"Step 3 · Strongest {u}"),
@@ -142,8 +141,8 @@ def page_keys(market, cfg, ov):
     out["market"] = key(
         R("In uptrend", f"How many {us} pass {uptrend}, out of every liquid {u} ({w['liq']}). Green when more than half do."),
         R(f"{Mk} {'coins' if c else 'stocks'} rising", f"{rising} The state under it: ▲ upswing or ▼ fading and since when; "
-          f"\"overbought\" when it's over {ob}, \"oversold\" under {os_}; plus its 10-day average. Dark green = {os_}-{ob} and rising, "
-          f"light green = {ob}-{rd} and rising, yellow = falling, red = over {rd} or under {os_}. The line = the last 60 days."),
+          f"\"overbought\" when it's over {ob}, \"oversold\" under {os_}; plus its 10-day average. Dark green = {os_}-{pr} and rising, "
+          f"light green = {pr}-{ob} and rising, yellow = falling, red = over {ob} or under {os_}. The line = the last 60 days."),
         R("% above 20 / 50 / 200-day", f"The share of {us} closing over their 20-, 50- and 200-day simple averages. ▲ / ▼ = up or "
           "down vs 5 days ago. Green over 50%. 20-day = short term, 50-day = the swing, 200-day = the long trend."),
         R("Advance / Decline", f"How many {us} closed up vs down today. The line is the running total over 60 days: rising = more "
@@ -175,13 +174,13 @@ def page_keys(market, cfg, ov):
         H("The heatmap"),
         R("Rows", f"{Mk} first, then each {g}, the most Rising tonight first. Each small cell is one {'day' if c else 'trading day'}, "
           "the last 3 months, newest on the right."),
-        R(f"{sw(PRIME)} Dark green", f"{os_}-{ob}% Rising and rising that day (above its 10-day average): the prime zone."),
-        R(f"{sw(GREEN)} Light green", f"{ob}-{rd}% and rising: still climbing, but over your {ob} line, so nothing in it gets bought."),
-        R(f"{sw(YELLOW)} Yellow", f"Falling (under its 10-day average, a downswing), anywhere from {os_} to {rd}."),
-        R(f"{sw(RED)} Red", f"Over {rd}: very stretched, or under {os_}: "
+        R(f"{sw(PRIME)} Dark green", f"{os_}-{pr}% Rising and rising that day (above its 10-day average): the prime zone."),
+        R(f"{sw(GREEN)} Light green", f"{pr}-{ob}% and rising: still climbing, getting stretched."),
+        R(f"{sw(YELLOW)} Yellow", f"Falling (under its 10-day average, a downswing), anywhere from {os_} to {ob}."),
+        R(f"{sw(RED)} Red", f"Over {ob}: overbought (your rule: no upswing then, and nothing in it gets bought), or under {os_}: "
           "oversold, washed out."),
         R("Tonight bar", f"Next to each row's 3 months: tonight's Rising as a bar, the same bar as on the Today tab. Its colour "
-          f"follows the same rule (green, yellow, red); the tick = its 10-day average; the dashed line = your {ob} line."),
+          f"follows the same rule (dark green, light green, yellow, red); the tick = its 10-day average; the dashed line = your {ob} line."),
         R("Right column", f"Rising tonight and its state: ▲ upswing, ▼ fading, <b>OB</b> overbought (over {ob}), <b>OS</b> oversold "
           f"(under {os_})."),
         R("Tap or hover", "A cell shows that day's Rising, its 10-day average, the share in your full uptrend and the state. "
@@ -216,7 +215,7 @@ def page_keys(market, cfg, ov):
           f"{ln(UP)}green when up, {ln(DN)}red when down. The small line under it is its closes over that stretch (Day = "
           "yesterday's close, today's open, today's close)."),
         R(f"{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Rising", f"Your breadth: the share of its {w['mem']} with the 10 EMA over the 20 and "
-          f"price over the 50 EMA. Dark green = {os_}-{ob}% and rising, light green = {ob}-{rd}% and rising, yellow = falling, red = over {rd} or under {os_}. "
+          f"price over the 50 EMA. Dark green = {os_}-{pr}% and rising, light green = {pr}-{ob}% and rising, yellow = falling, red = over {ob} or under {os_}. "
           "Line = its last month."),
         R("Avg volume", "The ETF's average daily volume over the 20 days before today."),
         R("Rel volume", "Today's volume ÷ that average. Over 1× (green) = busier than usual."),
@@ -245,7 +244,7 @@ def page_keys(market, cfg, ov):
         R("Lines", f"{ln('#e8a33d')}EMA 10 {ln(ACC)}EMA 20 {ln('#a259d9')}EMA 50."),
         R("Daily / Weekly / Monthly", "About 6 months, 2 years or 10 years of bars."),
         R("The strip under it", f"{ln('#14202e')}Rising {ln('#14202e', 'o')}share in your full uptrend. "
-          f"Shading: {sw(UP)}{os_}-{ob}% and rising, {sw(YEL)}{os_}-{ob}% and falling, {sw(DN)}over {ob} (overbought) or under {os_} "
+          f"Shading: {sw(UP)}{os_}-{pr}% and rising (darker), {pr}-{ob}% and rising (lighter), {sw(YEL)}falling, {sw(DN)}over {ob} (overbought) or under {os_} "
           f"(oversold). Faint red lines at {ob} and {os_}. "
           "Daily and weekly only: the prices behind it go back 2 years."),
         R("Hover / tap", "The line above the strip shows that bar's numbers."),
@@ -500,7 +499,7 @@ def ovtlyr_keys(heat_max=70):
         R("Stand-ins", "OVTLYR's heatmap and signals are private, so: heat = 14-day RSI; buy signal = the 10 EMA crossing over "
           "the 20; sell signal = under it; breadth = share of stocks with the 10 EMA over the 20."),
         U("Follow the deck top down: if the market fails, Plan M is off whatever the stocks look like. Then sectors, then the "
-          "Ready stocks. This page has none of your own rules (no 75 breadth line): it's OVTLYR's plan alone."))
+          "Ready stocks. This page has none of your own rules (no 85 breadth line): it's OVTLYR's plan alone."))
     out["market"] = key(
         R("✓ / ✗ on each card", "Whether that market check passes. All four must pass for Plan M."),
         R("SPY heat", f"SPY's 14-day RSI and yesterday's. Passes when under {heat_max} and rising. The chart = 3 months, with the "

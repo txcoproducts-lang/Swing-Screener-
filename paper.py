@@ -650,13 +650,13 @@ def sell_any(a, p, day, why):
 
 
 def market_hot(day):
-    """Your overbought rule for the whole market: last night's S&P 500 breadth over the 75 line. The reason, or ""."""
+    """Your overbought rule for the whole market: last night's S&P 500 breadth over the 85 line. The reason, or ""."""
     return SC.breadth_hot(None, day.breadth())
 
 
 def hot_now(day, items):
     """Your overbought rule at buying time, as the paper accounts use it from Oct 15: {ticker: why} for each (ticker,
-    sector) in items whose sector's breadth was over the 75 line last night (the market's is market_hot). RSI and CCI
+    sector) in items whose sector's breadth was over the 85 line last night (the market's is market_hot). RSI and CCI
     no longer count (the user dropped them everywhere, Oct 14)."""
     br = day.breadth()
     return {t: SC.breadth_hot(sec, br) for t, sec in items if isinstance(sec, str) and sec and SC.breadth_hot(sec, br)}
@@ -666,7 +666,7 @@ def paper_order(scr):
     """Setups in buying order for the paper accounts: the strongest sector, strongest stock list (SC.ss_order) plus the
     setups the screener marked Overbought only for RSI over 70 or CCI over 100, which the paper accounts don't use
     (your call, Oct 14). Those keep their setup type: a Pullback needs RSI 50 or under, a Momentum setup 55 or over.
-    A sector over the 75 line still fails sec_on, and the buyers check the market's breadth themselves."""
+    A sector over the 85 line still fails sec_on, and the buyers check the market's breadth themselves."""
     if "ss_ok" not in scr or "blocked" not in scr:
         return SC.ss_order(scr)
     has, blk = scr.has_setup.astype(bool), scr.blocked.astype(bool)
@@ -764,7 +764,7 @@ def a_buys(a, day):
         n_all = int((scr.has_setup.astype(bool) | (scr.blocked.astype(bool) if "blocked" in scr else False)).sum())
         note(a, now, f"No new buy: {src} found no setups." if not n_all else
              f"No new buy: none of the {plural(n_all, 'setup')} in {src} is on the strongest sector, strongest stock list "
-             "(in your uptrend, in a sector that is turning up and rising, not over the 75 line).", "day")
+             "(in your uptrend, in a sector that is turning up and rising, not over the 85 line).", "day")
         return
     sold_today = {p["ticker"] for p in a["closed"] if p["sell"]["t"][:10] == day.today.isoformat()}
     scan = [(i + 1, r) for i, r in setups.head(P["A_SCAN"]).iterrows()]

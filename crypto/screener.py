@@ -67,8 +67,8 @@ CFG = dict(
     OB_RSI=70, OS_RSI=30,    # 14-day RSI
     CCI_N=20,                # 20-day CCI; it swings around 0 (most days between -100 and +100), so its levels are +-100
     OB_CCI=100, OS_CCI=-100,
-    OB_BREADTH=75, OS_BREADTH=30,   # breadth (Rising: the share of coins with the 10 EMA over the 20 and price over the 50 EMA), market or category
-    RED_BREADTH=85,                 # colour only (user, 2026-11-16): red starts over 85, buys still stop over OB_BREADTH (75)
+    OB_BREADTH=85, OS_BREADTH=30,   # breadth (Rising: the share of coins with the 10 EMA over the 20 and price over the 50 EMA), market or category
+    PRIME_BREADTH=75,               # colour only: 30-75 rising = dark green, the prime zone (user, 2026-11-16; the buy block moved 75 -> 85 the same day)
 )
 YEAR, HALF, Q3, QTR, MONTH = 365, 182, 273, 91, 30   # coins trade every day: a year is 365 daily bars, not 252
 
@@ -427,8 +427,8 @@ def backtest(d, spy, years=None, br=None, group=None):
     """The user's rules on one stock's daily bars, against buy-and-hold of the coin and of BTC over the same days.
     Buy at the next open after a close with one of the page's setups (Momentum or Pullback, as analyze() finds them)
     that is on the strongest sector, strongest stock list that night, as Your system buys: the stock in your uptrend, its
-    sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 75 line, and the market not over
-    75 (RSI and CCI aren't checked: the user dropped that part of the overbought rule on 2026-10-15). Sell at the next open after a close with EMA10 under EMA20
+    sector (br[group]) in an upswing (Rising over its 10-day average) and not over the 85 line, and the market not over
+    85 (RSI and CCI aren't checked: the user dropped that part of the overbought rule on 2026-10-15). Sell at the next open after a close with EMA10 under EMA20
     and the price under EMA50 (the user's 4-hour exit, on daily bars: Yahoo keeps only ~2 years of intraday bars), or
     on an 8% drop from the entry (the paper accounts' stop). Cash earns nothing while out; no costs.
     br: {group: daily Rising / avg} (bt_breadth); days without breadth skip those checks, and a ticker with no group
@@ -605,12 +605,12 @@ def lvl(v, lim):
 
 def hot(r, c):
     """Why a coin is overbought by RSI or CCI: never, since 2026-10-15. The user dropped the RSI over 70 / CCI over 100
-    part of the overbought rule everywhere; only breadth over the 75 line (breadth_hot) blocks now. RSI and CCI stay on
+    part of the overbought rule everywhere; only breadth over the 85 line (breadth_hot) blocks now. RSI and CCI stay on
     the page as information (OB / OS tags)."""
     return []
 
 def breadth_hot(sector, br):
-    """Overbought breadth, over the 75 line: the market's (sector=None) or one sector's. br: {group: Rising %}, the
+    """Overbought breadth, over the 85 line: the market's (sector=None) or one sector's. br: {group: Rising %}, the
     breadth view's numbers. Returns the reason, or "" when it isn't."""
     v, lim = br.get(sector or MARKET), CFG["OB_BREADTH"]
     if v is None or v != v or v <= lim:
@@ -620,7 +620,7 @@ def breadth_hot(sector, br):
 
 def overbought(frames, sectors, br):
     """Tonight's overbought coins by the user's rule: {ticker: (own, sec)}, where own lists the reasons from its RSI /
-    CCI and sec is its category's breadth over the 75 line ("" when it isn't). Coins with neither are left out."""
+    CCI and sec is its category's breadth over the 85 line ("" when it isn't). Coins with neither are left out."""
     out = {}
     for t, d in frames.items():
         if len(d) <= 3 * CFG["CCI_N"]:
@@ -780,7 +780,7 @@ def breadth_history(frames, sectors, members):
 
 
 def bzone(v):
-    """The user's breadth lines: 2 = overbought (over 75), -1 = oversold (under 30), 0 = in between. Over 75 there is no
+    """The user's breadth lines: 2 = overbought (over 85), -1 = oversold (under 30), 0 = in between. Over 85 there is no
     upswing, only overbought (the user's rule)."""
     return 2 if v > CFG["OB_BREADTH"] else -1 if v < CFG["OS_BREADTH"] else 0
 
@@ -826,7 +826,7 @@ def chart_breadth(charts, bh):
 #   category = the coin's category's Rising
 #   coin     = its relative strength (IBD-style, as the AI picks use) ranked among the liquid coins in its category
 # On the list: a coin in the user's uptrend, in a category in an upswing (Rising above its 10-day average) that isn't over
-# the 75 line, and not overbought itself. Your system and Your system, after 2 PM buy the highest-scoring setup on it.
+# the 85 line, and not overbought itself. Your system and Your system, after 2 PM buy the highest-scoring setup on it.
 SS = dict(W_MKT=0.4, W_SEC=0.4, W_STK=0.2, N=25, PER_SECTOR=3)
 
 
@@ -839,7 +839,7 @@ def ibd_rs(c):
 def strength(df, frames, bh):
     """Adds the strength score and its parts to df (the liquid coins): rs, rs_n / rs_of (its rank in its category),
     ss_mkt / ss_sec / ss_stk (each part's points), strength (the total, 0-100), sec_on (its category is in an upswing and
-    not over the 75 line) and ss_ok (on the list). Also returns the market's and each category's state for the page."""
+    not over the 85 line) and ss_ok (on the list). Also returns the market's and each category's state for the page."""
     sw = {g: swing_state(b) for g, b in bh.items()}
     m = sw.get(MARKET)
     df["rs"] = df.ticker.map(lambda t: ibd_rs(frames[t]["Close"]))
@@ -1222,7 +1222,7 @@ def ovtlyr_plan(frames, sectors, spy, qqq, earn=None, prev=None, br=None, hot_ow
     benchmark's (Bitcoin's) daily bars; qqq: {coin: daily bars} for Plan ETF's coins; earn: always None (no earnings);
     prev: the last saved plan, so the Plan M list shows which coins are new and why any of the last list's coins left.
     The user's overbought rule on top of the plan: br = tonight's breadth view numbers ({group: Rising %}); the market or
-    a category over the 75 line fails its check; hot_own = {ticker: why} for coins with RSI over 70 or CCI over 100."""
+    a category over the 85 line fails its check; hot_own = {ticker: why} for coins with RSI over 70 or CCI over 100."""
     br, hot_own = br or {}, hot_own or {}
     mkt_hot = breadth_hot(None, br)
     idx = pd.DatetimeIndex(sorted(set().union(*(d.index for d in frames.values()))))
@@ -1829,7 +1829,7 @@ def ss_html(df, sw, mkt_hot=""):
         w = sw[n]
         top = ok[ok.sector == n].sort_values("rs_n").head(SS["PER_SECTOR"])
         best = ", ".join(tk(t) for t in top.ticker) or (
-            '<span class="mut">none: ' + ("over the 75 line" if w["z"] == 2 else "fading") + "</span>" if not (w["on"] and w["z"] != 2)
+            '<span class="mut">none: ' + ("over the 85 line" if w["z"] == 2 else "fading") + "</span>" if not (w["on"] and w["z"] != 2)
             else '<span class="mut">' + (f'{hot} in your uptrend, all overbought' if (hot := int((df.core & (df.sector == n)).sum())) else 'no coin in your uptrend') + '</span>')
         srows.append(f'<tr><td data-v="{i + 1}">{i + 1}</td><td data-v="{html_esc(n)}">{html_esc(SHORT_SECTOR.get(n, n))}</td>'
                      f'<td data-v="{w["rise"]}">{w["rise"]:.0f}%</td><td data-v="{w["avg"]}">{w["avg"]:.0f}%</td>'
@@ -1896,12 +1896,12 @@ def heat_html(bh, days=QTR):
     for i, n in enumerate(names):
         b, st = bh[n].reindex(idx), swing_state(bh[n])
         zd = lambda v, on: ((" o" if v > CFG["OS_BREADTH"] else " u") if bred(v) else " d" if on == 0 else
-                            " p" if round(float(v), 1) <= CFG["OB_BREADTH"] else "")   # o/u red, d falling = yellow, p prime dark green, else 75-85 light green
+                            " p" if round(float(v), 1) <= CFG["PRIME_BREADTH"] else "")   # o/u red, d falling = yellow, p prime dark green, else 75-85 light green
         cells = "".join(f'<i class="h{min(9, int(v // 10))}{zd(v, on)}"></i>' if v == v else "<i></i>"
                         for v, on in zip(b.rise, b.on))
         col = bbar(st)   # the user's breadth colours
         tbar = (f'<span class="sbar hmb"><b style="width:{min(st["rise"], 100):.0f}%;background:{col}"></b><i style="left:{min(st["avg"], 100):.0f}%"></i>'
-                f'<u style="left:{CFG["OB_BREADTH"]}%"></u></span>')      # tonight, as on the Today bars: tick = 10-day average, dashed = 75
+                f'<u style="left:{CFG["OB_BREADTH"]}%"></u></span>')      # tonight, as on the Today bars: tick = 10-day average, dashed = 85
         rows.append(f'<div class="hmr"><span class="hml">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                     f'<span class="hmc" data-i="{i}">{cells}</span>{tbar}<span class="hmv">{st["rise"]:.0f}% {swing_tag(st, False)}</span></div>')
         data["rows"].append(dict(n=n, r=r1(b.rise), a=r1(b.avg), u=r1(b.up), s=[None if v != v else int(v) for v in b.on]))
@@ -1909,22 +1909,22 @@ def heat_html(bh, days=QTR):
     if len(ticks) > 1 and ticks[1][0] < 8:          # a first month with only a few days would crowd the next label
         ticks = ticks[1:]
     axis = "".join(f'<b style="left:{k / len(idx) * 100:.1f}%">{d:%b}</b>' for k, d in ticks)
-    zkey = (f'<span class="hmz"><i class="g"></i>{CFG["OB_BREADTH"]}-{CFG["RED_BREADTH"]}% and rising: light green (over {CFG["OB_BREADTH"]} still blocks buys)</span>'
-            f'<span class="hmz"><i class="o"></i>over {CFG["RED_BREADTH"]} or under {CFG["OS_BREADTH"]}: red</span>'
+    zkey = (f'<span class="hmz"><i class="g"></i>{CFG["PRIME_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: light green</span>'
+            f'<span class="hmz"><i class="o"></i>over {CFG["OB_BREADTH"]} (overbought, no buys) or under {CFG["OS_BREADTH"]}: red</span>'
             f'<span class="hmz"><i class="g d"></i>falling (under its 10-day average): yellow</span>'
             f'<span class="hmz">Tonight bar: tick = its 10-day average, dashed = your {CFG["OB_BREADTH"]} line</span>')
     head = '<div class="hmr hmh"><span></span><span>Last 3 months, day by day</span><span>Tonight</span><span></span></div>'
     return (f'<div class="hm" id="hm">{head}{"".join(rows)}<div class="hmr"><span></span><span class="hmt">{axis}</span><span></span><span></span></div>'
-            f'<div class="hmk"><span class="hmz"><i class="p"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising: dark green, the prime zone</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
+            f'<div class="hmk"><span class="hmz"><i class="p"></i>{CFG["OS_BREADTH"]}-{CFG["PRIME_BREADTH"]}% and rising: dark green, the prime zone</span>{zkey}</div><div class="hmtip" hidden></div></div>'), data
 
 
 PRIME, LIGHT_G, RED_F, YEL_F = "#5cc08c", "#a8e0bf", "#f4a6a0", "#f7dc7a"   # breadth fills: prime dark green / 75-85 light green / red / yellow
 
 
 def bred(v):
-    """Red by the user's colour rule (2026-11-16): over 85 or under 30. Colour only: the over-75 buy block is bzone()."""
+    """Red by the user's colour rule (2026-11-16): over 85 (the overbought line, no buys) or under 30."""
     v = round(float(v), 1)
-    return v > CFG["RED_BREADTH"] or v < CFG["OS_BREADTH"]
+    return v > CFG["OB_BREADTH"] or v < CFG["OS_BREADTH"]
 
 
 def bfill(v, on):
@@ -1932,13 +1932,13 @@ def bfill(v, on):
     30-75 = dark green, the prime zone; rising and 75-85 = light green; falling = yellow."""
     if bred(v):
         return RED_F
-    return YEL_F if not on else PRIME if round(float(v), 1) <= CFG["OB_BREADTH"] else LIGHT_G
+    return YEL_F if not on else PRIME if round(float(v), 1) <= CFG["PRIME_BREADTH"] else LIGHT_G
 
 
 def bbar(w):
     """The Today / heatmap bar colour for a group's state: the same rule, in the stronger bar shades."""
     return ("var(--dn)" if bred(w["rise"]) else "var(--yel)" if not w["on"] else
-            "var(--up)" if w["rise"] <= CFG["OB_BREADTH"] else "#7fd1a8")
+            "var(--up)" if w["rise"] <= CFG["PRIME_BREADTH"] else "#7fd1a8")
 
 
 def bcls(w):
@@ -1948,7 +1948,7 @@ def bcls(w):
 
 
 def swing_tag(w, since=True):
-    """A group's state for the page: OB (overbought, over 75: no upswing then, the user's rule), else ▲ upswing / ▼ fading,
+    """A group's state for the page: OB (overbought, over 85: no upswing then, the user's rule), else ▲ upswing / ▼ fading,
     with OS when it's oversold (under 30); since = add the day the state began."""
     if w["z"] == 2:
         return '<span class="obt">OB</span>' + (f' <span class="mut">since {md(w["zsince"])}</span>' if since else "")
@@ -2057,9 +2057,9 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
     def srow(i, n, short=False):
         x = sws[n]
         col = bbar(x)   # the user's breadth colours
-        tag = ('<span class="pill p-dn">Over 75</span>' if x["z"] == 2 else
+        tag = ('<span class="pill p-dn">Over 85</span>' if x["z"] == 2 else
                '<span class="pill p-dn">Under 30</span>' if x["z"] == -1 else
-               '<span class="pill p-w">Near 75</span>' if x["rise"] >= CFG["OB_BREADTH"] - 5 and n_on[n] == 0 else
+               '<span class="pill p-w">Near 85</span>' if x["rise"] >= CFG["OB_BREADTH"] - 5 and n_on[n] == 0 else
                f'<span class="pill p-up">{n_on[n]} coin{"s" if n_on[n] != 1 else ""}</span>' if n_on[n] else
                '<span class="pill p-n">' + ("fading" if not x["on"] else "none pass") + '</span>')
         return (f'<div class="sr" data-sector="{html_esc(n)}" role="button" tabindex="0" title="Show {sh(n)} in the coin table">'
@@ -2072,7 +2072,7 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
         why = ""
         if top != lead:
             t = sws[top]
-            why = (f'{sh(top)} is higher ({t["rise"]:.0f}%) but ' + ("is over the 75 line." if t["z"] == 2 else "is fading." if not t["on"] else
+            why = (f'{sh(top)} is higher ({t["rise"]:.0f}%) but ' + ("is over the 85 line." if t["z"] == 2 else "is fading." if not t["on"] else
                    "every one of its uptrend coins is overbought." if int((df.core & (df.sector == top)).sum()) else "has no coin in your uptrend."))
         s2 = (f'<div class="step"><div class="n">Step 2 · Strongest category</div><div class="big">{sh(lead)} '
               f'<span class="pill p-up">{L["rise"]:.0f}% rising</span></div><div class="sub">{why or f"{sh(lead)} leads the categories you can trade tonight."}</div>'
@@ -2103,8 +2103,8 @@ def today_html(df, sws, spy=None, lists=None, ov=None, mkt_hot="", meta=""):
                  '<div class="hint">Share of each category\'s coins with the 10 EMA over the 20 and price over the 50 EMA · tick = its 10-day '
                  f'average · dashed = your {CFG["OB_BREADTH"]} line. Tap a category to see its coins.</div>'
                  + "".join(srow(i, n) for i, n in enumerate(secs))
-                 + f'<div class="lgd"><span><i style="background:var(--up)"></i>{CFG["OS_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising</span><span><i style="background:#7fd1a8"></i>{CFG["OB_BREADTH"]}-{CFG["RED_BREADTH"]}% and rising (no buys over {CFG["OB_BREADTH"]})</span><span><i style="background:var(--yel)"></i>Falling</span>'
-                 f'<span><i style="background:var(--dn)"></i>Over {CFG["RED_BREADTH"]} or under {CFG["OS_BREADTH"]}</span></div></div>') if secs else ""
+                 + f'<div class="lgd"><span><i style="background:var(--up)"></i>{CFG["OS_BREADTH"]}-{CFG["PRIME_BREADTH"]}% and rising</span><span><i style="background:#7fd1a8"></i>{CFG["PRIME_BREADTH"]}-{CFG["OB_BREADTH"]}% and rising</span><span><i style="background:var(--yel)"></i>Falling</span>'
+                 f'<span><i style="background:var(--dn)"></i>Over {CFG["OB_BREADTH"]} overbought or under {CFG["OS_BREADTH"]} oversold</span></div></div>') if secs else ""
     st_card = ('<div class="tcard"><h3>Strongest coins in the strongest categories <a data-go="stocks">All ' + str(len(ss)) + ' ›</a></h3>'
                '<div class="hint">Score out of 100 = market 40% + sector 40% + the coin\'s strength in its category 20%</div>'
                + ("".join(strow(r) for r in ss.head(10).itertuples()) or '<div class="hint pke">No coin passes tonight.</div>')
@@ -2142,13 +2142,13 @@ def sector_tiles(df, sws, bh, etfs=None, unit="coin"):
         w, k = sws[n], int((ss.sector == n).sum())
         r = w["rise"]
         bg, dark = bfill(w["rise"], w["on"]), 1   # the user's colours: red over 85 or under 30 / dark green 30-75 rising / light green 75-85 rising / yellow falling
-        tag = ("OVER 75" if w["z"] == 2 else "UNDER 30" if w["z"] == -1 else "NEAR 75" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
+        tag = ("OVER 85" if w["z"] == 2 else "UNDER 30" if w["z"] == -1 else "NEAR 85" if r >= CFG["OB_BREADTH"] - 5 else "RISING" if w["on"] else "FADING")
         line = spark(bh[n].rise.iloc[-5:], 64, 28, "#14202e" if dark else "#fff")
         sub = (f'{etfs[n]} · ' if etfs.get(n) else "") + (f"{k} on list" if k else "none pass")
         out.append(f'<div class="stile{" dk" if dark else ""}" data-sector="{html_esc(n)}" role="button" tabindex="0" style="background:{bg}" '
                    f'title="Show {html_esc(n)} in the {unit} table"><span class="nm">{html_esc(SHORT_SECTOR.get(n, n))}</span>'
                    f'<span class="e">{sub}</span><span class="bd">{tag}</span><span class="v">{r:.0f}%</span><span class="spk">{line}</span></div>')
-    return ('<div class="hint">Dark green = 30-75% of coins rising and climbing (above its 10-day average), the prime zone; light green = 75-85% and climbing (over 75 still blocks buys); yellow = falling; red = over 85% or under 30%. strongest first · line = the last 5 days. '
+    return ('<div class="hint">Dark green = 30-75% of coins rising and climbing (above its 10-day average), the prime zone; light green = 75-85% and climbing; yellow = falling; red = over 85% (overbought: no buys) or under 30%. strongest first · line = the last 5 days. '
             f'Tap one to see its {unit}s.</div><div class="stiles">' + "".join(out) + '</div>') if out else ""
 
 
@@ -2235,7 +2235,7 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
                            for lbl, k in (("3M", QTR), ("6M", HALF), ("1Y", YEAR), ("All", 0)))
                  + '</div></div><div class="blk" id="blk"></div><div class="blc"></div></div>') if bl_data and heat else ""
     bt_html = ('<h2>Breadth over time</h2>' + hk("breadth") + '<div class="hint">Categories stand in for sectors. Rising = the share of coins with the 10 EMA above the 20 '
-                      'and the close above the 50 EMA (your rule), by day for the last 3 months; dark green = 30-75% and rising (above its 10-day average), the prime zone; light green = 75-85% and rising (over 75 still blocks buys); yellow = falling (under its 10-day average); red = over 85 or under 30 (oversold). ▲ = an upswing (Rising '
+                      'and the close above the 50 EMA (your rule), by day for the last 3 months; dark green = 30-75% and rising (above its 10-day average), the prime zone; light green = 75-85% and rising; yellow = falling (under its 10-day average); red = over 85 (overbought: no buys) or under 30 (oversold). ▲ = an upswing (Rising '
                       'above its own 10-day average), ▼ = fading. Your lines: <span class="obt">OB</span> = overbought, Rising '
                       f'over {CFG["OB_BREADTH"]} (no upswing then, and nothing in it gets bought); <span class="ost">OS</span> = '
                       f'oversold, under {CFG["OS_BREADTH"]}. Tap or hover a row for the numbers.</div>' + heat + line_html) if heat else ""
@@ -2526,11 +2526,11 @@ showTab(location.hash.slice(1)||'today');
 <script>
 const CH={chart_json},HM={json.dumps(hm_data, separators=(",", ":"))},BL={json.dumps(bl_data, separators=(",", ":"))};
 const PINFO={pinfo};      // the pop-up's info line: m = the market, s = each category, t = each coin's category
-const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]},RDL={CFG["RED_BREADTH"]};
+const OBL={CFG["OB_BREADTH"]},OSL={CFG["OS_BREADTH"]},PRL={CFG["PRIME_BREADTH"]};
 // coin prices run from $100,000 to $0.00001: decimals by size, for labels and the chart's price axis
 const PREC=v=>{{const a=Math.abs(v);return a>=1||!a?2:Math.min(10,Math.max(2,3-Math.floor(Math.log10(a))))}};
 const FP=v=>v==null?'–':Math.abs(v)>=1?v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}):v.toFixed(PREC(v));
-const PF=v=>{{const p=PREC(v);return {{type:'price',precision:p,minMove:Math.pow(10,-p)}}}};      // your breadth lines: over 75 overbought (no upswing), under 30 oversold
+const PF=v=>{{const p=PREC(v);return {{type:'price',precision:p,minMove:Math.pow(10,-p)}}}};      // your breadth lines: over 85 overbought (no upswing), under 30 oversold
 const MD=t=>new Date(t+'T12:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric'}});
 (function(){{const boxes=[...document.querySelectorAll('.ch')];if(!boxes.length)return;
 if(!window.LightweightCharts){{document.getElementById('chfail').hidden=false;return}}
@@ -2584,7 +2584,7 @@ m.ln.forEach(([key,ser])=>ser.setData(s.t.map((t,i)=>({{time:t,value:s[key][i]}}
 m.c.timeScale().fitContent();
 if(m.st){{const has=!!s.br;m.bv.hidden=m.bl.hidden=!has;
 if(has){{const f=a=>s.t.map((t,i)=>a[i]==null?{{time:t}}:{{time:t,value:a[i]}});
-const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>RDL||s.br[i]<OSL?2:s.bs[i]!==1?0:s.br[i]>OBL?3:1,r=runs[runs.length-1];
+const runs=[];s.t.forEach((t,i)=>{{if(s.bs[i]==null)return;const z=s.br[i]>OBL||s.br[i]<OSL?2:s.bs[i]!==1?0:s.br[i]>PRL?3:1,r=runs[runs.length-1];
 if(r&&r[2]===z&&r[3]===i-1){{r[1]=t;r[3]=i}}else runs.push([t,t,z,i])}});m.st.band.set(runs);
 m.st.bu.setData(f(s.bu));m.st.br.setData(f(s.br));m.st.bc.timeScale().fitContent();
 requestAnimationFrame(()=>requestAnimationFrame(()=>m.st.bc.timeScale().fitContent()))}}}}
@@ -2802,7 +2802,7 @@ def main():
     except Exception as e:                 # extras; never block the scan
         print("  breadth history failed:", e)
     # the user's overbought rule (RSI / CCI dropped 2026-10-15): nothing with its category's or the market's breadth over the
-    # 75 line gets a setup ("Overbought" instead), a Top picks spot, a Plan M spot or a paper buy
+    # 85 line gets a setup ("Overbought" instead), a Top picks spot, a Plan M spot or a paper buy
     br = {g: round(float(b.rise.iloc[-1]), 1) for g, b in bh.items()}       # tonight's breadth, as the page shows it
     mkt_hot = breadth_hot(None, br)
     obr = overbought(frames, sectors, br)

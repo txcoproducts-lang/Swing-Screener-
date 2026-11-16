@@ -50,7 +50,7 @@ def split(frames, today):
 
 def scan(fr, sectors, subs, sp500):
     """The screener's own scoring for one side (now or last night): the stock table rows, breadth per group, and who
-    gives a buy signal (a setup that isn't blocked by breadth over 75, in the full uptrend or EMA10 > EMA20 with price
+    gives a buy signal (a setup that isn't blocked by breadth over 85, in the full uptrend or EMA10 > EMA20 with price
     over the 50 EMA: what the paper accounts buy)."""
     df = pd.DataFrame([r for r in (S.analyze(t, d) for t, d in fr.items()) if r])
     df["sector"] = df.ticker.map(sectors).fillna("")
@@ -167,7 +167,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         if not n.core:
             return "fell out of the uptrend" + (" (under the 150 MA)" if n.x1020 and n.vs50 > 0 else " (10 EMA under the 20 or price under the 50 EMA)")
         if n.blocked:
-            return "blocked: " + (n.ob or "market breadth over 75")
+            return "blocked: " + (n.ob or "market breadth over 85")
         if p.setup == "Momentum":
             if n.rsi > 80:
                 return f"too hot: RSI {n.rsi:.0f} over 80"
@@ -188,7 +188,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         if not (p.core or p.reg_up):
             w.append("joined the uptrend" if n.core else "10 EMA crossed over the 20 / price back over the 50 EMA")
         if p.blocked:
-            w.append("no longer blocked: breadth back under 75")
+            w.append("no longer blocked: breadth back under 85")
         elif not isinstance(p.setup, str) or p.setup in ("Uptrend", "Overbought") or p.setup != p.setup:
             if n.setup == "Momentum" and n.brk20 and not p.brk20:
                 w.append("the move broke its 20-day high")
@@ -253,7 +253,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                 "20 EMA above the 50 EMA": e20 > e50, "price above the 10 EMA": px > e10, "price above the 20 EMA": px > e20}
 
     def zone_word(z):
-        return {2: "over 75 (overbought)", -1: "under 30 (oversold)", 0: "between 30 and 75"}[z]
+        return {2: "over 85 (overbought)", -1: "under 30 (oversold)", 0: "between 30 and 85"}[z]
 
     def group_changes(name, a, b, etf, nP_, nN_, hotP_, hotN_):
         """[(good True / bad False / None, text)] for one group: the market (S&P 500) or a sector."""
@@ -289,7 +289,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         if nP_ != nN_:
             add(nN_ > nP_, f"Stocks with a buy signal {nP_} → {nN_}")
         if bool(hotP_) != bool(hotN_):
-            add(not hotN_, "No longer blocked: breadth back under 75" if not hotN_ else f"Blocked at {NOW}: {hotN_}")
+            add(not hotN_, "No longer blocked: breadth back under 85" if not hotN_ else f"Blocked at {NOW}: {hotN_}")
         return ch
 
     secN = N.groupby("sector").buy.sum()
@@ -340,7 +340,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
     mstate = turn(mP.get("on"), mN.get("on")) if m else ""
     sumcards = [
         ("Market", f'{pill(mstate)}' if m else "—",
-         f'S&amp;P 500 breadth {mP.get("rise", 0):.0f}% → {mN.get("rise", 0):.0f}%' + (" · over 75: no buys" if hotN else "")),
+         f'S&amp;P 500 breadth {mP.get("rise", 0):.0f}% → {mN.get("rise", 0):.0f}%' + (" · over 85: no buys" if hotN else "")),
         ("Sectors", f'{len(still) + len(tup)} of {len(secs)} rising', f'still rising: {esc(names(still))}' + (f' · turned up: {esc(names(tup))}' if tup else "")
          + (f' · turned down: {esc(names(tdn))}' if tdn else "")),
         ("Industries", f'{len(ind_up)} in uptrend', f'{sum(r["state"] == "Joined the uptrend" for r in ind)} joined, {sum(r["state"] == "Left the uptrend" for r in ind)} left since last night'),
@@ -356,7 +356,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         if t in gap_made:
             return f"gap up ▲{gap[t]:.1f}%"
         if p.blocked:
-            return "breadth back under 75"
+            return "breadth back under 85"
         if not (p.core or p.reg_up):
             return "joined the uptrend"
         if n.setup == "Momentum" and n.brk20 and not p.brk20:
@@ -390,10 +390,10 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
         summary=K.key(K.R("Last night → now", "Every number compares last night's close with the market right after today's open. "
                           "Both sides use the screener's own rules; \"now\" uses today's open and the latest price as if they were today's close."),
                       K.R("Market", "Still rising / Turned up / Turned down / Still falling = the S&amp;P 500's breadth (share of its stocks with the "
-                          "10 EMA over the 20 and price over the 50 EMA) above or below its 10-day average, last night and now. Over 75 blocks every buy (your rule)."),
+                          "10 EMA over the 20 and price over the 50 EMA) above or below its 10-day average, last night and now. Over 85 blocks every buy (your rule)."),
                       K.R("New buy signal", "A stock that gives a buy signal now and didn't last night: a Momentum or Pullback setup, not blocked by "
-                          "breadth over 75, in your full uptrend (a Super setup). The same signal the paper accounts buy."),
-                      K.U("Start with the market line. If it turned down or breadth is over 75, the new buy signals aren't buys yet. "
+                          "breadth over 85, in your full uptrend (a Super setup). The same signal the paper accounts buy."),
+                      K.U("Start with the market line. If it turned down or breadth is over 85, the new buy signals aren't buys yet. "
                           "Then look for new signals in the sectors that are still rising.")),
         sectors=K.key(K.R("Breadth", "Share of the sector's S&amp;P 500 stocks with the 10 EMA over the 20 and price over the 50 EMA. "
                           + K.zones(S.CFG)),
@@ -414,7 +414,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                       K.U("These use the open's price, not a close. A gap can fade during the day; the nightly page decides on the close.")),
         changes=K.key(K.R("What's listed", "For the market and every sector: the ETF's gap and move, each of your trend rules that flipped "
                           "(10 over 20, over the 50 EMA, over the 150 MA, 20 over 50, over the 10 and 20 EMA), entering or leaving your uptrend, breadth "
-                          "(Rising) and its direction against its 10-day average, the 30 / 75 lines, stocks in your uptrend, buy-signal count, the over-75 block "
+                          "(Rising) and its direction against its 10-day average, the 30 / 85 lines, stocks in your uptrend, buy-signal count, the over-85 block "
                           "and each sector's rank by breadth. The market adds the Stocks page's Today checks, VIX, how many stocks opened higher or lower, "
                           "and new vs lost buy signals and uptrends."),
                       K.R("▲ / ▼", "Better or worse for buying calls on the upswing (your long-only plan). A rising VIX counts as worse."),
@@ -424,7 +424,7 @@ def build(frames, etfs, sectors, subs, sp500, today, out_dir, at, preview=False)
                        "Worst day first."),
                    K.R("Lost on the last close", "Had a buy signal two closes ago and lost it on last night's close (the full day's move). "
                        "\"At the open\" says whether it came back this morning."),
-                   K.R("Why it's gone", "The first rule it now fails: out of the uptrend, blocked by breadth over 75, RSI out of the 55-80 momentum range, "
+                   K.R("Why it's gone", "The first rule it now fails: out of the uptrend, blocked by breadth over 85, RSI out of the 55-80 momentum range, "
                        "stretched over 3 ATRs above the 20 EMA, off its breakout / 52-week high, or a pullback that bounced (RSI back over 50)."),
                    K.R("Buy signals count", "How many stocks had a buy signal two closes ago → last night → now. A falling count means more signals are lost than found."),
                    K.U("Check these before buying or adding: a stock you hold or were about to buy that shows up here has lost its setup. "

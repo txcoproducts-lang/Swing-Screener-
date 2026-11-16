@@ -415,7 +415,7 @@ def setup_why(r, n, src="last night's screener", ranked=False):
 
 
 def market_hot(day):
-    """Your overbought rule for the whole market: last night's crypto market breadth over the 75 line. The reason, or ""."""
+    """Your overbought rule for the whole market: last night's crypto market breadth over the 85 line. The reason, or ""."""
     return SC.breadth_hot(None, day.breadth())
 
 
@@ -431,7 +431,7 @@ def with_today(d, sess, price, today):
 def hot_now(day, items):
     """Your overbought rule at buying time: {coin: why} for each (coin, category) in items that is overbought now:
     RSI over 70 or CCI over 100 on its daily bars plus today's trading so far, or last night's breadth for its category
-    over the 75 line (the market's is market_hot). Without today's bars it goes by last night's close; a coin whose
+    over the 85 line (the market's is market_hot). Without today's bars it goes by last night's close; a coin whose
     daily bars don't load is judged on its category alone."""
     tks = sorted({t for t, _ in items})
     if not tks:
