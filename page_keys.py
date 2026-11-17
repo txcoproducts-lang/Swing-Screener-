@@ -216,7 +216,7 @@ def page_keys(market, cfg, ov):
           "yesterday's close, today's open, today's close)."),
         R(f"{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Rising", f"Your breadth: the share of its {w['mem']} with the 10 EMA over the 20 and "
           f"price over the 50 EMA. Dark green = {os_}-{pr}% and rising, light green = {pr}-{ob}% and rising, yellow = falling, red = over {ob} or under {os_}. "
-          "Line = its last month."),
+          "Line = its last two months (about 42 trading days)."),
         R("Avg volume", "The ETF's average daily volume over the 20 days before today."),
         R("Rel volume", "Today's volume ÷ that average. Over 1× (green) = busier than usual."),
         R("Volume", "The ETF's volume today."),

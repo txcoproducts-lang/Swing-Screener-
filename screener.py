@@ -2434,7 +2434,7 @@ PERF_WIN = (("Day", 1), ("Week", 5), ("Month", 21), ("Quarter", 63), ("Half", 12
 def sector_perf_html(etf_frames, df, sws, bh):
     """Sector performance table (user's ask 2026-11-13, an original take on OVTLYR's sector map): one row per SPDR
     sector ETF with its % change over a day / week / month / quarter / half year / year, each with a small line of the
-    closes over that stretch; Rising (our breadth) with its last month; the ETF's volume; and relative greed = the
+    closes over that stretch; Rising (our breadth) with its last two months; the ETF's volume; and relative greed = the
     sector's average stock RSI (14) ÷ SPY's RSI, the same stand-in the OVTLYR page uses."""
     if not etf_frames or "SPY" not in etf_frames:
         return ""
@@ -2461,7 +2461,7 @@ def sector_perf_html(etf_frames, df, sws, bh):
         if w and n in (bh or {}):
             bg = bfill(w["rise"], w["on"])
             cells.append(f'<td data-v="{w["rise"]}" class="pf"><b class="rb" style="background:{bg}">{w["rise"]:.0f}%</b>'
-                         f'{sp(bh[n].rise.iloc[-21:], "#14202e")}</td>')
+                         f'{sp(bh[n].rise.iloc[-42:], "#14202e")}</td>')
         else:
             cells.append('<td data-v="-1" class="mut">–</td>')
         v = d.Volume
@@ -2487,7 +2487,7 @@ def sector_perf_html(etf_frames, df, sws, bh):
     return ('<h2>Sector performance</h2>' + hk("sector_perf")
             + '<div class="hint">Each sector\'s SPDR ETF: its % change over a day, week, month, quarter, half year and year, '
               'with a line of its closes over that stretch (green = up, red = down). Rising = the share of its S&amp;P 500 stocks '
-              'with the 10 EMA over the 20 and price over the 50 EMA, in your three colours, line = last month. Tap a header to sort, '
+              'with the 10 EMA over the 20 and price over the 50 EMA, in your three colours, line = last two months. Tap a header to sort, '
               'a ticker for its chart.</div>'
             f'<div class="wrap"><table id="sp"><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
 
