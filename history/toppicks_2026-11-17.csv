@@ -1,0 +1,22 @@
+list,rank,ticker,sector,close,rs,added,price,vol1,vol5,call_exp,call_dte,call_strike,call_delta,call_oi,call_quote,call_fits,call_premium,call_misses,ai_rank,why
+nu,1,RTX,Industrials,198.0,42,,,5509400.0,20484200.0,2026-12-18,30.0,195.0,0.6066543533885178,2522.0,live,1.0,7.7749999999999995,,,
+bo,1,PTC,Information Technology,195.63999938964844,90,,,1963100.0,7459800.0,,,,,,,,,,,
+bo,2,MDT,Health Care,102.31999969482422,74,,,5347100.0,27900800.0,,,,,,,,,,,
+bo,3,WRB,Financials,77.56999969482422,65,,,1131100.0,6868000.0,,,,,,,,,,,
+bo,4,VTR,Real Estate,88.04000091552734,46,,,1958000.0,12396100.0,,,,,,,,,,,
+bo,5,AON,Financials,334.79998779296875,35,,,1269200.0,4451300.0,2026-12-18,30.0,320.0,0.7098430490239334,325.0,live,0.0,20.5,oi,,
+bo,6,CMG,Consumer Discretionary,35.83000183105469,50,,,14644300.0,65201800.0,2026-12-18,30.0,34.0,0.6965552991409413,2826.0,live,1.0,2.7,,,
+bo,7,ACGL,Financials,109.22000122070312,71,,,2899800.0,8588200.0,,,,,,,,,,,
+bo,8,CPRT,Industrials,31.450000762939453,15,,,10712300.0,42095500.0,,,,,,,,,,,
+bo,9,CMCSA,Communication Services,25.309999465942383,30,,,30967500.0,116889400.0,2026-12-18,30.0,25.0,0.5775799658489782,7457.0,live,1.0,1.2850000000000001,,,
+bo,10,OTIS,Industrials,77.01000213623047,36,,,2110400.0,12982200.0,,,,,,,,,,,
+ai,1,MRNA,Health Care,206.8000030517578,99,2026-10-02,190.01,8223800.0,37943700.0,2026-12-18,30.0,190.0,0.6847303611049006,1173.0,live,3.0,29.375,,1.0,+19% in 3 months and +735% in 12; 23% below its 52-week high; strong industry (Biotechnology)
+ai,2,DELL,Information Technology,322.7900085449219,98,2026-10-02,562.52,7191400.0,43420200.0,2026-12-18,30.0,310.0,0.6167974860666481,888.0,live,2.0,44.65,,4.0,-26% in 3 months and +144% in 12; 45% below its 52-week high
+ai,3,AMD,Information Technology,503.4100036621094,98,2026-11-10,515.21,35805800.0,223593300.0,2026-12-18,30.0,470.0,0.6660770681616888,1083.0,live,10.0,64.05,,6.0,+8% in 3 months and +104% in 12; 22% below its 52-week high
+ai,4,MPC,Energy,395.6099853515625,98,2026-10-02,422.33,2644200.0,10750500.0,2026-12-18,30.0,380.0,0.6428313558377927,369.0,live,0.0,32.4,oi,7.0,+10% in 3 months and +101% in 12; 18% below its 52-week high; strong industry (Oil & Gas Refining & Marketing)
+ai,5,VLO,Energy,363.7699890136719,97,2026-10-02,406.3,1924000.0,10864800.0,2026-12-18,30.0,330.0,0.766731064832163,561.0,live,1.0,42.75,,8.0,+5% in 3 months and +104% in 12; 21% below its 52-week high; strong industry (Oil & Gas Refining & Marketing)
+ai,6,MU,Information Technology,712.4199829101562,96,2026-10-02,1074.89,32928600.0,152326300.0,2026-12-18,30.0,680.0,0.6289257858098165,653.0,live,9.0,85.375,,13.0,-24% in 3 months and +189% in 12; 41% below its 52-week high
+ai,7,PSX,Energy,256.92999267578125,96,2026-10-15,289.2,3378800.0,16434200.0,2026-12-18,30.0,250.0,0.6178933108209326,426.0,live,0.0,16.9,oi,15.0,+6% in 3 months and +86% in 12; 14% below its 52-week high; strong industry (Oil & Gas Refining & Marketing)
+ai,8,APA,Energy,46.880001068115234,96,2026-11-06,44.63,5864600.0,22668000.0,2026-12-18,30.0,45.0,0.6462284555010186,6145.0,live,1.0,3.5999999999999996,,16.0,+8% in 3 months and +95% in 12; 11% below its 52-week high
+ai,9,BBY,Consumer Discretionary,98.4000015258789,95,2026-11-12,103.41,3371100.0,11092100.0,2026-12-18,30.0,90.0,0.7397408974393056,432.0,live,0.0,11.4,oi,17.0,+11% in 3 months and +37% in 12; 7% below its 52-week high
+ai,10,ILMN,Health Care,202.61000061035156,95,2026-10-02,273.04,1671500.0,8011000.0,2026-12-18,30.0,165.0,0.7850660144461703,17.0,live,0.0,106.6,oi,18.0,-1% in 3 months and +68% in 12; 31% below its 52-week high; strong industry (Life Sciences Tools & Services)
