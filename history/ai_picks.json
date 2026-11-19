@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-17",
+ "as_of": "2026-11-18",
  "picks": [
   {
    "ticker": "MU",
@@ -24,12 +24,6 @@
    "added": "2026-10-02",
    "price": 406.3,
    "spy": 769.64
-  },
-  {
-   "ticker": "APA",
-   "added": "2026-11-06",
-   "price": 44.63,
-   "spy": 735.29
   },
   {
    "ticker": "AMD",
@@ -60,6 +54,12 @@
    "added": "2026-10-15",
    "price": 289.2,
    "spy": 771.79
+  },
+  {
+   "ticker": "CRL",
+   "added": "2026-11-18",
+   "price": 333.25,
+   "spy": 730.2
   }
  ],
  "closed": [
@@ -91,6 +91,16 @@
    "dropped": "2026-11-12",
    "out": 937.46,
    "spy_out": 757.12,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "APA",
+   "added": "2026-11-06",
+   "price": 44.63,
+   "spy": 735.29,
+   "dropped": "2026-11-18",
+   "out": 45.52,
+   "spy_out": 730.2,
    "why": "fell out of the top 20"
   }
  ]
