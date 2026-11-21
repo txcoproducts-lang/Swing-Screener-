@@ -1,22 +1,10 @@
 {
- "as_of": "2026-11-19",
+ "as_of": "2026-11-20",
  "picks": [
-  {
-   "ticker": "MU",
-   "added": "2026-10-02",
-   "price": 1074.89,
-   "spy": 769.64
-  },
   {
    "ticker": "MPC",
    "added": "2026-10-02",
    "price": 422.33,
-   "spy": 769.64
-  },
-  {
-   "ticker": "ILMN",
-   "added": "2026-10-02",
-   "price": 273.04,
    "spy": 769.64
   },
   {
@@ -60,6 +48,18 @@
    "added": "2026-10-15",
    "price": 289.2,
    "spy": 771.79
+  },
+  {
+   "ticker": "OKTA",
+   "added": "2026-11-20",
+   "price": 191.46,
+   "spy": 689.81
+  },
+  {
+   "ticker": "HUM",
+   "added": "2026-11-20",
+   "price": 390.0,
+   "spy": 689.81
   }
  ],
  "closed": [
@@ -101,6 +101,26 @@
    "dropped": "2026-11-18",
    "out": 45.52,
    "spy_out": 730.2,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "MU",
+   "added": "2026-10-02",
+   "price": 1074.89,
+   "spy": 769.64,
+   "dropped": "2026-11-20",
+   "out": 594.51,
+   "spy_out": 689.81,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "ILMN",
+   "added": "2026-10-02",
+   "price": 273.04,
+   "spy": 769.64,
+   "dropped": "2026-11-20",
+   "out": 192.82,
+   "spy_out": 689.81,
    "why": "fell out of the top 20"
   }
  ]
