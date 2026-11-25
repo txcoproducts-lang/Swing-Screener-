@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-23",
+ "as_of": "2026-11-24",
  "picks": [
   {
    "ticker": "MPC",
@@ -12,12 +12,6 @@
    "added": "2026-10-02",
    "price": 406.3,
    "spy": 769.64
-  },
-  {
-   "ticker": "AMD",
-   "added": "2026-11-10",
-   "price": 515.21,
-   "spy": 749.92
   },
   {
    "ticker": "BBY",
@@ -60,6 +54,12 @@
    "added": "2026-11-20",
    "price": 390.0,
    "spy": 689.81
+  },
+  {
+   "ticker": "PANW",
+   "added": "2026-11-24",
+   "price": 352.99,
+   "spy": 718.78
   }
  ],
  "closed": [
@@ -121,6 +121,16 @@
    "dropped": "2026-11-20",
    "out": 192.82,
    "spy_out": 689.81,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "AMD",
+   "added": "2026-11-10",
+   "price": 515.21,
+   "spy": 749.92,
+   "dropped": "2026-11-24",
+   "out": 413.27,
+   "spy_out": 718.78,
    "why": "fell out of the top 20"
   }
  ]
