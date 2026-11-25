@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-23",
+ "as_of": "2026-11-24",
  "picks": [
   {
    "ticker": "ZEC",
@@ -11,12 +11,6 @@
    "ticker": "QNT",
    "added": "2026-10-10",
    "price": 239.705,
-   "spy": 82912.23
-  },
-  {
-   "ticker": "ZRO",
-   "added": "2026-10-10",
-   "price": 1.9895,
    "spy": 82912.23
   },
   {
@@ -56,10 +50,16 @@
    "spy": 76677.3
   },
   {
-   "ticker": "BEAM",
-   "added": "2026-11-19",
-   "price": 0.003513,
-   "spy": 61901.82
+   "ticker": "HYPE",
+   "added": "2026-11-24",
+   "price": 59.9084,
+   "spy": 59747.77
+  },
+  {
+   "ticker": "INJ",
+   "added": "2026-11-24",
+   "price": 5.84261,
+   "spy": 59747.77
   }
  ],
  "closed": [
@@ -102,6 +102,26 @@
    "out": 0.104751,
    "spy_out": 61901.82,
    "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "ZRO",
+   "added": "2026-10-10",
+   "price": 1.9895,
+   "spy": 82912.23,
+   "dropped": "2026-11-24",
+   "out": 1.04479,
+   "spy_out": 59747.77,
+   "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "BEAM",
+   "added": "2026-11-19",
+   "price": 0.003513,
+   "spy": 61901.82,
+   "dropped": "2026-11-24",
+   "out": 0.003294,
+   "spy_out": 59747.77,
+   "why": "no longer passes the liquidity filter"
   }
  ]
 }
