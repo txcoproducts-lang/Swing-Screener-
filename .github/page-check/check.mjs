@@ -147,8 +147,15 @@ for (const [name, vp] of [["desktop", { width: 1400, height: 900 }], ["phone", {
   }
   // no setups at all (the market over the 75 line): open a ticker from the full uptrend list instead
   if (!await p.$("#t tbody tr:not([style*='none']) .tk")) await p.click('.bar button[data-f="all"]');
-  const tk = await p.$eval("#t tbody tr:not([style*='none']) .tk", e => e.dataset.tk);
-  await p.click("#t tbody tr:not([style*='none']) .tk");
+  let tk;
+  if (await p.$("#t tbody tr:not([style*='none']) .tk")) {
+    tk = await p.$eval("#t tbody tr:not([style*='none']) .tk", e => e.dataset.tk);
+    await p.click("#t tbody tr:not([style*='none']) .tk");
+  } else {                           // nothing in an uptrend at all (the table is empty): open the benchmark from the search bar
+    tk = /crypto\/?$/.test(process.env.PAGE_URL) ? "BTC" : "SPY";
+    log(`[${name}] the table is empty (nothing in an uptrend); opening ${tk} from the search bar instead`);
+    await p.fill("#sq", tk.toLowerCase()); await p.press("#sq", "Enter");
+  }
   await p.waitForTimeout(2500);
   log(`[${name}] opened ${tk}: legend="${(await p.$eval("#cmlg", e => e.textContent)).slice(0, 60)}"`);
   await p.screenshot({ path: `${out}/${name}-3-trend-daily.png` });
