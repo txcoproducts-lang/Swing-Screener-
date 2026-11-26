@@ -215,10 +215,11 @@ def page_keys(market, cfg, ov):
           f"from this page's own prices. OVTLYR's formulas are private, so each number below is a stand-in, and it says what it is. "
           "OVTLYR's \"price\" line is left out: it adds up every stock's price and means nothing for trading."),
         H("The summary line"),
-        R("The close it's for", f"Every number is as of the close named at the start (3:00 PM CT). Changes are against the close before."),
+        R("The close it's for", "Every number is as of the close named at the start (" + ("6:00 PM CT, midnight UTC" if c else "3:00 PM CT")
+          + "). Changes are against the close before."),
         H("The chart"),
         R(f"{ln(UP)}Bull List %", f"Rising, your breadth rule: the share of the group's {us} with the 10 EMA over the 20 and the close "
-          "over the 50 EMA. For SPY and the sectors it's the same number as the rest of the page."),
+          "over the 50 EMA. For {b} and the {gs} it's the same number as the rest of the page."),
         R(f"{ln('#e8762b')}{ln(WARN)}20 EMA / 50 EMA", "The Bull List's own 20-day and 50-day exponential averages. Above both = the "
           "group's breadth is in buy mode; under both = it has turned."),
         R(f"{ln(DN, 'd')}Dashed lines", f"{os_} (oversold) and {ob} (overbought, no buys) in red, your lines; 50 and {pr} (the top of the "
@@ -230,8 +231,9 @@ def page_keys(market, cfg, ov):
           "3M / 6M / 1Y / All = how far back (prices go back 2 years, less a 60-day warm-up)."),
         H("The table"),
         R("Market rows", f"All {us} (S&amp;P 500 + Nasdaq 100), then SPY (S&amp;P 500 {us}), DIA (the Dow 30) and QQQ (the Nasdaq 100)."
-          if not c else f"All {us}, then BTC."),
-        R("Sector rows", f"The 11 sectors, counting their S&amp;P 500 {us}. Trend, Alert and F&amp;G are on each sector's SPDR ETF."),
+          if not c else f"All {us}, with Trend, Alert and F&amp;G on Bitcoin."),
+        R(f"{G} rows", f"The 11 sectors, counting their S&amp;P 500 {us}. Trend, Alert and F&amp;G are on each sector's SPDR ETF."
+          if not c else f"Each category, counting its {us}. Trend, Alert and F&amp;G are on its equal-weight category index."),
         R(f"{sw(PRIME)}{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Breadth", "The Bull List % in your colours, with a word: Bullish (dark green, "
           f"{os_}-{pr}% and rising), Bullish, stretched (light green, {pr}-{ob}% and rising), Fading (yellow, falling: under its "
           f"10-day average), Bearish (red, under {os_}), Overbought (red, over {ob})."),

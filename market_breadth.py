@@ -88,17 +88,18 @@ def build(S, frames, sectors, sp500, ndx, etf_frames, market="stock"):
     C.index = rise.index = upm.index = R.index = pd.DatetimeIndex([pd.Timestamp(i.strftime("%Y-%m-%d")) for i in C.index])
 
     sp = [t for t in tks if t in sp500]
-    groups = [dict(n="All stocks", s="All stocks", k="m", tks=tks, etf=None,
-                   sub="S&amp;P 500 + Nasdaq 100" if market == "stock" else "every coin in the scan"),
-              dict(n="S&P 500", s="SPY", k="m", tks=sp, etf="SPY", sub="S&amp;P 500 stocks")]
-    if market == "stock":
-        groups += [dict(n="Dow 30", s="DIA", k="m", tks=[t for t in tks if t in DOW30], etf="DIA", sub="Dow 30 stocks"),
-                   dict(n="Nasdaq 100", s="QQQ", k="m", tks=[t for t in tks if t in ndx], etf="QQQ", sub="Nasdaq 100 stocks")]
+    if market == "crypto":                 # one market row: every coin, with Trend / Alert / F&G on Bitcoin
+        groups = [dict(n=S.MARKET, s="All coins", k="m", tks=sp, etf=S.BENCH, sub="every coin in the scan")]
+    else:
+        groups = [dict(n="All stocks", s="All stocks", k="m", tks=tks, etf=None, sub="S&amp;P 500 + Nasdaq 100"),
+                  dict(n="S&P 500", s="SPY", k="m", tks=sp, etf="SPY", sub="S&amp;P 500 stocks"),
+                  dict(n="Dow 30", s="DIA", k="m", tks=[t for t in tks if t in DOW30], etf="DIA", sub="Dow 30 stocks"),
+                  dict(n="Nasdaq 100", s="QQQ", k="m", tks=[t for t in tks if t in ndx], etf="QQQ", sub="Nasdaq 100 stocks")]
     secs = {}
     for t in sp:
         secs.setdefault(sectors.get(t) or "Other", []).append(t)
     for name in sorted(secs, key=lambda n: S.SHORT_SECTOR.get(n, n)):
-        if name in S.SECTOR_ETF and name != "S&P 500" and len(secs[name]) >= 5:
+        if name in S.SECTOR_ETF and name not in ("S&P 500", getattr(S, "MARKET", "")) and len(secs[name]) >= 5:
             groups.append(dict(n=name, s=S.SHORT_SECTOR.get(name, name), k="s", tks=secs[name], etf=S.SECTOR_ETF[name], sub=""))
 
     ser = {}
@@ -107,7 +108,7 @@ def build(S, frames, sectors, sp500, ndx, etf_frames, market="stock"):
             continue
         ser[g["n"]], g["cnt"] = group_series(rise, upm, R, g["tks"])
     groups = [g for g in groups if g["n"] in ser]
-    idx = ser["All stocks"].index
+    idx = ser[groups[0]["n"]].index
     r1 = lambda v: [None if x != x else round(float(x), 1) for x in v]
     chart = dict(t=[d.strftime("%Y-%m-%d") for d in idx], g=[])
     rows = []
@@ -151,7 +152,7 @@ def breadth_word(S, v, on):
     return "Bullish" if v <= S.CFG["PRIME_BREADTH"] else "Bullish, stretched"
 
 
-def html(S, mb, unit="stock"):
+def html(S, mb, unit="stock", close="3:00 PM CT", year=252):
     """The tab's HTML (table + chart box) and its data for the page script."""
     D, P = _wd(mb["asof"]), _wd(mb["prev"])
     us = unit + "s"
@@ -166,7 +167,7 @@ def html(S, mb, unit="stock"):
         e = r["etfs"] or {}
         bc = S.bfill(r["b"], r["on"])
         cells = [
-            f'<td><b>{S.html_esc(r["s"])}</b>' + (f' <span class="tk mut" data-tk="{r["etf"]}">{r["etf"]}</span>' if r["etf"] and r["etf"] != r["s"] else "")
+            f'<td><b>{S.html_esc(r["s"])}</b>' + (f' <span class="tk mut" data-tk="{r["etf"]}">{r["etf"]}</span>' if r["etf"] and r["etf"] != r["s"] and not r["etf"].endswith("-IDX") else "")
             + (f'<div class="mut sm">{r["sub"]}</div>' if r["sub"] else "") + '</td>',
             f'<td><span class="rb" style="background:{bc}">{r["b"]:.1f}%</span> <span class="sm">{breadth_word(S, r["b"], r["on"])}</span>'
             f'<div class="mut sm">{"▲ above" if r["on"] else "▼ under"} its 10-day avg</div></td>',
@@ -193,20 +194,20 @@ def html(S, mb, unit="stock"):
     mk = [r for r in mb["rows"] if r["k"] == "m"]
     sx = [r for r in mb["rows"] if r["k"] == "s"]
     a = mb["rows"][0]
-    summ = (f'<div class="mbs"><b>The {D} close (3:00 PM CT):</b> {a["b"]:.1f}% of all {a["cnt"]:,} {us} on the Bull List, '
+    summ = (f'<div class="mbs"><b>The {D} close ({close}):</b> {a["b"]:.1f}% of all {a["cnt"]:,} {us} on the Bull List, '
             f'<span class="rb" style="background:{S.bfill(a["b"], a["on"])}">{breadth_word(S, a["b"], a["on"])}</span>. '
             f'{a["u"]:,} in an uptrend ({a["du"]:+,d} vs the {P} close), {a["d"]:,} in a downtrend ({a["dd"]:+,d}). '
             f'Signal {"<b class=up>on</b>" if a["sig"] else "<b class=dn>off</b>"} since {_wd(a["sig_since"])}. '
             f'OC {a["oc"]:+d}, TS {a["ts"]:+d}.</div>')
     table = ('<div class="wrap"><table id="mbt"><thead><tr>' + head.format("Market") + '</tr></thead><tbody>'
              + "".join(row(r) for r in mk) + '</tbody>'
-             + ('<tbody><tr class="mbh">' + head.format("Sector").replace("<th>", "<td>").replace("</th>", "</td>") + '</tr>'
+             + ('<tbody><tr class="mbh">' + head.format("Sector" if unit == "stock" else "Category").replace("<th>", "<td>").replace("</th>", "</td>") + '</tr>'
                 + "".join(row(r) for r in sx) + '</tbody>' if sx else "") + '</table></div>')
     chart = ('<div class="bln" id="mbc"><div class="blh"><b>Bull List % and uptrend / downtrend counts</b>'
              '<select id="mbg" aria-label="Group">' + "".join(f'<option value="{i}">{S.html_esc(g["s"])}</option>'
                                                              for i, g in enumerate(mb["chart"]["g"]))
-             + '</select><div class="bar blr">' + "".join(f'<button data-r="{k}"' + (' class="on"' if k == 63 else '') + f'>{lbl}</button>'
-                                                        for lbl, k in (("3M", 63), ("6M", 126), ("1Y", 252), ("All", 0)))
+             + '</select><div class="bar blr">' + "".join(f'<button data-r="{k}"' + (' class="on"' if k == year // 4 else '') + f'>{lbl}</button>'
+                                                        for lbl, k in (("3M", year // 4), ("6M", year // 2), ("1Y", year), ("All", 0)))
              + '</div></div><div class="blk" id="mbk"></div><div class="mbc1"></div><div class="mbl">Uptrend ▲ / downtrend ▼ '
                f'{us}</div><div class="mbc2"></div></div>')
     hint = (f'<div class="hint">Stand-ins for OVTLYR\'s market breadth screens, rebuilt from this page\'s prices (their formulas are '
@@ -228,7 +229,7 @@ JS = r"""
 (function(){const el=document.getElementById('mbc');if(!el||!MB)return;
 const lg=document.getElementById('mbk'),sel=document.getElementById('mbg'),b1=el.querySelector('.mbc1'),b2=el.querySelector('.mbc2'),N=MB.t.length;
 if(!window.LightweightCharts){b1.hidden=b2.hidden=true;lg.textContent='The chart could not load (chart library blocked).';return}
-const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();let g=0,span=63;
+const cs=getComputedStyle(document.documentElement),V=n=>cs.getPropertyValue(n).trim();let g=0,span=+(el.querySelector('.blr button.on')||{dataset:{r:63}}).dataset.r;
 const opt=fmt=>({autoSize:true,localization:{locale:'en-US',priceFormatter:fmt},layout:{background:{color:'transparent'},textColor:V('--mut'),fontSize:11,attributionLogo:false},
 grid:{vertLines:{visible:false},horzLines:{color:V('--line')}},rightPriceScale:{borderVisible:false,minimumWidth:56,scaleMargins:{top:0.08,bottom:0.08}},
 timeScale:{borderVisible:false,lockVisibleTimeRangeOnResize:true},crosshair:{horzLine:{visible:false,labelVisible:false}},handleScroll:false,handleScale:false});
