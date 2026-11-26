@@ -209,6 +209,50 @@ def page_keys(market, cfg, ov):
         R("Tap a tile", f"Opens the {Us} tab filtered to that {g}."),
         U(f"You want a green tile with a RISING badge and {us} on the list: that's a {g} turning up with room to run. NEAR {ob} is "
           f"getting stretched; FADING {gs} are skipped by your system."))
+    out["mbreadth"] = key(
+        H("What this is"),
+        R("Where it comes from", "Two OVTLYR screens you shared (their Full Stocks chart and their Market Breadth table), rebuilt "
+          f"from this page's own prices. OVTLYR's formulas are private, so each number below is a stand-in, and it says what it is. "
+          "OVTLYR's \"price\" line is left out: it adds up every stock's price and means nothing for trading."),
+        H("The summary line"),
+        R("The close it's for", f"Every number is as of the close named at the start (3:00 PM CT). Changes are against the close before."),
+        H("The chart"),
+        R(f"{ln(UP)}Bull List %", f"Rising, your breadth rule: the share of the group's {us} with the 10 EMA over the 20 and the close "
+          "over the 50 EMA. For SPY and the sectors it's the same number as the rest of the page."),
+        R(f"{ln('#e8762b')}{ln(WARN)}20 EMA / 50 EMA", "The Bull List's own 20-day and 50-day exponential averages. Above both = the "
+          "group's breadth is in buy mode; under both = it has turned."),
+        R(f"{ln(DN, 'd')}Dashed lines", f"{os_} (oversold) and {ob} (overbought, no buys) in red, your lines; 50 and {pr} (the top of the "
+          "prime zone) in grey."),
+        R(f"{sw(UP)}{sw(DN)} Up / down bars", f"Bars above the middle = {us} in an uptrend (10 EMA over the 20 EMA); below = the rest, in "
+          f"a downtrend. Green and red bars = the signal is on that day (Bull List % above both its 20 and 50 EMA); grey = off. "
+          "The purple lines are each count's 10-day average."),
+        R("Tap or hover", "Shows that day's numbers above the chart. Pick a group from the list, or tap its row in the table. "
+          "3M / 6M / 1Y / All = how far back (prices go back 2 years, less a 60-day warm-up)."),
+        H("The table"),
+        R("Market rows", f"All {us} (S&amp;P 500 + Nasdaq 100), then SPY (S&amp;P 500 {us}), DIA (the Dow 30) and QQQ (the Nasdaq 100)."
+          if not c else f"All {us}, then BTC."),
+        R("Sector rows", f"The 11 sectors, counting their S&amp;P 500 {us}. Trend, Alert and F&amp;G are on each sector's SPDR ETF."),
+        R(f"{sw(PRIME)}{sw(GREEN)}{sw(YELLOW)}{sw(RED)} Breadth", "The Bull List % in your colours, with a word: Bullish (dark green, "
+          f"{os_}-{pr}% and rising), Bullish, stretched (light green, {pr}-{ob}% and rising), Fading (yellow, falling: under its "
+          f"10-day average), Bearish (red, under {os_}), Overbought (red, over {ob})."),
+        R("Uptrend / downtrend", f"How many {us} are in each, with the change vs the close before, out of the {us} counted."),
+        R("Signal", "On = the Bull List % is above both its 20 and 50 EMAs (the green / red bars on the chart); with the day it began."),
+        R("Trend", f"Your uptrend rule on the ETF itself: Bullish = 10 EMA over the 20, close over the 50 EMA and over the 150 line; "
+          "Bearish = all of it the other way; Mixed = some of each."),
+        R("Alert", "The early warning on the ETF, faster than Trend: Bullish = the close over its 10 EMA and the 5 EMA over the 10; "
+          "Bearish = both under; Mixed = split. It flips days before Trend does."),
+        R("OC (two closes)", "Two day-over-day checks, +1 if up and -1 if down (0 if unchanged): the Bull List % and the uptrend "
+          "count. +2 = both improving, -2 = both getting worse. The two columns are the close before and the latest close."),
+        R("TS (two closes)", "OC plus two more checks: Bull List % above its 20 EMA (+1, else -1) and above its 50 EMA (+1, else -1). "
+          "Runs -4 (everything bad) to +4 (everything good)."),
+        R("F&amp;G", "Fear &amp; greed on the ETF, 0-100: half from how far it sits above its 125-day average compared with the last "
+          "year, half from how calm it has been (20-day swings, compared with the last year: calm = greed). Under 25 extreme fear, "
+          "25-45 fear, 45-55 neutral, 55-75 greed, over 75 extreme greed. Green = rising vs the close before, yellow = falling."),
+        R("Constituent heatmap", f"The average 14-day RSI of the group's {us} (the same heat stand-in as the OVTLYR page), with Moving "
+          "up (green) or Moving down (yellow) vs the close before."),
+        U("Same order as your method: first the market rows. You want the Bull List green and rising, the signal on, OC and TS "
+          "positive and Trend Bullish. Then the sector rows: the one turning up first (OC +2, TS climbing, heatmap Moving up) is "
+          "the one to watch for setups. When most rows are red with TS at -4, the market isn't working in your favour: wait."))
     out["sector_perf"] = key(
         R("Each row", "One sector's SPDR ETF, with SPY on top (shaded) to compare against. Tap the ticker for its chart."),
         R("Day · Week · Month · Quarter · Half · Year", "The ETF's % change over the last 1, 5, 21, 63, 126 and 252 trading days, "

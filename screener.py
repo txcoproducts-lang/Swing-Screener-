@@ -64,6 +64,7 @@ ICB_TO_GICS = {"Technology": "Information Technology", "Telecommunications": "Co
                "Basic Materials": "Materials"}
 
 NAMES = {}   # ticker -> company name (S&P 500, from Wikipedia), for the search bar's suggestions
+NDX = set()  # Nasdaq 100 members, for the Market breadth tab's QQQ row
 
 
 def get_universe():
@@ -87,6 +88,7 @@ def get_universe():
         if col and len(t) > 50:
             t[col] = t[col].astype(str).str.replace(".", "-", regex=False)
             syms |= set(t[col])
+            NDX.update(t[col])
             scol = next((c for c in t.columns if "Sector" in str(c) or "Industry" in str(c)), None)
             if scol:
                 for tk, sec in zip(t[col], t[scol].astype(str)):
@@ -2687,7 +2689,7 @@ def signals_card(hist):
             f'<div style="margin-top:6px"><a href="#signals">Every close for the last {len(hist)} ›</a></div></div>')
 
 
-def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None, etf_frames=None, sigh=None):
+def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=None, calls=None, live_at=None, ov=None, bh=None, sw=None, spy=None, vix=None, sig=None, etf_frames=None, sigh=None, mb=None):
     x, p = breadth.iloc[-1], breadth.iloc[-6]
     reg, rcls = regime(breadth)
     arrow = lambda a, b: "▲" if a > b else "▼" if a < b else "–"
@@ -2865,7 +2867,18 @@ def render(picks, breadth, secb, df, asof, demo, charts=None, lists=None, earn=N
     srch_box, srch_alias = search_info.box(sig), search_info.alias_js(sig)
     srch_css, srch_js = (search_info.CSS, search_info.JS) if sig else ("", "")
     news = news_html(df, sws)
-    tabs = [("today", "Today"), ("market", "Market"), ("sectors", "Sectors"), ("stocks", "Stocks")] + ([("signals", "Signal changes")] if sigh else []) + (
+    mb_html, mb_data = "", None
+    if mb:
+        try:
+            import market_breadth
+            mb_html, mb_data = market_breadth.html(sys.modules[__name__], mb)
+        except Exception as e:             # an extra; never block the page
+            import traceback
+            traceback.print_exc()
+            print("  market breadth tab failed:", e)
+    mb_js = ("const MB=" + json.dumps(mb_data, separators=(",", ":")) + ";" + market_breadth.JS) if mb_data else ""
+    mb_css = market_breadth.CSS if mb_data else ""
+    tabs = [("today", "Today"), ("market", "Market")] + ([("mbreadth", "Market breadth")] if mb_data else []) + [("sectors", "Sectors"), ("stocks", "Stocks")] + ([("signals", "Signal changes")] if sigh else []) + (
         [("picks", "Top picks")] if lists else []) + ([("ovtlyr", "OVTLYR plan")] if ov else []) + (
         [("paper", "Paper trading")] if paper_js else []) + ([("backtests", "Backtests")] if bt_js else []) + [("news", "News")]
     tabs_nav = "".join(f'<a href="#{k}" data-tab="{k}"{on}>{v}</a>' for k, v in tabs for on in [' class="on"' if k == "today" else ""])
@@ -2988,7 +3001,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 #cmlg{{padding:4px 12px 0}}#cmlg .up,#cmlg .dn{{font-weight:600}}#cmw{{flex:1;min-height:0}}.trl{{position:absolute;inset:0 0 26px 0;pointer-events:none;z-index:2}}.trl i{{position:absolute;top:0;bottom:0;opacity:.13}}#cmw>div{{height:100%}}
 @media(max-width:600px){{#cm .box{{width:100vw;height:100dvh;border-radius:0}}}}
 .mkt{{display:inline-flex;background:var(--bg);border-radius:999px;padding:3px;gap:2px}}.mkt a{{padding:4px 14px;border-radius:999px;color:var(--mut);text-decoration:none;font-weight:600;font-size:13px}}.mkt a.on{{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}}
-{hk_css()}{srch_css}
+{hk_css()}{srch_css}{mb_css}
 #cmk{{padding:2px 12px 0}}#cmk .hk-b{{max-height:38vh;overflow:auto}}</style></head><body>
 <header class="top"><div class="hd"><h1>Swing Screener</h1>
 <nav class="mkt" aria-label="Market"><a class="on" href="./" aria-current="page">Stocks</a><a href="crypto/">Crypto</a><a href="ovtlyr/">OVTLYR</a><a href="open/">Open</a></nav>{srch_box}
@@ -2997,6 +3010,7 @@ h2{{font-size:16px;margin:18px 0 2px}}.hint,.mut{{color:var(--mut);font-size:12p
 <main>{banner}
 <section class="tab" id="tab-today">{today}</section>
 <section class="tab" id="tab-market" hidden><h2>Market</h2>{hk('market')}<div class="cards">{cards}</div>{vx_html}{bt_html}</section>
+<section class="tab" id="tab-mbreadth" hidden>{mb_html}</section>
 <section class="tab" id="tab-sectors" hidden><h2>Sectors</h2>{hk('tiles')}{sector_tiles(df, sws, bh)}{sp_html}{breadth20_html(bh)}{sector_html}{chart_html}</section>
 <section class="tab" id="tab-stocks" hidden>{ss_html(df, sw, mkt_hot)}
 <h2>Stocks <span id="secf" class="chip" hidden></span></h2>
@@ -3192,6 +3206,7 @@ document.addEventListener('pointerdown',e=>{{if(e.pointerType!=='mouse'&&!box.co
 try{{const s=JSON.parse(localStorage.getItem('bl')||'null'),j=s?BL.g.findIndex(x=>x.n===s.n):-1;
 if(j>=0){{g=j;sel.value=String(j)}}if(s&&btns.some(b=>+b.dataset.r===s.span))setSpan(s.span)}}catch(e){{}}
 show()}})();
+{mb_js}
 const rows=[...document.querySelectorAll('#t tbody tr')];let fSet='setups',fSec=null;
 const chip=document.getElementById('secf');
 function apply(){{rows.forEach(r=>{{const st=r.dataset.setup;const isS=st==='Momentum'||st==='Pullback';const okS=fSet==='all'||(fSet==='setups'?isS:fSet==='Super'||fSet==='Regular'?isS&&r.dataset.tier===fSet:st===fSet);
@@ -3402,6 +3417,29 @@ def main():
     except Exception as e:                 # an extra; never block the scan on it
         print("  VIX failed:", e)
 
+    mb = None
+    try:                                   # the Market breadth tab (user's ask, 2026-11-26): OVTLYR-style breadth stand-ins
+        import market_breadth
+        idx_frames = dict(etf_frames)
+        if a.demo:
+            idx_frames.update(zip(("QQQ", "DIA"), demo_frames(n=2, days=600).values()))
+            ndx = set(list(frames)[:40])
+            market_breadth.DOW30[:] = list(frames)[40:70]
+        else:
+            idx_frames.update(yf_batch(["QQQ", "DIA"], period="2y", interval="1d"))
+            ndx = NDX
+        mb = market_breadth.build(sys.modules[__name__], frames, sectors, sp500, ndx, idx_frames)
+        r0 = mb["rows"][0]
+        print(f"  market breadth: {len(mb['rows'])} rows; all stocks {r0['b']}% on the Bull List, {r0['u']} up / {r0['d']} down, "
+              f"OC {r0['oc']:+d}, TS {r0['ts']:+d}, signal {'on' if r0['sig'] else 'off'} since {r0['sig_since']}")
+        if "S&P 500" in bh:
+            sp_row = next(r for r in mb["rows"] if r["n"] == "S&P 500")
+            print(f"    SPY row {sp_row['b']}% vs breadth view {round(float(bh['S&P 500'].rise.iloc[-1]), 1)}%")
+    except Exception as e:                 # an extra; never block the scan
+        import traceback
+        traceback.print_exc()
+        print("  market breadth failed:", e)
+
     out = Path(a.out); out.mkdir(exist_ok=True)
     now = pd.Timestamp.now(tz="America/New_York")
     live_at = None if a.demo or asof != now.date().isoformat() or now.time() >= dt.time(16, 15) else now.strftime("%H:%M")
@@ -3526,7 +3564,7 @@ def main():
         import traceback
         traceback.print_exc()
         print("  signal changes failed:", e)
-    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames, sigh)
+    html = render(picks, breadth, secb, df, asof, a.demo, charts, lists, earn, calls, live_at, ov, bh, sw, etf_frames.get("SPY"), vix, sig, etf_frames, sigh, mb)
     html = dated.stamp(html, DL)
     (out / "latest.html").write_text(html, encoding="utf-8")
     (out / f"screener_{asof}.html").write_text(html, encoding="utf-8")
