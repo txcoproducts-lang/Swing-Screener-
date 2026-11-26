@@ -1,0 +1,104 @@
+[desktop] title=Crypto Screener 2026-11-25 rows=0 sectorCharts=140
+[desktop] news: News for the market · open on TradingView ↗, iframes=1
+[desktop] sector news: No coin in DeFi passes at the Wed Nov 25 close (6:00 PM CT). News for the market · open on TradingView ↗, iframes=1
+[desktop] backtests: BACKTESTS ON THIS PAGE | 5 | 4 plans, 1 research test | PLANS THAT BEAT BTC | 0 of 4 | over 10 years | PAPER TRIAL | Day 26 of 175 | Oct 13, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Your system, after 2 PM | -0.8% vs BTC -26.5%; plan cards=4, charts=9, research=1
+[desktop] backtests, 10-year view: Claude's picks leads at $33,692
+[desktop] paper tiles: Your system | Updated Nov 25, 5:10 PM ET | Your screener setups, as coins (no options) | $931.06 | ▼ -$68.94 (-6.9%) since Oct 13 · BTC -26.5% | 0 open positions · 4 closed trades | Full breakdown → || Your system, after 2 PM | Updated Nov 25, 5:10 PM ET | Your rules, buying only after 2 PM Central | $992.02 | ▼ -$7.98 (-0.8%) since Oct 13 · BTC -26.5% | 0 open positions · 2 closed trades | Full breakdown → || Claude's picks | Updated Nov 25, 5:10 PM ET | My AI picks list, as coins | $990.97 | ▼ -$9.03 (-0.9%) since Oct 13 · BTC -26.5% | 0 open positions · 13 closed trades | Full breakdown → || OVTLYR plan | Updated Nov 25, 5:10 PM ET | OVTLYR's Plan M and Plan ETF, as coins | $976.20 | ▼ -$23.80 (-2.4%) since Oct 13 · BTC -26.5% | 0 open positions · 1 closed trade | Full breakdown →
+[desktop] paper A: Value $931.06 -$68.94 since the start | Return -6.9% BTC -26.5% over the same days | Cash $931.06 0 open positions | Closed trades 4 0 won, 4 lost, -$68.94 in all
+[desktop] paper C: Value $992.02 -$7.98 since the start | Return -0.8% BTC -26.5% over the same days | Cash $992.02 0 open positions | Closed trades 2 0 won, 2 lost, -$7.98 in all
+[desktop] paper B: Value $990.97 -$9.03 since the start | Return -0.9% BTC -26.5% over the same days | Cash $990.97 0 open positions | Closed trades 13 3 won, 10 lost, -$9.03 in all
+[desktop] paper D: Value $976.20 -$23.80 since the start | Return -2.4% BTC -26.5% over the same days | Cash $976.20 0 open positions | Closed trades 1 0 won, 1 lost, -$23.80 in all
+[desktop] top picks nu: 0 rows
+[desktop] top picks bo: 0 rows
+[desktop] top picks ai: 10 rows
+[desktop] strongest sector list: 0 rows, 0 setups, top ; problems: none
+[desktop] Plan M list: Plan M coins: none at the Wed Nov 25 close (6:00 PM CT)
+[desktop] OVTLYR screener: Ready 0 | 2 rules away or fewer 0 | All 77 | All categories | AI & data | DeFi | Exchange tokens | Gaming | Infrastructure | Layer 1 | Layer 2 | Memes | Payments, rows shown=77
+[desktop] heatmap: Last 3 months, day by day at the Wed Nov 25 close (6:00 PM CT) | Crypto market 0% ▼ OS | DeFi 0% ▼ OS | Layer 1 0% ▼ OS | AI & data 0% ▼ OS | Gaming 0% ▼ OS | Layer 2 0% ▼ OS | Payments 0% ▼ OS | Exchange tokens 0% ▼ OS | Memes 0% ▼ OS | Infrastructure 0% ▼ OS | Sep Oct Nov
+[desktop] breadth line: Crypto market: Rising 0.0%5-day avg 0.1%10-day avg 0.7% | OS oversold, under 30 since Oct 17▼ below its 5-day average since Nov 19▼ below its 10-day average since Oct 6
+[desktop] strips: Crypto market: Jun 13 · Breadth 6% rising, avg 8% · 5% in uptrend · ▼ fading · OS oversold | AI & data: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 12 · OS oversold | DeFi: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 8 · OS oversold | Exchange tokens: Breadth 0% rising, avg 3% · 0% in uptrend · ▼ fading since Nov 20 · OS oversold | Gaming: Breadth 0% rising, avg 4% · 0% in uptrend · ▼ fading since Oct 12 · OS oversold | Infrastructure: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 8 · OS oversold | Layer 1: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Nov 14 · OS oversold | Layer 2: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 6 · OS oversold | Memes: Breadth 0% rising, avg 1% · 0% in uptrend · ▼ fading since Nov 13 · OS oversold | Payments: Breadth 0% rising, avg 1% · 0% in uptrend · ▼ fading since Nov 8 · OS oversold
+[desktop] the table is empty (nothing in an uptrend); opening BTC from the search bar instead
+[desktop] opened BTC: legend="Downtrend since 2026-11-12 · green = uptrend, red = downtren"
+[desktop] info line: "Category Payments · #6 of 9 · 0% rising · oversold under the 30 lineMarket BTC $60,378.20 +1.06% on Wed Nov 25 · BTC is not moving up (1 of 5 checks) · 0% of coins rising · oversold under the 30 line"
+[desktop] backtest: "Backtest, 10 years (2016-11-25 to 2026-11-25): your rules +10,353% · holding BTC +8,041% · holding BTC +8,041%Rules vs holding BTC: +2,312 pts · rules vs BTC: +2,312 pts · $1,000 became $104,531 on th"
+[desktop] daily 5Y: legend="Downtrend since 2026-11-12 · green = uptrend, red = downtren"
+[desktop] 240: legend="Downtrend since 2026-11-24 · green = uptrend, red = downtren"
+[desktop] W: legend="Downtrend since 2026-11-16 · green = uptrend, red = downtren"
+[desktop] M: legend="No trend since 2014-09-01 · green = uptrend, red = downtrend"
+[desktop] tradingview iframe=1
+[desktop] type-ahead "e": 9 - ENA ENJ ENS EOS ETC ETH
+[desktop] type-ahead "et": 3 - ETC ETH ETHFI
+[desktop] type-ahead "eth": 2 - ETH ETHFI
+[desktop] search "btc": opened BTC, 8 cards, 76 signals: "Not in your uptrend · strength score 13 · screener score 0Show every signal ▾"
+[desktop] search "layer 1": opened L1-IDX, 2 cards, 29 signals: "Layer 1 category · L1-IDX: the Layer 1 category, #2 of 9 by Rising, 0% rising, oversold, under the 30 line since Oct 17Show every signal ▾"
+[desktop] search "btc": opened BTC, 8 cards, 76 signals: "Not in your uptrend · strength score 13 · screener score 0Show every signal ▾"
+[desktop] search "zzqx": opened ZZQX, 1 cards, 20 signals: "ZZQX is not tracked by the screener, so only the TradingView chart is hereShow every signal ▾"
+[desktop] errors: 
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Failed to load resource: the server responded with a status of 404 ()
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+[phone] title=Crypto Screener 2026-11-25 rows=0 sectorCharts=140
+[phone] news: News for the market · open on TradingView ↗, iframes=1
+[phone] sector news: No coin in DeFi passes at the Wed Nov 25 close (6:00 PM CT). News for the market · open on TradingView ↗, iframes=1
+[phone] backtests: BACKTESTS ON THIS PAGE | 5 | 4 plans, 1 research test | PLANS THAT BEAT BTC | 0 of 4 | over 10 years | PAPER TRIAL | Day 26 of 175 | Oct 13, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Your system, after 2 PM | -0.8% vs BTC -26.5%; plan cards=4, charts=9, research=1
+[phone] backtests, 10-year view: Claude's picks leads at $33,692
+[phone] paper tiles: Your system | Updated Nov 25, 5:10 PM ET | Your screener setups, as coins (no options) | $931.06 | ▼ -$68.94 (-6.9%) since Oct 13 · BTC -26.5% | 0 open positions · 4 closed trades | Full breakdown → || Your system, after 2 PM | Updated Nov 25, 5:10 PM ET | Your rules, buying only after 2 PM Central | $992.02 | ▼ -$7.98 (-0.8%) since Oct 13 · BTC -26.5% | 0 open positions · 2 closed trades | Full breakdown → || Claude's picks | Updated Nov 25, 5:10 PM ET | My AI picks list, as coins | $990.97 | ▼ -$9.03 (-0.9%) since Oct 13 · BTC -26.5% | 0 open positions · 13 closed trades | Full breakdown → || OVTLYR plan | Updated Nov 25, 5:10 PM ET | OVTLYR's Plan M and Plan ETF, as coins | $976.20 | ▼ -$23.80 (-2.4%) since Oct 13 · BTC -26.5% | 0 open positions · 1 closed trade | Full breakdown →
+[phone] paper A: Value $931.06 -$68.94 since the start | Return -6.9% BTC -26.5% over the same days | Cash $931.06 0 open positions | Closed trades 4 0 won, 4 lost, -$68.94 in all
+[phone] paper C: Value $992.02 -$7.98 since the start | Return -0.8% BTC -26.5% over the same days | Cash $992.02 0 open positions | Closed trades 2 0 won, 2 lost, -$7.98 in all
+[phone] paper B: Value $990.97 -$9.03 since the start | Return -0.9% BTC -26.5% over the same days | Cash $990.97 0 open positions | Closed trades 13 3 won, 10 lost, -$9.03 in all
+[phone] paper D: Value $976.20 -$23.80 since the start | Return -2.4% BTC -26.5% over the same days | Cash $976.20 0 open positions | Closed trades 1 0 won, 1 lost, -$23.80 in all
+[phone] top picks nu: 0 rows
+[phone] top picks bo: 0 rows
+[phone] top picks ai: 10 rows
+[phone] strongest sector list: 0 rows, 0 setups, top ; problems: none
+[phone] Plan M list: Plan M coins: none at the Wed Nov 25 close (6:00 PM CT)
+[phone] OVTLYR screener: Ready 0 | 2 rules away or fewer 0 | All 77 | All categories | AI & data | DeFi | Exchange tokens | Gaming | Infrastructure | Layer 1 | Layer 2 | Memes | Payments, rows shown=77
+[phone] heatmap: Last 3 months, day by day at the Wed Nov 25 close (6:00 PM CT) | Crypto market 0% ▼ OS | DeFi 0% ▼ OS | Layer 1 0% ▼ OS | AI & data 0% ▼ OS | Gaming 0% ▼ OS | Layer 2 0% ▼ OS | Payments 0% ▼ OS | Exchange tokens 0% ▼ OS | Memes 0% ▼ OS | Infrastructure 0% ▼ OS | Sep Oct Nov
+[phone] breadth line: Crypto market: Rising 0.0%5-day avg 0.1%10-day avg 0.7% | OS oversold, under 30 since Oct 17▼ below its 5-day average since Nov 19▼ below its 10-day average since Oct 6
+[phone] strips: Crypto market: Breadth 0% rising, avg 1% · 0% in uptrend · ▼ fading since Oct 6 · OS oversold | AI & data: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 12 · OS oversold | DeFi: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 8 · OS oversold | Exchange tokens: Breadth 0% rising, avg 3% · 0% in uptrend · ▼ fading since Nov 20 · OS oversold | Gaming: Breadth 0% rising, avg 4% · 0% in uptrend · ▼ fading since Oct 12 · OS oversold | Infrastructure: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 8 · OS oversold | Layer 1: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Nov 14 · OS oversold | Layer 2: Breadth 0% rising, avg 0% · 0% in uptrend · ▼ fading since Oct 6 · OS oversold | Memes: Breadth 0% rising, avg 1% · 0% in uptrend · ▼ fading since Nov 13 · OS oversold | Payments: Breadth 0% rising, avg 1% · 0% in uptrend · ▼ fading since Nov 8 · OS oversold
+[phone] the table is empty (nothing in an uptrend); opening BTC from the search bar instead
+[phone] opened BTC: legend="Downtrend since 2026-11-12 · green = uptrend, red = downtren"
+[phone] info line: "Category Payments · #6 of 9 · 0% rising · oversold under the 30 lineMarket BTC $60,378.20 +1.06% on Wed Nov 25 · BTC is not moving up (1 of 5 checks) · 0% of coins rising · oversold under the 30 line"
+[phone] backtest: "Backtest, 10 years (2016-11-25 to 2026-11-25): your rules +10,353% · holding BTC +8,041% · holding BTC +8,041%Rules vs holding BTC: +2,312 pts · rules vs BTC: +2,312 pts · $1,000 became $104,531 on th"
+[phone] daily 5Y: legend="Downtrend since 2026-11-12 · green = uptrend, red = downtren"
+[phone] 240: legend="Downtrend since 2026-11-24 · green = uptrend, red = downtren"
+[phone] W: legend="Downtrend since 2026-11-16 · green = uptrend, red = downtren"
+[phone] M: legend="No trend since 2014-09-01 · green = uptrend, red = downtrend"
+[phone] tradingview iframe=1
+[phone] type-ahead "e": 9 - ENA ENJ ENS EOS ETC ETH
+[phone] type-ahead "et": 3 - ETC ETH ETHFI
+[phone] type-ahead "eth": 2 - ETH ETHFI
+[phone] search "btc": opened BTC, 8 cards, 76 signals: "Not in your uptrend · strength score 13 · screener score 0Show every signal ▾"
+[phone] search "layer 1": opened L1-IDX, 2 cards, 29 signals: "Layer 1 category · L1-IDX: the Layer 1 category, #2 of 9 by Rising, 0% rising, oversold, under the 30 line since Oct 17Show every signal ▾"
+[phone] search "btc": opened BTC, 8 cards, 76 signals: "Not in your uptrend · strength score 13 · screener score 0Show every signal ▾"
+[phone] search "zzqx": opened ZZQX, 1 cards, 20 signals: "ZZQX is not tracked by the screener, so only the TradingView chart is hereShow every signal ▾"
+[phone] errors: 
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  console: Failed to load resource: the server responded with a status of 404 ()
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
