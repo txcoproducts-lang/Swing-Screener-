@@ -91,7 +91,8 @@ def build(S, frames, sectors, sp500, ndx, etf_frames, market="stock"):
     if market == "crypto":                 # one market row: every coin, with Trend / Alert / F&G on Bitcoin
         groups = [dict(n=S.MARKET, s="All coins", k="m", tks=sp, etf=S.BENCH, sub="every coin in the scan")]
     else:
-        groups = [dict(n="All stocks", s="All stocks", k="m", tks=tks, etf=None, sub="S&amp;P 500 + Nasdaq 100"),
+        groups = [dict(n="All stocks", s="All stocks", k="m", tks=tks, etf=None,
+                       sub="S&amp;P 500 + Nasdaq 100" if len(set(tks) - set(sp500)) >= 5 else "every stock in the scan"),
                   dict(n="S&P 500", s="SPY", k="m", tks=sp, etf="SPY", sub="S&amp;P 500 stocks"),
                   dict(n="Dow 30", s="DIA", k="m", tks=[t for t in tks if t in DOW30], etf="DIA", sub="Dow 30 stocks"),
                   dict(n="Nasdaq 100", s="QQQ", k="m", tks=[t for t in tks if t in ndx], etf="QQQ", sub="Nasdaq 100 stocks")]

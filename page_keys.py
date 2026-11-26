@@ -230,7 +230,8 @@ def page_keys(market, cfg, ov):
         R("Tap or hover", "Shows that day's numbers above the chart. Pick a group from the list, or tap its row in the table. "
           "3M / 6M / 1Y / All = how far back (prices go back 2 years, less a 60-day warm-up)."),
         H("The table"),
-        R("Market rows", f"All {us} (S&amp;P 500 + Nasdaq 100), then SPY (S&amp;P 500 {us}), DIA (the Dow 30) and QQQ (the Nasdaq 100)."
+        R("Market rows", f"All {us} in the scan, then SPY (S&amp;P 500 {us}), DIA (the Dow 30) and QQQ (the Nasdaq 100, shown when "
+          "its member list loads)."
           if not c else f"All {us}, with Trend, Alert and F&amp;G on Bitcoin."),
         R(f"{G} rows", f"The 11 sectors, counting their S&amp;P 500 {us}. Trend, Alert and F&amp;G are on each sector's SPDR ETF."
           if not c else f"Each category, counting its {us}. Trend, Alert and F&amp;G are on its equal-weight category index."),
