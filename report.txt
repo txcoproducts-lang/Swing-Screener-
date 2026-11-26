@@ -1,0 +1,140 @@
+[desktop] title=Swing Screener 2026-11-25 rows=197 sectorCharts=168
+[desktop] news: News for the market · open on TradingView ↗, iframes=1
+[desktop] sector news: News for Staples (XLP) · open on TradingView ↗, iframes=1
+[desktop] stock news: News for TGT · open on TradingView ↗, iframes=1
+[desktop] backtests: BACKTESTS ON THIS PAGE | 10 | 4 plans, 6 research tests | PLANS THAT BEAT SPY | 1 of 4 | over 10 years: OVTLYR plan | PAPER TRIAL | Day 15 of 119 | Oct 15, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Claude's picks | -5.1% vs SPY -6.9%; plan cards=4, charts=10, research=6
+[desktop] backtests, 10-year view: OVTLYR plan leads at $141,325
+[desktop] signal changes: 20 closes; New buy signals on the Wed Nov 25, 3:00 PM CT close | 34 | no buy signal at the Tue Nov 24, 3:00 PM CT close, one at this close | CHTRjoined the uptrend | CDWbroke its 20-day high | CSGPjoined the uptrend | CLXbroke its 20-day high | HSYbroke its 20-day high | BALLmomentum setup | PPGmomentum setup ; width 1400
+[desktop] sector breadth 20 closes: 12 rows, 20 closes
+[desktop] paper tiles: Your system | Updated Nov 25, 5:14 PM ET | Your screener setups and option rules | $2,534.01 | ▼ -$2,465.99 (-49.3%) since Oct 15 · SPY -6.9% | 1 open position · 6 closed trades | Full breakdown → || Your system, after 2 PM | Updated Nov 25, 5:14 PM ET | Your rules, buying only after 2 PM Central | $3,302.65 | ▼ -$1,697.35 (-33.9%) since Oct 15 · SPY -6.9% | 0 open positions · 5 closed trades | Full breakdown → || Claude's picks | Updated Nov 25, 5:14 PM ET | My AI picks list, as shares | $4,746.57 | ▼ -$253.43 (-5.1%) since Oct 15 · SPY -6.9% | 2 open positions · 11 closed trades | Full breakdown → || OVTLYR plan | Updated Nov 25, 5:14 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $4,125.49 | ▼ -$874.51 (-17.5%) since Oct 15 · SPY -6.9% | 1 open position · 8 closed trades | Full breakdown →
+[desktop] paper A: Value $2,534.01 -$2,465.99 since the start | Return -49.3% SPY -6.9% over the same days | Cash $924.51 1 open position worth $1,609.50 | Closed trades 6 1 won, 5 lost, -$2,594.08 in all
+[desktop] paper C: Value $3,302.65 -$1,697.35 since the start | Return -33.9% SPY -6.9% over the same days | Cash $3,302.65 0 open positions | Closed trades 5 0 won, 5 lost, -$1,697.35 in all
+[desktop] paper B: Value $4,746.57 -$253.43 since the start | Return -5.1% SPY -6.9% over the same days | Cash $3,769.78 2 open positions worth $976.79 | Closed trades 11 5 won, 6 lost, -$273.27 in all
+[desktop] paper D: Value $4,125.49 -$874.51 since the start | Return -17.5% SPY -6.9% over the same days | Cash $0.00 1 open position worth $4,125.49 | Closed trades 8 0 won, 8 lost, -$873.67 in all
+[desktop] top picks nu: 15 rows
+[desktop] top picks bo: 10 rows
+[desktop] top picks ai: 10 rows
+[desktop] strongest sector list: 25 rows, 17 setups, top TGT 72.5, DLTR 71.9, KO 71.2, WMT 70.6, KDP 69.9; problems: none
+[desktop] Plan M list: Plan M stocks: 2 2 new Plan M is off, so none are buys
+[desktop] OVTLYR screener: Ready 2 | 2 rules away or fewer 157 | All 433 | All sectors | Communication Services | Consumer Discretionary | Consumer Staples | Energy | Financials | Health Care | Industrials | Information Technology | Materials | Real Estate | Utilities, rows shown=157
+[desktop] heatmap: Last 3 months, day by day at the Wed Nov 25 close (3:00 PM CT) | S&P 500 47% ▼ | Staples 84% ▲ | Utilities 77% ▼ | Real Estate 66% ▲ | Discretionary 60% ▼ | Health Care 55% ▼ | Communication 50% ▲ | Financials 49% ▼ | Industrials 42% ▼ | Materials 42% ▼ | Technology 13% ▼ OS | Energy 0% ▼ OS | Sep Oct Nov
+[desktop] breadth line: S&P 500: Rising 46.8%5-day avg 45.2%10-day avg 48.7% | ▲ above its 5-day average since Nov 24▼ below its 10-day average since Nov 16
+[desktop] breadth line: Technology: Rising 13.3%5-day avg 14.7%10-day avg 18.3% | OS oversold, under 30 since Nov 13▼ below its 5-day average since Nov 13▼ below its 10-day average since Nov 13
+[desktop] sector performance: S&P 500 SPY -6.88% rising 47% | Technology XLK -17.78% rising 13% | Health Care XLV +2.51% rising 55% | Financials XLF +1.13% rising 49% | Discretionary XLY +1.77% rising 60% | Communication XLC +1.74% rising 50% | Industrials XLI -2.96% rising 42% | Staples XLP +5.91% rising 84% | Energy XLE -10.72% rising 0% | Utilities XLU +1.77% rising 77% | Real Estate XLRE +3.35% rising 66% | Materials XLB -1.10% rising 42%
+[desktop] strips: S&P 500: Breadth 47% rising, avg 49% · 42% in uptrend · ▼ fading since Nov 16 | Consumer Staples: Breadth 84% rising, avg 80% · 81% in uptrend · ▲ upswing since Nov 25 | Utilities: Breadth 77% rising, avg 78% · 68% in uptrend · ▼ fading since Nov 17 | Health Care: Breadth 55% rising, avg 63% · 53% in uptrend · ▼ fading since Nov 16 | Real Estate: Breadth 66% rising, avg 50% · 48% in uptrend · ▲ upswing since Nov 24 | Financials: Breadth 49% rising, avg 53% · 47% in uptrend · ▼ fading since Nov 17 | Industrials: Breadth 42% rising, avg 46% · 38% in uptrend · ▼ fading since Nov 16 | Materials: Breadth 42% rising, avg 44% · 38% in uptrend · ▼ fading since Nov 11 | Consumer Discretionary: Breadth 60% rising, avg 60% · 43% in uptrend · ▼ fading since Nov 16 | Communication Services: Breadth 50% rising, avg 46% · 36% in uptrend · ▲ upswing since Nov 24 | Information Technology: Breadth 13% rising, avg 18% · 13% in uptrend · ▼ fading since Nov 13 · OS oversold | Energy: Breadth 0% rising, avg 4% · 0% in uptrend · ▼ fading since Nov 2 · OS oversold
+[desktop] opened AEE: legend="Uptrend since 2026-10-22 · green = uptrend, red = downtrend "
+[desktop] info line: "Sector Utilities · #2 of 11 · 77% rising · ▼ fading since Nov 17 · XLU $43.61 +0.48% on Wed Nov 25Market SPY $716.70 -0.29% on Wed Nov 25 · SPY is not moving up (1 of 5 checks) · 47% of S&P 500 stocks rising · ▼ fading since Nov 16"
+[desktop] backtest: "Backtest, 10 years (2016-11-25 to 2026-11-25): your rules +40% · holding AEE +207% · holding SPY +279%Rules vs holding AEE: -166 pts · rules vs SPY: -238 pts · $1,000 became $1,404 on the rules, $3,06"
+[desktop] daily 5Y: legend="Uptrend since 2026-10-22 · green = uptrend, red = downtrend "
+[desktop] 240: legend="Uptrend since 2026-11-23 · green = uptrend, red = downtrend "
+[desktop] W: legend="Uptrend since 2026-11-02 · green = uptrend, red = downtrend "
+[desktop] M: legend="Uptrend since 2024-09-01 · green = uptrend, red = downtrend "
+[desktop] tradingview iframe=1
+[desktop] type-ahead "s": 29 - SO SW SHW SJM SLB SNA
+[desktop] type-ahead "sp": 4 - SPG SPY SPGI SPXL
+[desktop] type-ahead "spy": 1 - SPY
+[desktop] search "aee": opened AEE, 9 cards, 80 signals: "Ameren · Super Momentum setup · strength score 66 · screener score 86Show every signal ▾"
+[desktop] search "technology": opened XLK, 2 cards, 30 signals: "Technology sector · XLK: the Technology sector, #10 of 11 by Rising, 13% rising, oversold, under the 30 line since Nov 13Show every signal ▾"
+[desktop] search "spy": opened SPY, 1 cards, 21 signals: "the market · SPY: the market. Not moving up (1 of 5 checks)Show every signal ▾"
+[desktop] search "zzqx": opened ZZQX, 1 cards, 21 signals: "ZZQX is not tracked by the screener, so only the TradingView chart is hereShow every signal ▾"
+[desktop] errors: 
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  console: Failed to load resource: the server responded with a status of 404 ()
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+[phone] title=Swing Screener 2026-11-25 rows=197 sectorCharts=168
+[phone] news: News for the market · open on TradingView ↗, iframes=1
+[phone] sector news: News for Staples (XLP) · open on TradingView ↗, iframes=1
+[phone] stock news: News for TGT · open on TradingView ↗, iframes=1
+[phone] backtests: BACKTESTS ON THIS PAGE | 10 | 4 plans, 6 research tests | PLANS THAT BEAT SPY | 1 of 4 | over 10 years: OVTLYR plan | PAPER TRIAL | Day 15 of 119 | Oct 15, 2026 to Apr 6, 2027 | LEADING THE TRIAL | Claude's picks | -5.1% vs SPY -6.9%; plan cards=4, charts=10, research=6
+[phone] backtests, 10-year view: OVTLYR plan leads at $141,325
+[phone] signal changes: 20 closes; New buy signals on the Wed Nov 25, 3:00 PM CT close | 34 | no buy signal at the Tue Nov 24, 3:00 PM CT close, one at this close | CHTRjoined the uptrend | CDWbroke its 20-day high | CSGPjoined the uptrend | CLXbroke its 20-day high | HSYbroke its 20-day high | BALLmomentum setup | PPGmomentum setup ; width 390
+[phone] sector breadth 20 closes: 12 rows, 20 closes
+[phone] paper tiles: Your system | Updated Nov 25, 5:14 PM ET | Your screener setups and option rules | $2,534.01 | ▼ -$2,465.99 (-49.3%) since Oct 15 · SPY -6.9% | 1 open position · 6 closed trades | Full breakdown → || Your system, after 2 PM | Updated Nov 25, 5:14 PM ET | Your rules, buying only after 2 PM Central | $3,302.65 | ▼ -$1,697.35 (-33.9%) since Oct 15 · SPY -6.9% | 0 open positions · 5 closed trades | Full breakdown → || Claude's picks | Updated Nov 25, 5:14 PM ET | My AI picks list, as shares | $4,746.57 | ▼ -$253.43 (-5.1%) since Oct 15 · SPY -6.9% | 2 open positions · 11 closed trades | Full breakdown → || OVTLYR plan | Updated Nov 25, 5:14 PM ET | OVTLYR's Plan M, Plan ETF and SGOV, as shares | $4,125.49 | ▼ -$874.51 (-17.5%) since Oct 15 · SPY -6.9% | 1 open position · 8 closed trades | Full breakdown →
+[phone] paper A: Value $2,534.01 -$2,465.99 since the start | Return -49.3% SPY -6.9% over the same days | Cash $924.51 1 open position worth $1,609.50 | Closed trades 6 1 won, 5 lost, -$2,594.08 in all
+[phone] paper C: Value $3,302.65 -$1,697.35 since the start | Return -33.9% SPY -6.9% over the same days | Cash $3,302.65 0 open positions | Closed trades 5 0 won, 5 lost, -$1,697.35 in all
+[phone] paper B: Value $4,746.57 -$253.43 since the start | Return -5.1% SPY -6.9% over the same days | Cash $3,769.78 2 open positions worth $976.79 | Closed trades 11 5 won, 6 lost, -$273.27 in all
+[phone] paper D: Value $4,125.49 -$874.51 since the start | Return -17.5% SPY -6.9% over the same days | Cash $0.00 1 open position worth $4,125.49 | Closed trades 8 0 won, 8 lost, -$873.67 in all
+[phone] top picks nu: 15 rows
+[phone] top picks bo: 10 rows
+[phone] top picks ai: 10 rows
+[phone] strongest sector list: 25 rows, 17 setups, top TGT 72.5, DLTR 71.9, KO 71.2, WMT 70.6, KDP 69.9; problems: none
+[phone] Plan M list: Plan M stocks: 2 2 new Plan M is off, so none are buys
+[phone] OVTLYR screener: Ready 2 | 2 rules away or fewer 157 | All 433 | All sectors | Communication Services | Consumer Discretionary | Consumer Staples | Energy | Financials | Health Care | Industrials | Information Technology | Materials | Real Estate | Utilities, rows shown=157
+[phone] heatmap: Last 3 months, day by day at the Wed Nov 25 close (3:00 PM CT) | S&P 500 47% ▼ | Staples 84% ▲ | Utilities 77% ▼ | Real Estate 66% ▲ | Discretionary 60% ▼ | Health Care 55% ▼ | Communication 50% ▲ | Financials 49% ▼ | Industrials 42% ▼ | Materials 42% ▼ | Technology 13% ▼ OS | Energy 0% ▼ OS | Sep Oct Nov
+[phone] breadth line: S&P 500: Rising 46.8%5-day avg 45.2%10-day avg 48.7% | ▲ above its 5-day average since Nov 24▼ below its 10-day average since Nov 16
+[phone] breadth line: Technology: Rising 13.3%5-day avg 14.7%10-day avg 18.3% | OS oversold, under 30 since Nov 13▼ below its 5-day average since Nov 13▼ below its 10-day average since Nov 13
+[phone] sector performance: S&P 500 SPY -6.88% rising 47% | Technology XLK -17.78% rising 13% | Health Care XLV +2.51% rising 55% | Financials XLF +1.13% rising 49% | Discretionary XLY +1.77% rising 60% | Communication XLC +1.74% rising 50% | Industrials XLI -2.96% rising 42% | Staples XLP +5.91% rising 84% | Energy XLE -10.72% rising 0% | Utilities XLU +1.77% rising 77% | Real Estate XLRE +3.35% rising 66% | Materials XLB -1.10% rising 42%
+[phone] strips: S&P 500: Breadth 47% rising, avg 49% · 42% in uptrend · ▼ fading since Nov 16 | Consumer Staples: Breadth 84% rising, avg 80% · 81% in uptrend · ▲ upswing since Nov 25 | Utilities: Breadth 77% rising, avg 78% · 68% in uptrend · ▼ fading since Nov 17 | Health Care: Breadth 55% rising, avg 63% · 53% in uptrend · ▼ fading since Nov 16 | Real Estate: Breadth 66% rising, avg 50% · 48% in uptrend · ▲ upswing since Nov 24 | Financials: Breadth 49% rising, avg 53% · 47% in uptrend · ▼ fading since Nov 17 | Industrials: Breadth 42% rising, avg 46% · 38% in uptrend · ▼ fading since Nov 16 | Materials: Breadth 42% rising, avg 44% · 38% in uptrend · ▼ fading since Nov 11 | Consumer Discretionary: Breadth 60% rising, avg 60% · 43% in uptrend · ▼ fading since Nov 16 | Communication Services: Breadth 50% rising, avg 46% · 36% in uptrend · ▲ upswing since Nov 24 | Information Technology: Breadth 13% rising, avg 18% · 13% in uptrend · ▼ fading since Nov 13 · OS oversold | Energy: Breadth 0% rising, avg 4% · 0% in uptrend · ▼ fading since Nov 2 · OS oversold
+[phone] opened AEE: legend="Uptrend since 2026-10-22 · green = uptrend, red = downtrend "
+[phone] info line: "Sector Utilities · #2 of 11 · 77% rising · ▼ fading since Nov 17 · XLU $43.61 +0.48% on Wed Nov 25Market SPY $716.70 -0.29% on Wed Nov 25 · SPY is not moving up (1 of 5 checks) · 47% of S&P 500 stocks rising · ▼ fading since Nov 16"
+[phone] backtest: "Backtest, 10 years (2016-11-25 to 2026-11-25): your rules +40% · holding AEE +207% · holding SPY +279%Rules vs holding AEE: -166 pts · rules vs SPY: -238 pts · $1,000 became $1,404 on the rules, $3,06"
+[phone] daily 5Y: legend="Uptrend since 2026-10-22 · green = uptrend, red = downtrend "
+[phone] 240: legend="Uptrend since 2026-11-23 · green = uptrend, red = downtrend "
+[phone] W: legend="Uptrend since 2026-11-02 · green = uptrend, red = downtrend "
+[phone] M: legend="Uptrend since 2024-09-01 · green = uptrend, red = downtrend "
+[phone] tradingview iframe=1
+[phone] type-ahead "s": 29 - SO SW SHW SJM SLB SNA
+[phone] type-ahead "sp": 4 - SPG SPY SPGI SPXL
+[phone] type-ahead "spy": 1 - SPY
+[phone] search "aee": opened AEE, 9 cards, 80 signals: "Ameren · Super Momentum setup · strength score 66 · screener score 86Show every signal ▾"
+[phone] search "technology": opened XLK, 2 cards, 30 signals: "Technology sector · XLK: the Technology sector, #10 of 11 by Rising, 13% rising, oversold, under the 30 line since Nov 13Show every signal ▾"
+[phone] search "spy": opened SPY, 1 cards, 21 signals: "the market · SPY: the market. Not moving up (1 of 5 checks)Show every signal ▾"
+[phone] search "zzqx": opened ZZQX, 1 cards, 21 signals: "ZZQX is not tracked by the screener, so only the TradingView chart is hereShow every signal ▾"
+[phone] errors: 
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+  console: Failed to load resource: the server responded with a status of 404 ()
+  console: Permissions policy violation: unload is not allowed in this document.
+  console: Permissions policy violation: unload is not allowed in this document.
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/site-widget/report net::ERR_ABORTED
+  failed: https://telemetry.tradingview.com/widget/report net::ERR_ABORTED
+[desktop] OVTLYR tap SYY: pop-up open (SYY), signals panel yes; after close: back on OVTLYR page
+[desktop] OVTLYR page: 433 stocks, 11 sector tiles, width 1400, errors: none
+[phone] OVTLYR tap SYY: pop-up open (SYY), signals panel yes; after close: back on OVTLYR page
+[phone] OVTLYR page: 433 stocks, 11 sector tiles, width 390, errors: none
+[desktop] Open page boxes: new buy signals 20 / 3 / 26; lost buy signals 14 / 32 / 59 → 53 → 59; new-signal causes shown: 23
+[desktop] Open page: Tue Nov 24 open (8:30 AM CT) vs Mon Nov 23 close (3:00 PM CT) · prices as of Tue Nov 24 8:35 AM CT; Still falling | 0 of 11 rising | 27 in uptrend | 20 new buy signals; width 1400, errors: none
+[phone] Open page boxes: new buy signals 20 / 3 / 26; lost buy signals 14 / 32 / 59 → 53 → 59; new-signal causes shown: 23
+[phone] Open page: Tue Nov 24 open (8:30 AM CT) vs Mon Nov 23 close (3:00 PM CT) · prices as of Tue Nov 24 8:35 AM CT; Still falling | 0 of 11 rising | 27 in uptrend | 20 new buy signals; width 390, errors: none

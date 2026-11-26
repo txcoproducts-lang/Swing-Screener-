@@ -1,0 +1,75 @@
+tickers with charts: 338
+order block boxes: 8191 (1075 untouched)
+daily bars per ticker: min 790, median 1260, max 1260 (5 years is about 1,260)
+missing data files: ALLE, WAB, J, DGX, DRI
+data issues: 0
+table vs data mismatches: 0
+RSI / CCI vs data: 197 stocks checked, 0 off
+rows with an options contract: 17
+10-year backtests: 333 (years covered: min 2.3, median 10); rules beat holding on 24; table stocks without one: none
+  medians: in the market 41% of days, 30 trades, 39% winners; 9702 trades, average 1.49%, median -1.75%; ended by {"exit":8295,"stop":1261,"open":146}
+  XLK rules 242.1% hold 619% spy 278.9% n 30 win 53% in 61%
+  SPY rules 112.5% hold 278.9% spy 278.9% n 31 win 52% in 68%
+  AAPL rules 362.2% hold 1284.8% spy 278.9% n 29 win 55% in 51%
+  EMR rules -21% hold 261.2% spy 278.9% n 36 win 36% in 43%
+  MSFT rules 143.7% hold 807.2% spy 278.9% n 31 win 48% in 60%
+top picks: 15 new uptrends, 10 breakout watch, 10 AI picks; issues: 22
+  pk-nu CSX: call expires 2026-12-11, list is as of undefined
+  pk-nu DXCM: call expires 2026-12-18, list is as of undefined
+  pk-nu O: call expires 2026-12-18, list is as of undefined
+  pk-nu NEE: call expires 2026-12-18, list is as of undefined
+  pk-nu TTWO: call expires 2026-12-18, list is as of undefined
+  pk-nu CBRE: call expires 2026-12-18, list is as of undefined
+  pk-nu CRH: call expires 2026-12-18, list is as of undefined
+  pk-nu CSGP: call expires 2026-12-18, list is as of undefined
+  pk-nu CHTR: call expires 2026-12-24, list is as of undefined
+  pk-bo VZ: call expires 2026-12-18, list is as of undefined
+  pk-bo AIG: call expires 2026-12-18, list is as of undefined
+  pk-bo ALL: call expires 2026-12-18, list is as of undefined
+  pk-ai MRNA: call expires 2026-12-18, list is as of undefined
+  pk-ai OKTA: call expires 2026-12-18, list is as of undefined
+  pk-ai OKTA: earnings flag true (earnings in 6 days, expiry in NaN)
+  pk-ai PANW: call expires 2026-12-18, list is as of undefined
+  pk-ai HUM: call expires 2026-12-18, list is as of undefined
+  pk-ai DELL: call expires 2026-12-18, list is as of undefined
+  pk-ai BBY: call expires 2026-12-11, list is as of undefined
+  pk-ai MPC: call expires 2026-12-18, list is as of undefined
+  pk-ai PSX: call expires 2026-12-18, list is as of undefined
+  pk-ai VLO: call expires 2026-12-18, list is as of undefined
+pk-nu calls that fit: 5 of 15, closest shown in grey: 4; none for HSIC (none fits: no call 0.50-0.80 delta with OI over 500), SYY (none fits: no call 0.50-0.80 delta with OI over 500), UDR (none fits: no call 0.50-0.80 delta with OI over 500), PPL (none fits: no call 0.50-0.80 delta with OI over 500), BXP (none fits: no call 0.50-0.80 delta with OI over 500), PEG (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-bo calls that fit: 2 of 10, closest shown in grey: 1; none for PEG (none fits: no call 0.50-0.80 delta with OI over 500), ACGL (none fits: no call 0.50-0.80 delta with OI over 500), OTIS (none fits: no call 0.50-0.80 delta with OI over 500), EXR (none fits: no call 0.50-0.80 delta with OI over 500), UDR (none fits: no call 0.50-0.80 delta with OI over 500), EVRG (none fits: no call 0.50-0.80 delta with OI over 500), HIG (none fits: no call 0.50-0.80 delta with OI over 500)
+pk-ai calls that fit: 6 of 10, closest shown in grey: 3; none for CRL (none fits: no call 0.50-0.80 delta with OI over 500)
+filter setups: 119 rows, 0 wrong
+filter Super: 109 rows, 0 wrong
+filter Regular: 10 rows, 0 wrong
+filter Momentum: 106 rows, 0 wrong
+filter Pullback: 13 rows, 0 wrong
+filter Overbought: 0 rows, 0 wrong
+filter all: 197 rows, 0 wrong
+overbought rule: 119 setups, 0 marked Overbought, 4 oversold, market breadth 46.8; problems: none
+sector Consumer Staples: 12 rows ok
+sector Utilities: 14 rows ok
+sector Health Care: 17 rows ok
+sector Real Estate: 9 rows ok
+sector Financials: 18 rows ok
+sector Industrials: 15 rows ok
+sector Materials: 5 rows ok
+sector Consumer Discretionary: 15 rows ok
+sector Communication Services: 6 rows ok
+sector Information Technology: 8 rows ok
+sector Energy: 0 rows ok
+sorted 28 columns checked 2-13, 0 bad
+breadth view: 12 heatmap rows x 63 days, 84 strip canvases, problems: none
+breadth line: 12 groups x 471 days from 2025-01-13, 7 canvases, problems: none
+Plan M list: 2 stocks (summary says 2), 2 new (summary says 2), 0 dropped, the Market box link opens it: true
+opened 338 tickers x 4 timeframes (daily also at 5Y), problems: 5
+  ALLE: no trend data (Trend data not available for ALLE here, showing the indicato)
+  WAB: no trend data (Trend data not available for WAB here, showing the indicator)
+  J: no trend data (Trend data not available for J here, showing the indicator c)
+  DGX: no trend data (Trend data not available for DGX here, showing the indicator)
+  DRI: no trend data (Trend data not available for DRI here, showing the indicator)
+paper A Your system: $2,534.01 (updated 2026-11-25 17:14), cash $924.51, 1 open, 6 closed, 43 log lines, 16 closes; problems: none
+paper C Your system, after 2 PM: $3,302.65 (updated 2026-11-25 17:14), cash $3,302.65, 0 open, 5 closed, 42 log lines, 16 closes; problems: none
+paper B Claude's picks: $4,746.57 (updated 2026-11-25 17:14), cash $3,769.78, 2 open, 11 closed, 54 log lines, 16 closes; problems: none
+paper D OVTLYR plan: $4,125.49 (updated 2026-11-25 17:14), cash $0.00, 1 open, 8 closed, 51 log lines, 16 closes; problems: none
+page errors overall: none
