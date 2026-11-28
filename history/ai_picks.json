@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-25",
+ "as_of": "2026-11-27",
  "picks": [
   {
    "ticker": "MPC",
@@ -18,12 +18,6 @@
    "added": "2026-11-12",
    "price": 103.41,
    "spy": 757.12
-  },
-  {
-   "ticker": "CRL",
-   "added": "2026-11-18",
-   "price": 333.25,
-   "spy": 730.2
   },
   {
    "ticker": "MRNA",
@@ -60,6 +54,12 @@
    "added": "2026-11-24",
    "price": 352.99,
    "spy": 718.78
+  },
+  {
+   "ticker": "VTRS",
+   "added": "2026-11-27",
+   "price": 20.2,
+   "spy": 728.32
   }
  ],
  "closed": [
@@ -132,6 +132,16 @@
    "out": 413.27,
    "spy_out": 718.78,
    "why": "fell out of the top 20"
+  },
+  {
+   "ticker": "CRL",
+   "added": "2026-11-18",
+   "price": 333.25,
+   "spy": 730.2,
+   "dropped": "2026-11-27",
+   "out": 337.39,
+   "spy_out": 728.32,
+   "why": "no longer passes the liquidity filter"
   }
  ]
 }
